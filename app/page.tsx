@@ -1,65 +1,174 @@
-import Image from "next/image";
+"use client"; // Client side logic k liye zaroori hai
 
-export default function Home() {
+import { useEffect, useState } from "react";
+import { signInWithPopup, onAuthStateChanged } from "firebase/auth";
+import { getUserShopProfile } from "../app/lib/authService"; // Jo pichle step mn banaya tha
+import { useStore } from "../app/store/useStore"; // Global state
+import { useRouter } from "next/navigation";
+import { CheckCircle2, Loader2, Store } from "lucide-react"; // Icons
+import { auth, googleProvider } from "../app/lib/firebase";
+
+export default function LoginPage() {
+  const router = useRouter();
+  const { setCurrentUser, setCurrentShop } = useStore();
+  const [loading, setLoading] = useState(true);
+
+  // 1. Check if user is already logged in
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        checkUserProfile(user);
+      } else {
+        setLoading(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Profile Check Logic
+  const checkUserProfile = async (user: any) => {
+    setLoading(true);
+    setCurrentUser(user);
+
+    const shopProfile = await getUserShopProfile(user.uid);
+
+    if (shopProfile) {
+      setCurrentShop(shopProfile);
+      router.push("/dashboard");
+    } else {
+      router.push("/setup");
+    }
+    setLoading(false);
+  };
+
+  // 3. Google Login Handler
+  const handleGoogleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      checkUserProfile(result.user);
+    } catch (error: any) {
+      console.error("Login Failed", error);
+      alert("Login Failed: " + error.message);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
+        <span className="ml-2 text-gray-600 font-medium">Loading System...</span>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 font-sans">
+      
+      {/* Main Card Container */}
+      <div className="bg-white rounded-3xl shadow-2xl overflow-hidden max-w-5xl w-full flex flex-col md:flex-row min-h-[600px]">
+        
+        {/* --- LEFT SIDE: LOGIN FORM --- */}
+        <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center bg-white relative">
+          
+          {/* Logo / Brand Top Left */}
+          <div className="absolute top-8 left-8 flex items-center gap-2">
+             <div className="bg-blue-600 p-1.5 rounded-lg">
+                <Store className="text-white h-5 w-5" />
+             </div>
+             <span className="font-bold text-gray-700 text-sm tracking-wide">SMART POS</span>
+          </div>
+
+          <div className="mt-6 md:mt-0"> {/* Top margin kam kiya */}
+            
+            {/* Heading Spacing Reduced */}
+            {/* <h4 className="text-sm font-semibold text-blue-600 uppercase tracking-wider mb-2 ml-6">Welcome Back</h4> */}
+            <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-3 mt-12"> {/* mt-8 -> mt-4, mb-4 -> mb-3 */}
+              Login to your account
+            </h1>
+            
+            {/* Paragraph Spacing Reduced */}
+            <p className="text-gray-500 mb-6 leading-relaxed text-sm md:text-base"> {/* mb-8 -> mb-6 */}
+              Manage your inventory, track sales, and handle your point of sale operations efficiently.
+            </p>
+
+            {/* Login Button */}
+            <button
+              onClick={handleGoogleLogin}
+              className="group relative w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-200 p-3.5 rounded-xl hover:border-blue-600 hover:bg-blue-50 transition-all duration-300 shadow-sm hover:shadow-md"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              {/* Google Icon */}
+              <svg className="h-5 w-5" viewBox="0 0 24 24"> {/* Icon size thora adjust kiya */}
+                <path
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  fill="#4285F4"
+                />
+                <path
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  fill="#34A853"
+                />
+                <path
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                  fill="#FBBC05"
+                />
+                <path
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  fill="#EA4335"
+                />
+              </svg>
+              <span className="font-bold text-gray-700 text-base md:text-lg group-hover:text-blue-700 transition-colors">
+                Continue with Google
+              </span>
+            </button>
+
+            {/* Features List Spacing Reduced */}
+            <div className="mt-8 space-y-2.5"> {/* mt-10 -> mt-8, space-y-3 -> space-y-2.5 */}
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    <span>Real-time Inventory Tracking</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    <span>Fast POS Billing</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                    <span>Offline Support</span>
+                </div>
+            </div>
+          </div>
+          
+          <div className="mt-auto pt-6 text-center text-xs text-gray-400">
+            &copy; {new Date().getFullYear()} Smart POS System. All rights reserved.
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* --- RIGHT SIDE: ILLUSTRATION --- */}
+       
+       
+       {/* --- RIGHT SIDE: ILLUSTRATION --- */}
+        <div className="hidden md:flex w-1/2 bg-blue-600 relative items-center justify-center p-10 overflow-hidden">
+            
+            {/* Background Decoration Circles */}
+            <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-blue-500 rounded-full opacity-50 blur-3xl"></div>
+            <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-blue-700 rounded-full opacity-50 blur-3xl"></div>
+            
+            <div className="relative z-10 text-center text-white flex flex-col items-center">
+                {/* Illustration Image */}
+                {/* Ensure 'login-image.png' is inside your 'public' folder */}
+                <img 
+                    src="/login-image.png" 
+                    alt="POS Dashboard 3D Character"
+                    className="w-full max-w-[400px] object-contain mb-6 drop-shadow-2xl animate-in slide-in-from-right duration-700 hover:scale-105 transition-transform"
+                />
+                
+                <h2 className="text-3xl font-bold mb-3">Manage Shop Effortlessly</h2>
+                <p className="text-blue-100 text-lg max-w-sm">
+                    One place to manage inventory, orders, and customer details.
+                </p>
+            </div>
         </div>
-      </main>
+
+      </div>
     </div>
   );
 }
