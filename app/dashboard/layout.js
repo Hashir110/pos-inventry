@@ -19,7 +19,8 @@ import {
   CreditCard,
   MessageCircle,
   Phone,
-  X
+  X,
+  Wallet
 } from "lucide-react";
 import Link from "next/link";
 
@@ -186,6 +187,7 @@ export default function DashboardLayout({ children }) {
     { name: "Inventory", href: "/dashboard/inventry", icon: Package },
     { name: "Add Product", href: "/dashboard/inventry/add", icon: Package },
     { name: "POS (Sale)", href: "/dashboard/pos", icon: ShoppingCart },
+    { name: "Expenses", href: "/dashboard/expenses", icon: Wallet }, // <--- NEW ADDITION
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
   ];
 

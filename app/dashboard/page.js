@@ -11,7 +11,8 @@ import {
   Search, 
   Calendar,
   Filter,
-  Loader2
+  Loader2,
+  Wallet
 } from "lucide-react";
 
 export default function DashboardHome() {
@@ -27,7 +28,8 @@ export default function DashboardHome() {
     totalSales: 0,
     netProfit: 0,
     totalInvoices: 0,
-    lowStockCount: 0
+    lowStockCount: 0,
+    expenses: 0
   });
 
   // Invoices List
@@ -35,7 +37,7 @@ export default function DashboardHome() {
   const [searchInvoice, setSearchInvoice] = useState("");
 
   // 1. Fetch Dashboard Data
-  const fetchDashboardData = async (isFilter = false) => {
+ const fetchDashboardData = async (isFilter = false) => {
     if (!currentUser) return;
     setLoading(true);
 
@@ -44,43 +46,69 @@ export default function DashboardHome() {
         let salesQuery = query(
             collection(db, "sales"), 
             where("ownerId", "==", currentUser.uid),
-            orderBy("date", "desc") // Newest first
+            orderBy("date", "desc")
         );
 
         const salesSnapshot = await getDocs(salesQuery);
         let allSales = salesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // --- FILTER LOGIC ---
+        // --- B. GET EXPENSES DATA (NEW) ---
+        let expensesQuery = query(
+            collection(db, "expenses"),
+            where("ownerId", "==", currentUser.uid),
+            orderBy("date", "desc")
+        );
+        const expenseSnapshot = await getDocs(expensesQuery);
+        let allExpenses = expenseSnapshot.docs.map(doc => doc.data());
+
+
+        // --- FILTER LOGIC (Sales & Expenses Dono par lagega) ---
         if (isFilter && startDate && endDate) {
             const start = new Date(startDate).setHours(0,0,0,0);
             const end = new Date(endDate).setHours(23,59,59,999);
 
+            // Filter Sales
             allSales = allSales.filter(sale => {
                 const saleDate = new Date(sale.date).getTime();
                 return saleDate >= start && saleDate <= end;
             });
+
+            // Filter Expenses
+            allExpenses = allExpenses.filter(exp => {
+                const expDate = new Date(exp.date).getTime();
+                return expDate >= start && expDate <= end;
+            });
         } 
-        // Default: Show ALL time stats (Or you can default to Today)
         
         // --- CALCULATIONS ---
+        
+        // 1. Calculate Sales & Gross Profit
         let totalRevenue = 0;
-        let totalProfit = 0;
+        let grossProfit = 0;
 
         allSales.forEach(sale => {
             totalRevenue += sale.totalAmount || 0;
             
-            // Profit Calc per sale item
             if(sale.items) {
                 sale.items.forEach(item => {
                     const buying = item.buyingPrice || 0;
                     const selling = item.price || 0;
                     const qty = item.qty || 0;
-                    totalProfit += (selling - buying) * qty;
+                    grossProfit += (selling - buying) * qty;
                 });
             }
         });
 
-        // --- B. GET LOW STOCK ---
+        // 2. Calculate Total Expenses
+        let totalExpenseSum = 0;
+        allExpenses.forEach(exp => {
+            totalExpenseSum += (parseFloat(exp.amount) || 0);
+        });
+
+        // 3. Calculate FINAL Net Profit (Gross Profit - Expenses)
+        const finalNetProfit = grossProfit - totalExpenseSum;
+
+        // --- C. GET LOW STOCK ---
         const productsQuery = query(
             collection(db, "products"), 
             where("ownerId", "==", currentUser.uid)
@@ -89,17 +117,18 @@ export default function DashboardHome() {
         let lowStock = 0;
         productsSnap.forEach(doc => {
             const p = doc.data();
-            if(p.stock < 5) lowStock++; // Assuming 5 is low threshold
+            if(p.stock < 5) lowStock++; 
         });
 
         // --- UPDATE STATE ---
         setStats({
             totalSales: totalRevenue,
-            netProfit: totalProfit,
+            netProfit: finalNetProfit, // Ab ye Expense minus karke dikhayega
             totalInvoices: allSales.length,
-            lowStockCount: lowStock
+            lowStockCount: lowStock,
+            totalExpenses: totalExpenseSum // Store Update
         });
-        setInvoices(allSales); // Store filtered list for table
+        setInvoices(allSales); 
 
     } catch (error) {
         console.error("Error fetching dashboard:", error);
@@ -188,35 +217,48 @@ export default function DashboardHome() {
       </div>
 
       {/* 3. Stats Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatCard 
           title="TOTAL SALES" 
           value={`Rs ${Math.round(stats.totalSales).toLocaleString()}`} 
-          subtitle="Total revenue for period"
+          subtitle="Total revenue"
           icon={DollarSign} 
           theme="blue"
           loading={loading}
         />
+        
+        {/* NEW EXPENSE CARD */}
         <StatCard 
-          title="LOW STOCK" 
-          value={stats.lowStockCount} 
-          subtitle="Products need restock"
-          icon={Package} 
-          theme="orange"
+          title="EXPENSES" 
+          value={`Rs ${Math.round(stats.totalExpenses).toLocaleString()}`} 
+          subtitle="Total costs"
+          icon={Wallet} 
+          theme="red" // Red theme for expenses
           loading={loading}
         />
+
         <StatCard 
           title="NET PROFIT" 
           value={`Rs ${Math.round(stats.netProfit).toLocaleString()}`} 
-          subtitle="Net sales amount"
+          subtitle="Sales Profit - Expenses"
           icon={TrendingUp} 
           theme="green"
           loading={loading}
         />
+
         <StatCard 
-          title="TOTAL INVOICES" 
+          title="LOW STOCK" 
+          value={stats.lowStockCount} 
+          subtitle="Items need restock"
+          icon={Package} 
+          theme="orange"
+          loading={loading}
+        />
+        
+        <StatCard 
+          title="INVOICES" 
           value={stats.totalInvoices} 
-          subtitle="Total invoices created"
+          subtitle="Total bills created"
           icon={FileText} 
           theme="purple"
           loading={loading}
