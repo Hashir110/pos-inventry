@@ -7,7 +7,8 @@ import { useStore } from "../app/store/useStore"; // Global state
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, Store } from "lucide-react"; // Icons
 import { auth, googleProvider } from "../app/lib/firebase";
-
+// Is line ko code ke top par likhein:
+import { toast } from 'react-toastify';
 export default function LoginPage() {
   const router = useRouter();
   const { setCurrentUser, setCurrentShop } = useStore();
@@ -48,7 +49,7 @@ export default function LoginPage() {
       checkUserProfile(result.user);
     } catch (error: any) {
       console.error("Login Failed", error);
-      alert("Login Failed: " + error.message);
+      toast.error("Login Failed: " + error.message);
     }
   };
 

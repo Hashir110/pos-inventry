@@ -5,6 +5,8 @@ import { db } from "../../lib/firebase";
 import { collection, query, where, getDocs, doc, runTransaction, onSnapshot } from "firebase/firestore";
 import { useStore } from "../../store/useStore";
 import { Search, ShoppingCart, Trash2, Calculator, X, Loader2, Printer, Wifi, WifiOff, ChevronUp, ChevronDown } from "lucide-react";
+// Is line ko code ke top par likhein:
+import { toast } from 'react-toastify';
 
 export default function POSPage() {
     const { currentUser, currentShop } = useStore(); // Shop Name k liye currentShop chahiye
@@ -184,12 +186,12 @@ export default function POSPage() {
       // --- SUCCESS LOGIC (Change Here) ---
       // Cart clear MAT karo abhi.
       // Sirf Receipt Modal kholo.
-      alert("Sale Successful!");
+      toast.success("Sale Successful!");
       setShowReceipt(true); 
 
     } catch (error) {
         console.error(error);
-        alert("Failed: " + (typeof error === 'string' ? error : error.message));
+        toast.error("Failed: " + (typeof error === 'string' ? error : error.message));
     }
     setCheckoutLoading(false);
   };

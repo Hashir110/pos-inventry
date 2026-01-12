@@ -5,7 +5,8 @@ import { db } from "../../../../lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { Scale, Hash, ArrowLeft, Save, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-
+// Is line ko code ke top par likhein:
+import { toast } from 'react-toastify';
 export default function EditProductPage({ params }) {
   // --- FIX 1: Params ko safe tarike se unwrap karna ---
   // Agar aap Next.js 15 use kar rahay hain to `use(params)` chahiye, 
@@ -49,7 +50,7 @@ export default function EditProductPage({ params }) {
                     unitType: data.unitType
                 });
             } else {
-                alert("Product not found!");
+                toast.success("Product not found!");
                 router.push("/dashboard/inventry");
             }
         } catch (error) {
@@ -81,12 +82,12 @@ export default function EditProductPage({ params }) {
         updatedAt: new Date().toISOString(),
       });
 
-      alert("Product Updated Successfully!");
+      toast.success("Product Updated Successfully!");
       router.push("/dashboard/inventry");
 
     } catch (error) {
       console.error(error);
-      alert("Error: " + error.message);
+      toast.error("Error: " + error.message);
     }
     setSubmitting(false);
   };

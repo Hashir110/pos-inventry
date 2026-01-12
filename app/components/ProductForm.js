@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 import { db } from "../lib/firebase";
 import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
 import { Scale, Hash, X } from "lucide-react";
-
+// Is line ko code ke top par likhein:
+import { toast } from 'react-toastify';
 export default function ProductForm({ currentUser, editingProduct, onClose, onComplete }) {
   const [submitting, setSubmitting] = useState(false);
   
@@ -50,14 +51,14 @@ export default function ProductForm({ currentUser, editingProduct, onClose, onCo
         // --- UPDATE ---
         const productRef = doc(db, "products", editingProduct.id);
         await updateDoc(productRef, productData);
-        alert("Product Updated!");
+        toast.success("Product Updated!");
       } else {
         // --- CREATE ---
         await addDoc(collection(db, "products"), {
             ...productData,
             createdAt: new Date().toISOString()
         });
-        alert("Product Added!");
+        toast.success("Product Added!");
       }
       
       onComplete(); // Parent ko batao ke kaam ho gaya (Refresh List)
@@ -65,7 +66,7 @@ export default function ProductForm({ currentUser, editingProduct, onClose, onCo
 
     } catch (error) {
       console.error(error);
-      alert("Error saving product");
+      toast.error("Error saving product");
     }
     setSubmitting(false);
   };

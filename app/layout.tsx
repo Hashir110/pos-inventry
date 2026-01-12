@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-
+import ToastProvider from "./components/ToastProvider";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
@@ -30,6 +30,7 @@ export default function RootLayout({
       <body
         className={`${inter.className} ${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <ToastProvider />
         {children}
       </body>
     </html>

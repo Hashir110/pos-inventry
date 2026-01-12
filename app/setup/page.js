@@ -6,7 +6,8 @@ import { createShopProfile, getUserShopProfile } from "../lib/authService"; // g
 import { auth } from "../lib/firebase"; 
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-
+// Is line ko code ke top par likhein:
+import { toast } from 'react-toastify';
 export default function SetupPage() {
   const { setCurrentShop } = useStore();
   const router = useRouter();
@@ -61,7 +62,7 @@ export default function SetupPage() {
 
     } catch (error) {
       console.error(error);
-      alert("Error: " + error.message);
+      toast.error("Error: " + error.message);
     }
     setSubmitting(false);
   };

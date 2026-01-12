@@ -15,7 +15,8 @@ import {
   MapPin,
   Receipt
 } from "lucide-react";
-
+// Is line ko code ke top par likhein:
+import { toast } from 'react-toastify';
 export default function SettingsPage() {
   const { currentUser, currentShop, setCurrentShop } = useStore();
   
@@ -66,10 +67,10 @@ export default function SettingsPage() {
       // Update Global Store (Taake Sidebar mn naam update hojaye)
       setCurrentShop({ ...currentShop, ...formData });
 
-      alert("Settings Saved Successfully!");
+      toast.success("Settings Saved Successfully!");
     } catch (error) {
       console.error(error);
-      alert("Error saving settings");
+      toast.error("Error saving settings");
     }
     setLoading(false);
   };

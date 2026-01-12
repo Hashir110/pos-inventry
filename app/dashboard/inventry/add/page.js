@@ -6,7 +6,8 @@ import { collection, addDoc } from "firebase/firestore";
 import { useStore } from "../../../store/useStore";
 import { Scale, Hash, ArrowLeft, Save, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation"; // Router wapis jane k liye
-
+// Is line ko code ke top par likhein:
+import { toast } from 'react-toastify';
 export default function AddProductPage() {
   const { currentUser } = useStore();
   const router = useRouter();
@@ -37,12 +38,12 @@ export default function AddProductPage() {
       });
 
       // Success!
-      alert("Product Added Successfully!");
+      toast.success("Product Added Successfully!");
       router.push("/dashboard/inventry"); // Wapis List par jao
 
     } catch (error) {
       console.error(error);
-      alert("Error: " + error.message);
+      toast.error("Error: " + error.message);
     }
     setSubmitting(false);
   };

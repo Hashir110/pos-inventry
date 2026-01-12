@@ -5,7 +5,8 @@ import { db } from "../../lib/firebase";
 import { collection, addDoc, query, where, orderBy, getDocs, deleteDoc, doc, Timestamp } from "firebase/firestore";
 import { useStore } from "../../store/useStore";
 import { Plus, Trash2, Calendar, DollarSign, Wallet } from "lucide-react";
-
+// Is line ko code ke top par likhein:
+import { toast } from 'react-toastify';
 export default function ExpensesPage() {
   const { currentUser } = useStore();
   
@@ -73,12 +74,12 @@ export default function ExpensesPage() {
 
         // Reset & Refresh
         setFormData({ title: "", amount: "", category: "General" });
-        alert("Expense Added!");
+        toast.success("Expense Added!");
         fetchExpenses(); 
 
     } catch (error) {
         console.error(error);
-        alert("Failed to add expense");
+        toast.error("Failed to add expense");
     }
     setSubmitting(false);
   };

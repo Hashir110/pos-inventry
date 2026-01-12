@@ -23,7 +23,8 @@ import {
   Wallet
 } from "lucide-react";
 import Link from "next/link";
-
+// Is line ko code ke top par likhein:
+import { toast } from 'react-toastify';
 export default function DashboardLayout({ children }) {
   const { currentShop, setCurrentUser, setCurrentShop } = useStore();
   const router = useRouter();
@@ -159,14 +160,14 @@ export default function DashboardLayout({ children }) {
         // Success: Clear LocalStorage
         localStorage.setItem("pendingSales", "[]");
         setPendingCount(0);
-        alert("All Data Synced Successfully!");
+        toast.success("All Data Synced Successfully!");
         
         // Refresh page to show updated stock
         window.location.reload();
 
     } catch (error) {
         console.error("Sync Error:", error);
-        alert("Sync Failed: " + error.message);
+        toast.error("Sync Failed: " + error.message);
     }
     setIsSyncing(false);
   };
