@@ -42,45 +42,50 @@ export default function DashboardHome() {
     setLoading(true);
 
     try {
-        // --- A. GET SALES DATA ---
+        // --- 1. DATE LOGIC SETTING ---
+        let startIso, endIso;
+        
+        if (isFilter && startDate && endDate) {
+            // User ne Date Select ki hai
+            const s = new Date(startDate); s.setHours(0, 0, 0, 0);
+            const e = new Date(endDate); e.setHours(23, 59, 59, 999);
+            startIso = s.toISOString();
+            endIso = e.toISOString();
+        } else {
+            // Default: Sirf is mahine ka data (1st Date to Now)
+            const now = new Date();
+            const s = new Date(now.getFullYear(), now.getMonth(), 1); // 1st of month
+            startIso = s.toISOString();
+            endIso = new Date().toISOString(); // Abhi tak
+        }
+
+        // --- A. GET SALES DATA (Optimized) ---
+        // Hum query mein hi bata rahe hain ke kab se kab tak ka data chahiye
         let salesQuery = query(
-            collection(db, "sales"), 
+            collection(db, "sales"),
             where("ownerId", "==", currentUser.uid),
+            where("date", ">=", startIso), // Start Date
+            ...(isFilter ? [where("date", "<=", endIso)] : []), // End Date (agar filter ho)
             orderBy("date", "desc")
         );
 
         const salesSnapshot = await getDocs(salesQuery);
+        // Ab JS filter ki zarurat nahi, data pehle hi filtered aaya hai
         let allSales = salesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // --- B. GET EXPENSES DATA (NEW) ---
+        // --- B. GET EXPENSES DATA (Optimized) ---
         let expensesQuery = query(
             collection(db, "expenses"),
             where("ownerId", "==", currentUser.uid),
+            where("date", ">=", startIso),
+            ...(isFilter ? [where("date", "<=", endIso)] : []),
             orderBy("date", "desc")
         );
+        
         const expenseSnapshot = await getDocs(expensesQuery);
         let allExpenses = expenseSnapshot.docs.map(doc => doc.data());
 
-
-        // --- FILTER LOGIC (Sales & Expenses Dono par lagega) ---
-        if (isFilter && startDate && endDate) {
-            const start = new Date(startDate).setHours(0,0,0,0);
-            const end = new Date(endDate).setHours(23,59,59,999);
-
-            // Filter Sales
-            allSales = allSales.filter(sale => {
-                const saleDate = new Date(sale.date).getTime();
-                return saleDate >= start && saleDate <= end;
-            });
-
-            // Filter Expenses
-            allExpenses = allExpenses.filter(exp => {
-                const expDate = new Date(exp.date).getTime();
-                return expDate >= start && expDate <= end;
-            });
-        } 
-        
-        // --- CALCULATIONS ---
+        // --- CALCULATIONS (Same as before) ---
         
         // 1. Calculate Sales & Gross Profit
         let totalRevenue = 0;
@@ -88,7 +93,6 @@ export default function DashboardHome() {
 
         allSales.forEach(sale => {
             totalRevenue += sale.totalAmount || 0;
-            
             if(sale.items) {
                 sale.items.forEach(item => {
                     const buying = item.buyingPrice || 0;
@@ -105,28 +109,29 @@ export default function DashboardHome() {
             totalExpenseSum += (parseFloat(exp.amount) || 0);
         });
 
-        // 3. Calculate FINAL Net Profit (Gross Profit - Expenses)
+        // 3. Calculate FINAL Net Profit
         const finalNetProfit = grossProfit - totalExpenseSum;
 
-        // --- C. GET LOW STOCK ---
+        // --- C. GET LOW STOCK (Optimized) ---
+        // Isay bhi optimize kar diya hai: Pura products fetch karne ke bajaye query karo
         const productsQuery = query(
             collection(db, "products"), 
-            where("ownerId", "==", currentUser.uid)
+            where("ownerId", "==", currentUser.uid),
+            where("stock", "<", 5) // Sirf kam stock wale fetch karo
         );
+        // Note: Is query ke liye bhi Index mangega shayad
+        // Agar ye index error de, toh filhal purana method use karein,
+        // Lekin best practice yehi hai.
         const productsSnap = await getDocs(productsQuery);
-        let lowStock = 0;
-        productsSnap.forEach(doc => {
-            const p = doc.data();
-            if(p.stock < 5) lowStock++; 
-        });
+        let lowStock = productsSnap.size; // Direct count mil gaya
 
         // --- UPDATE STATE ---
         setStats({
             totalSales: totalRevenue,
-            netProfit: finalNetProfit, // Ab ye Expense minus karke dikhayega
+            netProfit: finalNetProfit,
             totalInvoices: allSales.length,
             lowStockCount: lowStock,
-            totalExpenses: totalExpenseSum // Store Update
+            totalExpenses: totalExpenseSum
         });
         setInvoices(allSales); 
 
@@ -135,7 +140,7 @@ export default function DashboardHome() {
     } finally {
         setLoading(false);
     }
-  };
+};
 
   // Initial Load
   useEffect(() => {

@@ -216,7 +216,7 @@ export default function SalesHistoryPage() {
                     </div>
                     <div className="space-y-3">
                         {selectedSale.items.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-center border-b border-dashed border-gray-100 pb-2">
+                            <div key={idx} className="flex justify-between items-center border-b border-dashed border-gray-300 pb-2">
                                 <div>
                                     <p className="font-medium text-gray-800">{item.name}</p>
                                     <p className="text-xs text-gray-500">{item.qty} {item.type === 'weight' ? 'kg' : 'pcs'} x {item.price}</p>
@@ -227,7 +227,7 @@ export default function SalesHistoryPage() {
                     </div>
                 </div>
                 <div className="p-4 border-t bg-gray-50 flex gap-3">
-                    <button onClick={() => window.print()} className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex justify-center items-center gap-2"><Printer size={16} /> Print</button>
+                    <button onClick={() => setSelectedSale(null)} className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex justify-center items-center gap-2">Close</button>
                 </div>
             </div>
         </div>

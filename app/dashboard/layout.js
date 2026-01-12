@@ -187,7 +187,8 @@ export default function DashboardLayout({ children }) {
     { name: "Inventory", href: "/dashboard/inventry", icon: Package },
     { name: "Add Product", href: "/dashboard/inventry/add", icon: Package },
     { name: "POS (Sale)", href: "/dashboard/pos", icon: ShoppingCart },
-    { name: "Expenses", href: "/dashboard/expenses", icon: Wallet }, // <--- NEW ADDITION
+    { name: "Expenses", href: "/dashboard/expenses", icon: Wallet },
+    { name: "Sales History", href: "/dashboard/sales", icon: ShoppingCart }, 
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
   ];
 
