@@ -27,48 +27,48 @@ export default function POSPage() {
     const [showMobileCart, setShowMobileCart] = useState(false);
 
     // 1. Fetch Products (Real-time Listener)
-  useEffect(() => {
-    // Online/Offline Status Listeners
-    setIsOnline(navigator.onLine);
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    useEffect(() => {
+        // Online/Offline Status Listeners
+        setIsOnline(navigator.onLine);
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
 
-    let unsubscribe = () => {};
+        let unsubscribe = () => { };
 
-    if (currentUser) {
-        setLoading(true);
-        try {
-            const q = query(
-                collection(db, "products"), 
-                where("ownerId", "==", currentUser.uid)
-            );
+        if (currentUser) {
+            setLoading(true);
+            try {
+                const q = query(
+                    collection(db, "products"),
+                    where("ownerId", "==", currentUser.uid)
+                );
 
-            // --- CHANGE: getDocs ki jagah onSnapshot (Live Data) ---
-            unsubscribe = onSnapshot(q, (snapshot) => {
-                const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-                setProducts(items);
+                // --- CHANGE: getDocs ki jagah onSnapshot (Live Data) ---
+                unsubscribe = onSnapshot(q, (snapshot) => {
+                    const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    setProducts(items);
+                    setLoading(false);
+                }, (error) => {
+                    console.log("Real-time fetch error:", error);
+                    setLoading(false);
+                });
+
+            } catch (err) {
+                console.log("Offline or Error fetching products");
                 setLoading(false);
-            }, (error) => {
-                console.log("Real-time fetch error:", error);
-                setLoading(false);
-            });
-
-        } catch (err) {
-            console.log("Offline or Error fetching products");
-            setLoading(false);
+            }
         }
-    }
 
-    // Cleanup function
-    return () => {
-        unsubscribe(); // Firebase listener band karo jab page choro
-        window.removeEventListener('online', handleOnline);
-        window.removeEventListener('offline', handleOffline);
-    };
-  }, [currentUser]);
+        // Cleanup function
+        return () => {
+            unsubscribe(); // Firebase listener band karo jab page choro
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, [currentUser]);
     // 2. Product Click
     const handleProductClick = (product) => {
         setSelectedProduct(product);
@@ -127,76 +127,77 @@ export default function POSPage() {
     // };
 
     // 6. STEP 2: Finalize Sale (Direct Action)
-   const handleFinalizeSale = async () => {
-    setCheckoutLoading(true);
+    const handleFinalizeSale = async () => {
+        setCheckoutLoading(true);
 
-    try {
-      if (isOnline) {
-        // --- ONLINE LOGIC (Firebase Transaction) ---
-        await runTransaction(db, async (transaction) => {
-           // ... (Yahan apka purana Transaction Code ayega, same wesa hi) ...
-           // Main short kar raha hun taake confusion na ho
-           
-           const reads = [];
-           for (const item of cart) {
-               const productRef = doc(db, "products", item.id);
-               const snapshot = await transaction.get(productRef);
-               reads.push({ snapshot, item });
-           }
-           const updates = [];
-           for (const { snapshot, item } of reads) {
-               if (!snapshot.exists()) throw `Error: ${item.name} not found!`;
-               const currentStock = snapshot.data().stock;
-               if (currentStock < item.qty) throw `Stock Low! ${item.name} only ${currentStock} left.`;
-               updates.push({ ref: snapshot.ref, newStock: currentStock - item.qty });
-           }
-           updates.forEach((update) => {
-               transaction.update(update.ref, { stock: update.newStock });
-           });
-           const saleRef = doc(collection(db, "sales"));
-           transaction.set(saleRef, {
-               ownerId: currentUser.uid,
-               items: cart,
-               totalAmount: grandTotal,
-               date: new Date().toISOString()
-           });
-        });
+        try {
+            if (isOnline) {
+                // --- ONLINE LOGIC (Firebase Transaction) ---
+                await runTransaction(db, async (transaction) => {
+                    // ... (Yahan apka purana Transaction Code ayega, same wesa hi) ...
+                    // Main short kar raha hun taake confusion na ho
 
-      } else {
-        // --- OFFLINE LOGIC ---
-        const offlineOrder = {
-            ownerId: currentUser.uid,
-            items: cart,
-            totalAmount: grandTotal,
-            date: new Date().toISOString(),
-            isOffline: true 
-        };
-        const pendingSales = JSON.parse(localStorage.getItem("pendingSales") || "[]");
-        pendingSales.push(offlineOrder);
-        localStorage.setItem("pendingSales", JSON.stringify(pendingSales));
+                    const reads = [];
+                    for (const item of cart) {
+                        const productRef = doc(db, "products", item.id);
+                        const snapshot = await transaction.get(productRef);
+                        reads.push({ snapshot, item });
+                    }
+                    const updates = [];
+                    for (const { snapshot, item } of reads) {
+                        if (!snapshot.exists()) throw `Error: ${item.name} not found!`;
+                        const currentStock = snapshot.data().stock;
+                        if (currentStock < item.qty) throw `Stock Low! ${item.name} only ${currentStock} left.`;
+                        updates.push({ ref: snapshot.ref, newStock: currentStock - item.qty });
+                    }
+                    updates.forEach((update) => {
+                        transaction.update(update.ref, { stock: update.newStock });
+                    });
+                    const saleRef = doc(collection(db, "sales"));
+                    transaction.set(saleRef, {
+                        productId: saleRef.id,
+                        ownerId: currentUser.uid,
+                        items: cart,
+                        totalAmount: grandTotal,
+                        date: new Date().toISOString()
+                    });
+                });
 
-        const updatedProducts = products.map(p => {
-            const cartItem = cart.find(c => c.id === p.id);
-            if (cartItem) return { ...p, stock: p.stock - cartItem.qty };
-            return p;
-        });
-        setProducts(updatedProducts);
-      }
+            } else {
+                // --- OFFLINE LOGIC ---
+                const offlineOrder = {
+                    ownerId: currentUser.uid,
+                    items: cart,
+                    totalAmount: grandTotal,
+                    date: new Date().toISOString(),
+                    isOffline: true
+                };
+                const pendingSales = JSON.parse(localStorage.getItem("pendingSales") || "[]");
+                pendingSales.push(offlineOrder);
+                localStorage.setItem("pendingSales", JSON.stringify(pendingSales));
 
-      // --- SUCCESS LOGIC (Change Here) ---
-      // Cart clear MAT karo abhi.
-      // Sirf Receipt Modal kholo.
-      toast.success("Sale Successful!");
-      setShowReceipt(true); 
+                const updatedProducts = products.map(p => {
+                    const cartItem = cart.find(c => c.id === p.id);
+                    if (cartItem) return { ...p, stock: p.stock - cartItem.qty };
+                    return p;
+                });
+                setProducts(updatedProducts);
+            }
 
-    } catch (error) {
-        console.error(error);
-        toast.error("Failed: " + (typeof error === 'string' ? error : error.message));
-    }
-    setCheckoutLoading(false);
-  };
+            // --- SUCCESS LOGIC (Change Here) ---
+            // Cart clear MAT karo abhi.
+            // Sirf Receipt Modal kholo.
+            toast.success("Sale Successful!");
+            setShowReceipt(true);
 
- 
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed: " + (typeof error === 'string' ? error : error.message));
+        }
+        setCheckoutLoading(false);
+    };
+
+
 
     const filteredProducts = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -204,7 +205,7 @@ export default function POSPage() {
         <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] lg:h-[calc(100vh-100px)] gap-4 relative">
             {/* Print Styles */}
             {/* Print Styles for Thermal Printer */}
-      <style jsx global>{`
+            <style jsx global>{`
         @media print {
           /* Page setup for Thermal Printer */
           @page {
@@ -474,73 +475,73 @@ export default function POSPage() {
                 </div>
             )}
 
-           {/* Receipt Modal */}
-      {showReceipt && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] animate-in fade-in backdrop-blur-sm p-4">
-            
-            {/* Printable Container */}
-            <div id="printable-receipt" className="bg-white p-4 rounded-xl w-full max-w-[300px] shadow-2xl relative text-black">
-                
-                {/* Close Button (Hidden in Print) */}
-                <button 
-                    onClick={() => { setShowReceipt(false); setCart([]); }} // Close & Clear
-                    className="absolute top-2 right-2 p-1 text-gray-400 no-print"
-                >
-                    <X size={20} />
-                </button>
+            {/* Receipt Modal */}
+            {showReceipt && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] animate-in fade-in backdrop-blur-sm p-4">
 
-                {/* --- SLIP CONTENT (Clean Design) --- */}
-                <div className="text-center mb-2 border-b border-black pb-2">
-                    <h2 className="text-lg font-bold uppercase text-black">{currentShop?.shopName}</h2>
-                    <p className="text-[10px] text-black">{new Date().toLocaleString()}</p>
-                </div>
+                    {/* Printable Container */}
+                    <div id="printable-receipt" className="bg-white p-4 rounded-xl w-full max-w-[300px] shadow-2xl relative text-black">
 
-                <div className="space-y-1 mb-2 text-xs max-h-60 overflow-auto text-black">
-                    {cart.map((item, idx) => (
-                        <div key={idx} className="flex justify-between border-b border-dotted border-gray-400 pb-1">
-                            <span className="truncate w-24 font-medium">{item.name}</span>
-                            <span className="text-[10px]">{item.qty} x {item.price}</span>
-                            <span className="font-bold">{Math.round(item.total)}</span>
+                        {/* Close Button (Hidden in Print) */}
+                        <button
+                            onClick={() => { setShowReceipt(false); setCart([]); }} // Close & Clear
+                            className="absolute top-2 right-2 p-1 text-gray-400 no-print"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        {/* --- SLIP CONTENT (Clean Design) --- */}
+                        <div className="text-center mb-2 border-b border-black pb-2">
+                            <h2 className="text-lg font-bold uppercase text-black">{currentShop?.shopName}</h2>
+                            <p className="text-[10px] text-black">{new Date().toLocaleString()}</p>
                         </div>
-                    ))}
-                </div>
 
-                <div className="border-t border-black pt-2 mb-4">
-                    <div className="flex justify-between text-lg font-bold text-black">
-                        <span>Total:</span>
-                        <span>Rs. {Math.round(grandTotal)}</span>
+                        <div className="space-y-1 mb-2 text-xs max-h-60 overflow-auto text-black">
+                            {cart.map((item, idx) => (
+                                <div key={idx} className="flex justify-between border-b border-dotted border-gray-400 pb-1">
+                                    <span className="truncate w-24 font-medium">{item.name}</span>
+                                    <span className="text-[10px]">{item.qty} x {item.price}</span>
+                                    <span className="font-bold">{Math.round(item.total)}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="border-t border-black pt-2 mb-4">
+                            <div className="flex justify-between text-lg font-bold text-black">
+                                <span>Total:</span>
+                                <span>Rs. {Math.round(grandTotal)}</span>
+                            </div>
+                        </div>
+
+                        <div className="text-center text-[10px] text-black mb-4">
+                            Thank you for shopping!<br />No Return / Exchange
+                        </div>
+
+                        {/* --- BUTTONS (Hidden in Print) --- */}
+                        <div className="flex flex-col gap-2 no-print">
+
+                            {/* Print Button */}
+                            <button
+                                onClick={() => window.print()}
+                                className="w-full py-3 bg-green-600 text-white rounded-lg font-bold flex justify-center items-center gap-2 hover:bg-green-700"
+                            >
+                                <Printer size={18} /> Print Slip
+                            </button>
+
+                            {/* New Order Button */}
+                            <button
+                                onClick={() => {
+                                    setShowReceipt(false); // Modal Band
+                                    setCart([]);           // Cart Khali
+                                }}
+                                className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700"
+                            >
+                                New Order (Clear Cart)
+                            </button>
+                        </div>
                     </div>
                 </div>
-
-                <div className="text-center text-[10px] text-black mb-4">
-                    Thank you for shopping!<br/>No Return / Exchange
-                </div>
-
-                {/* --- BUTTONS (Hidden in Print) --- */}
-                <div className="flex flex-col gap-2 no-print">
-                    
-                    {/* Print Button */}
-                    <button 
-                        onClick={() => window.print()} 
-                        className="w-full py-3 bg-green-600 text-white rounded-lg font-bold flex justify-center items-center gap-2 hover:bg-green-700"
-                    >
-                        <Printer size={18} /> Print Slip
-                    </button>
-
-                    {/* New Order Button */}
-                    <button 
-                        onClick={() => {
-                            setShowReceipt(false); // Modal Band
-                            setCart([]);           // Cart Khali
-                        }} 
-                        className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700"
-                    >
-                        New Order (Clear Cart)
-                    </button>
-                </div>
-            </div>
-        </div>
-      )}
+            )}
 
         </div>
     );

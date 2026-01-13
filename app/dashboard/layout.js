@@ -20,7 +20,8 @@ import {
   MessageCircle,
   Phone,
   X,
-  Wallet
+  Wallet,
+  RotateCcw
 } from "lucide-react";
 import Link from "next/link";
 // Is line ko code ke top par likhein:
@@ -190,6 +191,7 @@ export default function DashboardLayout({ children }) {
     { name: "POS (Sale)", href: "/dashboard/pos", icon: ShoppingCart },
     { name: "Expenses", href: "/dashboard/expenses", icon: Wallet },
     { name: "Sales History", href: "/dashboard/sales", icon: ShoppingCart }, 
+    {name: "Returns", href: "/dashboard/returns", icon: RotateCcw },
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
   ];
 
