@@ -11,15 +11,13 @@ export default function ReturnsPage() {
     const [loading, setLoading] = useState(false);
     // const { user } = useAuth(); // User ID chahiye hogi
 
-    const ownerId = "RujJth2c3iWyA9Gx6z5xxYjYAB73"
 
 
     // 1. Invoice Search Karna
     const handleSearch = async (e) => {
         e.preventDefault();
 
-        console.log("Current User UID:", ownerId); // Check karein user logged in hai ya nahi
-        console.log("Searching for ID:", invoiceId.trim());
+
         if (!invoiceId) return;
         setLoading(true);
         setSaleData(null);
@@ -42,71 +40,59 @@ export default function ReturnsPage() {
 
     // 2. Return Process Karna (Single Item)
     const handleReturnItem = async (item, index) => {
-        // 1. Prompt mein quantity maangna
-        // (Max returnable = Total Sold - Already Returned)
+        // ... (Prompt aur Validation wala hissa same rahega) ...
+
+        // Log for debugging
         console.log("🔍 INSPECT ITEM:", JSON.stringify(item, null, 2));
 
         const availableToReturn = item.qty - (item.returnedQty || 0);
         const qtyStr = prompt(`How many "${item.name}" to return? (Max: ${availableToReturn})`);
 
-        if (!qtyStr) return; // User ne cancel kar diya
+        if (!qtyStr) return;
 
-        // --- FIX 1: Allow Decimals (Weight items ke liye) ---
         const returnQty = parseFloat(qtyStr);
 
-        // Validation
-        if (isNaN(returnQty) || returnQty <= 0) {
-            return toast.error("Invalid Quantity! (Zero allowed nahi hai)");
-        }
-        if (returnQty > availableToReturn) {
-            return toast.error(`Error: Sirf ${availableToReturn} wapas ho sakte hain.`);
-        }
+        if (isNaN(returnQty) || returnQty <= 0) return toast.error("Invalid Quantity!");
+        if (returnQty > availableToReturn) return toast.error(`Error: Max limit is ${availableToReturn}`);
 
         try {
             setLoading(true);
 
-            // --- FIX 2: Debugging & Stock Update ---
-            console.log("Returning Item:", item.name, "Product ID:", item.productId);
-
+            // 1. ID Solution (Jo aapne pehle lagaya tha)
             const actualProductId = item.productId || item.id;
-
             console.log("🎯 Stock Update ID:", actualProductId);
 
             if (actualProductId) {
-                // Ab ID mil jayegi ("TYuUs1aFSpgCeKVXq3GF")
                 const productRef = doc(db, "products", actualProductId);
+
+                // 🔥 FIX 1: ownerId bhejna zaroori hai security rules ke liye
                 await updateDoc(productRef, {
-                    stock: increment(returnQty)
+                    stock: increment(returnQty),
+                    ownerId: saleData.ownerId
                 });
-                // toast.success("Stock restored!"); // Optional
             } else {
                 toast.warning("⚠️ Stock update skipped (ID missing)");
             }
 
-            // --- Refund Amount Calculation (Fix for NaN) ---
-            // Selling Price check karo, agar nahi hai to Price uthao
+            // 2. Price Calculation
             const unitPrice = item.sellingPrice !== undefined ? parseFloat(item.sellingPrice) : parseFloat(item.price || 0);
             const refundAmount = returnQty * unitPrice;
 
-            if (isNaN(refundAmount)) {
-                console.error("Price Issue:", item);
-                throw new Error("Price missing in data");
-            }
+            if (isNaN(refundAmount)) throw new Error("Price calculation error");
 
-            // --- Update Sale Document ---
+            // 3. Sales Document Update
             const saleRef = doc(db, "sales", saleData.id);
-
-            // Items array ko update karo (Returned Qty barhao)
             const updatedItems = [...saleData.items];
             if (!updatedItems[index].returnedQty) updatedItems[index].returnedQty = 0;
-            updatedItems[index].returnedQty += returnQty; // 0.25 bhi add ho jayega
+            updatedItems[index].returnedQty += returnQty;
 
             await updateDoc(saleRef, {
                 items: updatedItems,
-                refundedAmount: increment(refundAmount)
+                refundedAmount: increment(refundAmount),
+                ownerId: saleData.ownerId // 🔥 Ahtiyatan yahan bhi bhej dein
             });
 
-            // --- Create Return Record ---
+            // 4. Returns Collection Add
             await addDoc(collection(db, "returns"), {
                 originalSaleId: saleData.id,
                 itemName: item.name,
@@ -114,7 +100,7 @@ export default function ReturnsPage() {
                 unitPrice: unitPrice,
                 refundAmount: refundAmount,
                 date: new Date().toISOString(),
-                ownerId: ownerId
+                ownerId: saleData.ownerId // 🔥 FIX 2: Variable name corrected
             });
 
             toast.success(`Returned ${returnQty} x ${item.name} Successfully!`);
@@ -125,7 +111,7 @@ export default function ReturnsPage() {
 
         } catch (error) {
             console.error("Return Error:", error);
-            toast.error("Return Failed! Console check karein.");
+            toast.error("Return Failed! (Check Console for details)");
         } finally {
             setLoading(false);
         }
