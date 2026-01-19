@@ -484,18 +484,40 @@ export default function POSPage() {
 
                         {/* Close Button (Hidden in Print) */}
                         <button
-                            onClick={() => { setShowReceipt(false); setCart([]); }} // Close & Clear
+                            onClick={() => { setShowReceipt(false); setCart([]); }}
                             className="absolute top-2 right-2 p-1 text-gray-400 no-print"
                         >
                             <X size={20} />
                         </button>
 
-                        {/* --- SLIP CONTENT (Clean Design) --- */}
+                        {/* --- SLIP HEADER (Updated) --- */}
                         <div className="text-center mb-2 border-b border-black pb-2">
-                            <h2 className="text-lg font-bold uppercase text-black">{currentShop?.shopName}</h2>
-                            <p className="text-[10px] text-black">{new Date().toLocaleString()}</p>
+                            {/* 1. Shop Name */}
+                            <h2 className="text-lg font-bold uppercase text-black leading-tight">
+                                {currentShop?.shopName || "My Shop"}
+                            </h2>
+
+                            {/* 2. Address (Agar majood ho toh dikhao) */}
+                            {currentShop?.address && (
+                                <p className="text-[10px] text-gray-800 mt-1">
+                                    Address: {currentShop.address}
+                                </p>
+                            )}
+
+                            {/* 3. Contact Number */}
+                            {currentShop?.contact && (
+                                <p className="text-[10px] font-bold text-gray-900">
+                                    Ph: {currentShop.contact}
+                                </p>
+                            )}
+
+                            {/* 4. Date & Time */}
+                            <p className="text-[9px] text-gray-600 mt-1">
+                                {new Date().toLocaleString()}
+                            </p>
                         </div>
 
+                        {/* --- SLIP ITEMS (Same as before) --- */}
                         <div className="space-y-1 mb-2 text-xs max-h-60 overflow-auto text-black">
                             {cart.map((item, idx) => (
                                 <div key={idx} className="flex justify-between border-b border-dotted border-gray-400 pb-1">
@@ -506,6 +528,7 @@ export default function POSPage() {
                             ))}
                         </div>
 
+                        {/* --- TOTALS --- */}
                         <div className="border-t border-black pt-2 mb-4">
                             <div className="flex justify-between text-lg font-bold text-black">
                                 <span>Total:</span>
@@ -513,8 +536,19 @@ export default function POSPage() {
                             </div>
                         </div>
 
-                        <div className="text-center text-[10px] text-black mb-4">
-                            Thank you for shopping!<br />No Return / Exchange
+                        {/* --- FOOTER MESSAGE (Updated) --- */}
+                        <div className="text-center text-[10px] text-black mb-4 whitespace-pre-wrap leading-tight">
+                            {/* Agar User ne Custom Message set kiya hai wo dikhao, warna Default dikhao */}
+                            {currentShop?.receiptMessage ? (
+                                currentShop.receiptMessage
+                            ) : (
+                                <>
+                                    Thank you for shopping!<br />
+                                    No Return / Exchange
+                                </>
+                            )}
+                            <p className="text-black my-1 whitespace-pre-wrap leading-tight">Powered by H-H Partners</p>
+                            <p>For Contact US: 03090391673</p>
                         </div>
 
                         {/* --- BUTTONS (Hidden in Print) --- */}
@@ -531,8 +565,8 @@ export default function POSPage() {
                             {/* New Order Button */}
                             <button
                                 onClick={() => {
-                                    setShowReceipt(false); // Modal Band
-                                    setCart([]);           // Cart Khali
+                                    setShowReceipt(false);
+                                    setCart([]);
                                 }}
                                 className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700"
                             >

@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useStore } from "../store/useStore";
 import { db } from "../lib/firebase";
+import { toast } from 'react-toastify';
 import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"; // orderBy aur limit add kiya
 import {
     DollarSign,
@@ -12,7 +13,10 @@ import {
     Calendar,
     Filter,
     Loader2,
-    Wallet
+    Wallet,
+    EyeOff,
+    Eye,
+    X
 } from "lucide-react";
 
 export default function DashboardHome() {
@@ -22,6 +26,13 @@ export default function DashboardHome() {
     // Date Filters
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
+
+    const [showSales, setShowSales] = useState(false);
+    const [showProfit, setShowProfit] = useState(false);
+
+    const [isPassModalOpen, setIsPassModalOpen] = useState(false);
+    const [passInput, setPassInput] = useState("");
+    const [targetField, setTargetField] = useState(null);
 
     // Stats Data
     const [stats, setStats] = useState({
@@ -181,6 +192,36 @@ export default function DashboardHome() {
         inv.id.toLowerCase().includes(searchInvoice.toLowerCase())
     );
 
+    const handleToggle = (field) => {
+        // Agar pehle se khula hai toh band kardo (No password needed to hide)
+        if (field === 'sales' && showSales) return setShowSales(false);
+        if (field === 'profit' && showProfit) return setShowProfit(false);
+
+        // Agar hidden hai toh password modal kholo
+        setTargetField(field);
+        setPassInput(""); // Clear previous input
+        setIsPassModalOpen(true);
+    };
+
+    const verifyPassword = (e) => {
+        e.preventDefault();
+        const savedPass = localStorage.getItem("dashboardPass");
+
+        if (!savedPass) {
+            toast.error("Please set a password in Settings first!");
+            return;
+        }
+
+        if (passInput === savedPass) {
+            if (targetField === 'sales') setShowSales(true);
+            if (targetField === 'profit') setShowProfit(true);
+            setIsPassModalOpen(false); // Close Modal
+            toast.success("Access Granted");
+        } else {
+            toast.error("Wrong Password!");
+        }
+    };
+
     return (
         <div className="space-y-6 font-sans">
 
@@ -246,6 +287,9 @@ export default function DashboardHome() {
                     icon={DollarSign}
                     theme="blue"
                     loading={loading}
+                    isPrivate={true}           // Yeh card private hai
+                    isVisible={showSales}      // State se control hoga
+                    onToggle={() => handleToggle('sales')}
                 />
 
                 {/* NEW EXPENSE CARD */}
@@ -265,6 +309,9 @@ export default function DashboardHome() {
                     icon={TrendingUp}
                     theme="green"
                     loading={loading}
+                    isPrivate={true}           // Yeh card private hai
+                    isVisible={showProfit}     // State se control hoga
+                    onToggle={() => handleToggle('profit')}
                 />
 
                 <StatCard
@@ -337,7 +384,7 @@ export default function DashboardHome() {
                                     <tr key={inv.id} className="hover:bg-blue-50/30 transition">
                                         <td className="p-4 text-gray-600">{formatDate(inv.date)}</td>
                                         <td className="p-4 font-mono text-xs text-gray-500">#{inv.id
-                                            }</td>
+                                        }</td>
                                         <td className="p-4 text-gray-800">{inv.items?.length || 0} items</td>
                                         <td className="p-4 text-right font-bold text-gray-800">
                                             Rs {Math.round(inv.totalAmount).toLocaleString()}
@@ -357,12 +404,46 @@ export default function DashboardHome() {
                     </div>
                 )}
             </div>
+
+            {isPassModalOpen && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[99] backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm relative animate-in fade-in zoom-in duration-200">
+
+                        <button
+                            onClick={() => setIsPassModalOpen(false)}
+                            className="absolute top-3 right-3 text-gray-400 hover:text-black"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        <h3 className="text-lg font-bold mb-4 text-center">Security Check 🔒</h3>
+                        <p className="text-sm text-gray-500 mb-4 text-center">Enter dashboard password to view this amount.</p>
+
+                        <form onSubmit={verifyPassword}>
+                            <input
+                                type="password"
+                                autoFocus
+                                className="w-full p-3 border rounded-lg mb-4 text-center text-lg tracking-widest outline-none focus:ring-2 focus:ring-blue-500"
+                                placeholder="Enter Password"
+                                value={passInput}
+                                onChange={(e) => setPassInput(e.target.value)}
+                            />
+                            <button
+                                type="submit"
+                                className="w-full bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 transition"
+                            >
+                                Unlock
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
 
 // Updated StatCard with Loading State
-function StatCard({ title, value, subtitle, icon: Icon, theme, loading }) {
+function StatCard({ title, value, subtitle, icon: Icon, theme, loading, isPrivate, isVisible, onToggle }) {
 
     const styles = {
         blue: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-600", iconBg: "bg-blue-100" },
@@ -381,7 +462,12 @@ function StatCard({ title, value, subtitle, icon: Icon, theme, loading }) {
                     {loading ? (
                         <div className="h-8 w-24 bg-gray-200 animate-pulse rounded"></div>
                     ) : (
-                        <h3 className="text-2xl font-bold text-gray-800 tracking-tight">{value}</h3>
+                        <h3 className="text-2xl font-bold text-gray-800 tracking-tight">{isPrivate && !isVisible ? "****" : value}</h3>
+                    )}
+                    {isPrivate && (
+                        <button onClick={onToggle} className="text-gray-400 hover:text-gray-600">
+                            {isVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
                     )}
                 </div>
                 <div className={`p-2.5 rounded-lg ${currentStyle.iconBg} ${currentStyle.text}`}>
