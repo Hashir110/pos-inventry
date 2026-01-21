@@ -18,7 +18,7 @@ export default function LicenseExpiredPage() {
             <p className="text-sm text-gray-500 mb-2">Contact Support:</p>
             <div className="flex items-center justify-center gap-2 text-lg font-bold text-blue-600">
                 <Phone size={20} />
-                <span>0300-1234567</span> 
+                <span>03304201181</span> 
             </div>
         </div>
         
