@@ -22,14 +22,15 @@ export const getUserShopProfile = async (uid) => {
 export const createShopProfile = async (user, shopDetails) => {
   try {
     const userDocRef = doc(db, "users", user.uid);
-    
+
     const newShopData = {
       uid: user.uid,
       email: user.email,
       shopName: shopDetails.shopName,
       businessType: shopDetails.businessType, // Grocery, Medical, etc.
       currency: "PKR", // Default
-      createdAt: new Date(),
+      createdAt: shopDetails.createdAt || new Date().toISOString(),
+      licenseExpiry: shopDetails.licenseExpiry
     };
 
     await setDoc(userDocRef, newShopData);

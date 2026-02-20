@@ -548,7 +548,7 @@ export default function POSPage() {
                                 </>
                             )}
                             <p className="text-black my-1 whitespace-pre-wrap leading-tight">Powered by H-H Partners</p>
-                            <p>For Contact US: 03090391673</p>
+                            <p>For Contact US: 0314-1811181</p>
                         </div>
 
                         {/* --- BUTTONS (Hidden in Print) --- */}

@@ -102,13 +102,14 @@ export default function AddProductPage() {
             </div>
 
             {/* Prices */}
-            <div>
+           <div>
               <label className="text-sm font-semibold text-gray-700">Buying Price</label>
               <div className="relative mt-1">
                 <span className="absolute left-3 top-3 text-gray-500 font-bold">Rs.</span>
                 <input 
                     type="number" required min="0" step="0.01"
-                    className="w-full pl-10 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                    // 👇 Yahan Tailwind ki custom classes add ki hain
+                    className="w-full pl-10 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     value={formData.buyingPrice}
                     onChange={(e) => setFormData({...formData, buyingPrice: e.target.value})}
                 />
@@ -121,7 +122,8 @@ export default function AddProductPage() {
                 <span className="absolute left-3 top-3 text-gray-500 font-bold">Rs.</span>
                 <input 
                     type="number" required min="0" step="0.01"
-                    className="w-full pl-10 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                    // 👇 Yahan bhi same classes add ki hain
+                    className="w-full pl-10 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     value={formData.sellingPrice}
                     onChange={(e) => setFormData({...formData, sellingPrice: e.target.value})}
                 />
@@ -135,7 +137,7 @@ export default function AddProductPage() {
               </label>
               <input 
                 type="number" required min="0" step="0.01"
-                className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 value={formData.stock}
                 onChange={(e) => setFormData({...formData, stock: e.target.value})}
               />

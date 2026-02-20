@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store/useStore";
 import { createShopProfile, getUserShopProfile } from "../lib/authService"; // getUserShopProfile import kiya
-import { auth } from "../lib/firebase"; 
+import { auth } from "../lib/firebase";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 // Is line ko code ke top par likhein:
@@ -11,7 +11,7 @@ import { toast } from 'react-toastify';
 export default function SetupPage() {
   const { setCurrentShop } = useStore();
   const router = useRouter();
-  
+
   const [formData, setFormData] = useState({
     shopName: "",
     businessType: "Grocery"
@@ -25,17 +25,30 @@ export default function SetupPage() {
     const unsubscribe = auth.onAuthStateChanged(async (u) => {
       if (u) {
         setUser(u);
-        
+
         // CHECK: Kya is bande ki shop pehle se hai?
         const existingShop = await getUserShopProfile(u.uid);
-        
+
         if (existingShop) {
-            // Agar shop hai, toh yahan kya kar rahe ho? Chalo Dashboard!
-            setCurrentShop(existingShop);
-            router.replace("/dashboard"); // 'push' ki jagah 'replace' taake back na aa sake
+          // --- 🔥 EXPIRE CHECK (Agar koi direct /setup URL type karke aaye) ---
+          if (existingShop.licenseExpiry) {
+            const now = new Date();
+            const expiry = new Date(existingShop.licenseExpiry);
+
+            if (now > expiry) {
+              toast.error("Aapka Trial khatam ho chuka hai!");
+              router.replace("/expired?type=trial"); // Expired page par bhej do
+              return;
+            }
+          }
+          // -----------------------------------------------------------------
+
+          // Agar shop hai aur trial bacha hai, toh Dashboard!
+          setCurrentShop(existingShop);
+          router.replace("/dashboard");
         } else {
-            // Agar shop nahi hai, tabhi form dikhao
-            setLoading(false);
+          // Agar shop nahi hai, tabhi form dikhao
+          setLoading(false);
         }
       } else {
         // Login hi nahi hai toh bahar nikalo
@@ -47,24 +60,39 @@ export default function SetupPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if(!user) return;
-    
+    if (!user) return;
+
     setSubmitting(true);
     try {
-      // 1. Firebase mn save karo
-      await createShopProfile(user, formData);
-      
+      // --- 🔥 7 DAYS TRIAL LOGIC ---
+      const today = new Date();
+      const expiryDate = new Date(today);
+      expiryDate.setDate(expiryDate.getDate() + 7); // 7 din add kiye
+
+      // Form data mein dates mix karein
+      const finalDataToSave = {
+        ...formData,
+        createdAt: today.toISOString(),
+        licenseExpiry: expiryDate.toISOString() // Ye database mein save hoga
+      };
+      // -----------------------------
+
+      // 1. Firebase mn save karo (Ab finalDataToSave bhejna hai)
+      await createShopProfile(user, finalDataToSave);
+
       // 2. Store update karo
-      setCurrentShop({ ...formData, uid: user.uid });
-      
+      setCurrentShop({ ...finalDataToSave, uid: user.uid });
+
       // 3. Dashboard bhejo
+      toast.success("Account Created! 7-Day Free Trial Started 🎉");
       router.push("/dashboard");
 
     } catch (error) {
       console.error(error);
       toast.error("Error: " + error.message);
+    } finally {
+      setSubmitting(false); // Finally block use karna zyada behtar hai
     }
-    setSubmitting(false);
   };
 
   // Jab tak check chal raha hai, Loading dikhao
@@ -83,7 +111,7 @@ export default function SetupPage() {
       <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-lg">
         <h2 className="mb-6 text-2xl font-bold text-gray-800">Shop Setup</h2>
         <p className="mb-4 text-sm text-gray-500">Welcome! Apni dukan setup karein.</p>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Dukan ka Naam</label>
@@ -92,7 +120,7 @@ export default function SetupPage() {
               required
               className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               value={formData.shopName}
-              onChange={(e) => setFormData({...formData, shopName: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, shopName: e.target.value })}
               placeholder="e.g. Bismillah General Store"
             />
           </div>
@@ -102,7 +130,7 @@ export default function SetupPage() {
             <select
               className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               value={formData.businessType}
-              onChange={(e) => setFormData({...formData, businessType: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
             >
               <option value="Grocery">Grocery / Kiryana</option>
               <option value="Medical">Medical Store</option>
