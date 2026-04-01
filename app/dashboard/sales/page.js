@@ -222,99 +222,117 @@ export default function SalesHistoryPage() {
 
       {/* --- SALES TABLE --- */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="p-4 font-semibold text-gray-600">Date</th>
-                <th className="p-4 font-semibold text-gray-600">Items</th>
-                <th className="p-4 text-left font-semibold text-gray-600">
-                  <div className="flex items-center gap-2">
-                    Sale Amount
-                    <button onClick={() => handleToggle('revenue')} className="text-gray-400 hover:text-blue-600">
-                      {showRevenue ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </th>
-                <th className="p-4 text-left font-semibold text-gray-600">
-                  <div className="flex items-center gap-2">
-                    Profit
-                    <button onClick={() => handleToggle('profit')} className="text-gray-400 hover:text-green-600">
-                      {showProfit ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </button>
-                  </div>
-                </th>
-                <th className="p-4 font-semibold text-gray-600 text-right">View</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {loading ? (
-                <tr><td colSpan="5" className="p-6 text-center">Loading Data...</td></tr>
-              ) : sales.length === 0 ? (
-                <tr><td colSpan="5" className="p-6 text-center text-gray-500">No records found.</td></tr>
-              ) : (
-                sales.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-gray-50 transition">
-                    <td className="p-4 text-gray-900">
-                      {formatDate(sale.date)}
-                    </td>
-                    <td className="p-4">
-                      {sale.items.length} items
-                    </td>
-                    {/* TOTAL AMOUNT CELL */}
-                    <td className="p-4 font-bold text-gray-800">
-                      {showRevenue
-                        ? `Rs. ${Math.round(sale.totalAmount).toLocaleString()}`
-                        : "****"
-                      }
-                    </td>
+  <div className="overflow-x-auto">
+    <table className="w-full text-left text-sm">
+      <thead className="bg-gray-50 border-b">
+        <tr>
+          {/* Naye Headers */}
+          <th className="p-4 font-semibold text-gray-600">ID</th>
+          <th className="p-4 font-semibold text-gray-600">Customer</th>
+          
+          <th className="p-4 font-semibold text-gray-600">Date</th>
+          <th className="p-4 font-semibold text-gray-600">Items</th>
+          <th className="p-4 text-left font-semibold text-gray-600">
+            <div className="flex items-center gap-2">
+              Sale Amount
+              <button onClick={() => handleToggle('revenue')} className="text-gray-400 hover:text-blue-600">
+                {showRevenue ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </th>
+          <th className="p-4 text-left font-semibold text-gray-600">
+            <div className="flex items-center gap-2">
+              Profit
+              <button onClick={() => handleToggle('profit')} className="text-gray-400 hover:text-green-600">
+                {showProfit ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </th>
+          <th className="p-4 font-semibold text-gray-600 text-right">View</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y">
+        {loading ? (
+          <tr><td colSpan="7" className="p-6 text-center">Loading Data...</td></tr>
+        ) : sales.length === 0 ? (
+          <tr><td colSpan="7" className="p-6 text-center text-gray-500">No records found.</td></tr>
+        ) : (
+          sales.map((sale) => (
+            <tr key={sale.invoiceNo} className="hover:bg-gray-50 transition">
+              
+              {/* 1. INVOICE ID */}
+              <td className="p-4 text-gray-500 font-mono text-xs uppercase">
+                #{sale.invoiceNo || "-"} 
+              </td>
 
-                    {/* PROFIT CELL */}
-                    <td className="p-4 font-bold text-green-600">
-                      {showProfit
-                        ? `Rs. ${Math.round(sale.profit).toLocaleString()}`
-                        : "****"
-                      }
-                    </td>
-                    <td className="p-4 text-right">
-                      <button
-                        onClick={() => setSelectedSale(sale)}
-                        className="text-blue-600 hover:bg-blue-50 p-2 rounded-full transition"
-                      >
-                        <Eye size={20} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-            {/* Table Footer Summary */}
-            <tfoot className="bg-gray-100 font-bold text-gray-900 border-t-2 border-gray-300">
-              <tr>
-                <td className="p-4 text-right" colSpan="2">Total (Current List):</td>
+              {/* 2. CUSTOMER NAME */}
+              <td className="p-4 text-gray-900 font-medium">
+                {/* Agar customer ka naam nahi hai toh 'Walk-in' dikhao */}
+                {sale.customerName || "Walk-in"} 
+              </td>
 
-                {/* TOTAL REVENUE FOOTER */}
-                <td className="p-4">
-                  {showRevenue
-                    ? `Rs. ${Math.round(stats.totalRevenue || 0).toLocaleString()}`
-                    : "****"
-                  }
-                </td>
+              <td className="p-4 text-gray-900">
+                {formatDate(sale.date)}
+              </td>
+              <td className="p-4">
+                {sale.items?.length || 0} items
+              </td>
+              
+              {/* TOTAL AMOUNT CELL */}
+              <td className="p-4 font-bold text-gray-800">
+                {showRevenue
+                  ? `Rs. ${Math.round(sale.totalAmount).toLocaleString()}`
+                  : "****"
+                }
+              </td>
 
-                {/* TOTAL PROFIT FOOTER */}
-                <td className="p-4 text-green-700">
-                  {showProfit
-                    ? `Rs. ${Math.round(stats.totalProfit || 0).toLocaleString()}`
-                    : "****"
-                  }
-                </td>
+              {/* PROFIT CELL */}
+              <td className="p-4 font-bold text-green-600">
+                {showProfit
+                  ? `Rs. ${Math.round(sale.profit).toLocaleString()}`
+                  : "****"
+                }
+              </td>
+              <td className="p-4 text-right">
+                <button
+                  onClick={() => setSelectedSale(sale)}
+                  className="text-blue-600 hover:bg-blue-50 p-2 rounded-full transition"
+                >
+                  <Eye size={20} />
+                </button>
+              </td>
+            </tr>
+          ))
+        )}
+      </tbody>
+      {/* Table Footer Summary */}
+      <tfoot className="bg-gray-100 font-bold text-gray-900 border-t-2 border-gray-300">
+        <tr>
+          {/* colSpan 2 ki jagah 4 kar diya taake layout theek rahay */}
+          <td className="p-4 text-right" colSpan="4">Total (Current List):</td>
 
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
+          {/* TOTAL REVENUE FOOTER */}
+          <td className="p-4">
+            {showRevenue
+              ? `Rs. ${Math.round(stats.totalRevenue || 0).toLocaleString()}`
+              : "****"
+            }
+          </td>
+
+          {/* TOTAL PROFIT FOOTER */}
+          <td className="p-4 text-green-700">
+            {showProfit
+              ? `Rs. ${Math.round(stats.totalProfit || 0).toLocaleString()}`
+              : "****"
+            }
+          </td>
+
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
 
       {/* Detail Modal */}
       {selectedSale && (

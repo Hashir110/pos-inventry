@@ -189,8 +189,7 @@ export default function DashboardHome() {
 
     // Filtered Invoices for Search
     const filteredInvoicesList = invoices.filter(inv =>
-        inv.id.toLowerCase().includes(searchInvoice.toLowerCase())
-    );
+        inv.invoiceNo?.toLowerCase().includes(searchInvoice.toLowerCase()));
 
     const handleToggle = (field) => {
         // Agar pehle se khula hai toh band kardo (No password needed to hide)
@@ -375,6 +374,10 @@ export default function DashboardHome() {
                                 <tr>
                                     <th className="p-4 font-semibold text-gray-600">Date</th>
                                     <th className="p-4 font-semibold text-gray-600">Invoice ID</th>
+
+                                    {/* 🔥 Naya Column Header: Customer */}
+                                    <th className="p-4 font-semibold text-gray-600">Customer</th>
+
                                     <th className="p-4 font-semibold text-gray-600">Items</th>
                                     <th className="p-4 font-semibold text-gray-600 text-right">Amount</th>
                                 </tr>
@@ -383,8 +386,13 @@ export default function DashboardHome() {
                                 {filteredInvoicesList.slice(0, 5).map((inv) => (
                                     <tr key={inv.id} className="hover:bg-blue-50/30 transition">
                                         <td className="p-4 text-gray-600">{formatDate(inv.date)}</td>
-                                        <td className="p-4 font-mono text-xs text-gray-500">#{inv.id
-                                        }</td>
+                                        <td className="p-4 font-mono text-xs text-gray-500">#{inv.invoiceNo || "-"}</td>
+
+                                        {/* 🔥 Naya Cell: Customer Name */}
+                                        <td className="p-4 font-medium text-gray-800">
+                                            {inv.customerName || "Walk-in"}
+                                        </td>
+
                                         <td className="p-4 text-gray-800">{inv.items?.length || 0} items</td>
                                         <td className="p-4 text-right font-bold text-gray-800">
                                             Rs {Math.round(inv.totalAmount).toLocaleString()}

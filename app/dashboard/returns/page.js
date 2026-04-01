@@ -1,7 +1,7 @@
 "use client";
 import { useState } from 'react';
-import { db } from '../../lib/firebase'; // Apni config path set karein
-import { doc, getDoc, updateDoc, increment, addDoc, collection } from 'firebase/firestore';
+import { db , auth} from '../../lib/firebase'; // Apni config path set karein
+import { doc, getDoc, updateDoc, increment, addDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { toast } from 'react-toastify';
 import { Search, RotateCcw, AlertCircle } from 'lucide-react';
 
@@ -9,25 +9,32 @@ export default function ReturnsPage() {
     const [invoiceId, setInvoiceId] = useState('');
     const [saleData, setSaleData] = useState(null);
     const [loading, setLoading] = useState(false);
-    // const { user } = useAuth(); // User ID chahiye hogi
-
+    const currentUser = auth.currentUser;
 
 
     // 1. Invoice Search Karna
     const handleSearch = async (e) => {
         e.preventDefault();
 
-
         if (!invoiceId) return;
         setLoading(true);
         setSaleData(null);
 
         try {
-            const docRef = doc(db, "sales", invoiceId.trim());
-            const docSnap = await getDoc(docRef);
+            // 🔥 Naya simple search logic
+            const q = query(
+                collection(db, "sales"),
+                where("ownerId", "==", currentUser.uid), // 👈 Firebase ko tasalli dene ke liye!
+                where("invoiceNo", "==", invoiceId.trim())
+            );
 
-            if (docSnap.exists()) {
+            const querySnapshot = await getDocs(q);
+
+            if (!querySnapshot.empty) {
+                // Jo pehla record mila usko set kar do
+                const docSnap = querySnapshot.docs[0];
                 setSaleData({ id: docSnap.id, ...docSnap.data() });
+                toast.success("Invoice Found!");
             } else {
                 toast.error("Invoice not found!");
             }
@@ -40,9 +47,6 @@ export default function ReturnsPage() {
 
     // 2. Return Process Karna (Single Item)
     const handleReturnItem = async (item, index) => {
-        // ... (Prompt aur Validation wala hissa same rahega) ...
-
-        // Log for debugging
         console.log("🔍 INSPECT ITEM:", JSON.stringify(item, null, 2));
 
         const availableToReturn = item.qty - (item.returnedQty || 0);
@@ -58,14 +62,11 @@ export default function ReturnsPage() {
         try {
             setLoading(true);
 
-            // 1. ID Solution (Jo aapne pehle lagaya tha)
             const actualProductId = item.productId || item.id;
             console.log("🎯 Stock Update ID:", actualProductId);
 
             if (actualProductId) {
                 const productRef = doc(db, "products", actualProductId);
-
-                // 🔥 FIX 1: ownerId bhejna zaroori hai security rules ke liye
                 await updateDoc(productRef, {
                     stock: increment(returnQty),
                     ownerId: saleData.ownerId
@@ -74,7 +75,7 @@ export default function ReturnsPage() {
                 toast.warning("⚠️ Stock update skipped (ID missing)");
             }
 
-            // 2. Price Calculation
+            // 2. Price Calculation (Aapka pehle wala logic)
             const unitPrice = item.sellingPrice !== undefined ? parseFloat(item.sellingPrice) : parseFloat(item.price || 0);
             const refundAmount = returnQty * unitPrice;
 
@@ -89,7 +90,7 @@ export default function ReturnsPage() {
             await updateDoc(saleRef, {
                 items: updatedItems,
                 refundedAmount: increment(refundAmount),
-                ownerId: saleData.ownerId // 🔥 Ahtiyatan yahan bhi bhej dein
+                ownerId: saleData.ownerId 
             });
 
             // 4. Returns Collection Add
@@ -100,7 +101,7 @@ export default function ReturnsPage() {
                 unitPrice: unitPrice,
                 refundAmount: refundAmount,
                 date: new Date().toISOString(),
-                ownerId: saleData.ownerId // 🔥 FIX 2: Variable name corrected
+                ownerId: saleData.ownerId 
             });
 
             toast.success(`Returned ${returnQty} x ${item.name} Successfully!`);
@@ -146,7 +147,7 @@ export default function ReturnsPage() {
                     <div className="flex justify-between items-start mb-4 border-b pb-4">
                         <div>
                             <p className="text-sm text-gray-500">Invoice ID</p>
-                            <p className="font-mono font-bold">{saleData.id}</p>
+                            <p className="font-mono font-bold text-lg text-blue-600">#{saleData.invoiceNo}</p>
                         </div>
                         <div className="text-right">
                             <p className="text-sm text-gray-500">Date</p>
@@ -158,10 +159,12 @@ export default function ReturnsPage() {
 
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
-                            <thead className="bg-gray-50 text-gray-600">
+                            <thead className="bg-gray-50 text-gray-600 border-b">
                                 <tr>
                                     <th className="p-3">Item</th>
                                     <th className="p-3">Price</th>
+                                    {/* 🔥 NAYA COLUMN: Discount */}
+                                    <th className="p-3">Discount</th>
                                     <th className="p-3">Sold Qty</th>
                                     <th className="p-3">Returned</th>
                                     <th className="p-3 text-right">Action</th>
@@ -173,13 +176,22 @@ export default function ReturnsPage() {
                                     const canReturn = item.qty - alreadyReturned > 0;
 
                                     return (
-                                        <tr key={index}>
-                                            <td className="p-3 font-medium">{item.name}</td>
-                                            <td className="p-3">{item.sellingPrice || item.price}</td>
+                                        <tr key={index} className="hover:bg-gray-50 transition">
+                                            <td className="p-3 font-medium text-gray-800">{item.name}</td>
+                                            
+                                            <td className="p-3 text-gray-600">Rs. {item.total || item.price}</td>
+                                            
+                                            {/* 🔥 NAYA CELL: Discount Ki Value */}
+                                            <td className="p-3 font-medium text-emerald-600">
+                                                {item.discount > 0 ? `- Rs. ${item.discount}` : '-'}
+                                            </td>
+                                            
                                             <td className="p-3">{item.qty}</td>
+                                            
                                             <td className="p-3 text-red-500 font-bold">
                                                 {alreadyReturned > 0 ? `-${alreadyReturned}` : '-'}
                                             </td>
+                                            
                                             <td className="p-3 text-right">
                                                 {canReturn ? (
                                                     <button
@@ -189,7 +201,7 @@ export default function ReturnsPage() {
                                                         Return Item
                                                     </button>
                                                 ) : (
-                                                    <span className="text-gray-400 text-xs italic">Fully Returned</span>
+                                                    <span className="text-gray-400 text-xs italic font-medium">Fully Returned</span>
                                                 )}
                                             </td>
                                         </tr>

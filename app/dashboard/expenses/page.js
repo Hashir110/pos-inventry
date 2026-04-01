@@ -145,7 +145,7 @@ export default function ExpensesPage() {
                 <input 
                     type="number" required min="0"
                     placeholder="0"
-                    className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                    className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     value={formData.amount}
                     onChange={(e) => setFormData({...formData, amount: e.target.value})}
                 />
