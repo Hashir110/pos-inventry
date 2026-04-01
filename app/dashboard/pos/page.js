@@ -210,11 +210,15 @@ export default function POSPage() {
         // Agar input khali hai toh 0 samjho
         const discount = parseFloat(discountValue) || 0;
 
-        // Sirf us item par discount lagao
         newCart[index].discount = discount;
 
-        // Naya Total = (Asal Price - Discount) x Quantity
-        newCart[index].total = (newCart[index].price - discount) * newCart[index].qty;
+        // 🔥 FIX 1: Naya Total = (Asal Price x Quantity) - Flat Discount
+        newCart[index].total = (newCart[index].price * newCart[index].qty) - discount;
+
+        // Safety Check: Agar ghalti se 100 ki cheez par 150 discount likh de, toh total minus mein na jaye (0 ho jaye)
+        if (newCart[index].total < 0) {
+            newCart[index].total = 0;
+        }
 
         setCart(newCart);
     };
@@ -290,25 +294,54 @@ export default function POSPage() {
                         <div className="flex h-full items-center justify-center text-slate-400">Loading...</div>
                     ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                            {filteredProducts.map((product) => (
-                                <div
-                                    key={product.id}
-                                    onClick={() => handleProductClick(product)}
-                                    className="group bg-white p-3 rounded-xl border border-slate-300/60 shadow-sm hover:shadow-md hover:bg-blue-50 active:scale-95 transition-all cursor-pointer flex flex-col justify-between h-28 relative overflow-hidden"
-                                >
-                                    <div>
-                                        <h3 className="font-bold text-slate-700 text-sm leading-tight line-clamp-2">{product.name}</h3>
-                                        <p className={`text-[10px] mt-1 font-medium ${product.stock < 5 ? 'text-rose-500' : 'text-slate-400'}`}>
-                                            {product.stock} {product.unitType === 'weight' ? 'kg' : 'pcs'}
-                                        </p>
+                            {filteredProducts.map((product) => {
+                                // Stock Check
+                                const isOutOfStock = product.stock <= 0;
+
+                                return (
+                                    <div
+                                        key={product.id}
+                                        // 🔥 FIX 1: Click sirf tab chale jab stock > 0 ho
+                                        onClick={() => {
+                                            if (!isOutOfStock) {
+                                                handleProductClick(product);
+                                            }
+                                        }}
+                                        // 🔥 FIX 2: Dynamic CSS - Out of stock par styling change (UI wahi rakha hai)
+                                        className={`group p-3 rounded-xl border shadow-sm transition-all flex flex-col justify-between h-28 relative overflow-hidden ${isOutOfStock
+                                            ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed grayscale-[0.5]' // Disabled Design
+                                            : 'bg-white border-slate-300/60 hover:shadow-md hover:bg-blue-50 active:scale-95 cursor-pointer' // Active Design
+                                            }`}
+                                    >
+                                        {/* 🔥 FIX 3: Out of Stock Badge (Agar 0 hai toh top right par label aayega) */}
+                                        {isOutOfStock && (
+                                            <div className="absolute top-0 right-0 bg-red-500 text-white text-[8px] font-extrabold px-2 py-0.5 rounded-bl-lg shadow-sm">
+                                                OUT OF STOCK
+                                            </div>
+                                        )}
+
+                                        <div>
+                                            <h3 className={`font-bold text-sm leading-tight line-clamp-2 ${isOutOfStock ? 'text-slate-500' : 'text-slate-700'}`}>
+                                                {product.name}
+                                            </h3>
+                                            {/* Stock Text Color Logic */}
+                                            <p className={`text-[10px] mt-1 font-medium ${isOutOfStock ? 'text-red-600 font-bold' :
+                                                product.stock < 5 ? 'text-rose-500' :
+                                                    'text-slate-400'
+                                                }`}>
+                                                {product.stock} {product.unitType === 'weight' ? 'kg' : 'pcs'}
+                                            </p>
+                                        </div>
+
+                                        <div className="mt-2 self-start">
+                                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${isOutOfStock ? 'bg-slate-200 text-slate-500' : 'bg-blue-50 text-blue-700'
+                                                }`}>
+                                                Rs. {product.sellingPrice}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="mt-2 self-start">
-                                        <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">
-                                            Rs. {product.sellingPrice}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -446,7 +479,8 @@ export default function POSPage() {
 
                         cart.forEach(item => {
                             subTotal += (item.price * item.qty);
-                            totalDiscount += ((item.discount || 0) * item.qty);
+                            // 🔥 FIX 2: Yahan se '* item.qty' HATA DIYA HAI. Ab sirf flat discount jama hoga.
+                            totalDiscount += (item.discount || 0);
                         });
 
                         return (
