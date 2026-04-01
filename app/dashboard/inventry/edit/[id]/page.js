@@ -121,7 +121,7 @@ export default function EditProductPage({ params }) {
               <label className="text-sm font-semibold text-gray-700">Product Name</label>
               <input 
                 type="text" required
-                className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none "
                 placeholder="e.g. Rice / Panadol"
                 value={formData.name}
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
@@ -158,7 +158,7 @@ export default function EditProductPage({ params }) {
                 <span className="absolute left-3 top-3 text-gray-500 font-bold">Rs.</span>
                 <input 
                     type="number" required min="0" step="0.01"
-                    className="w-full pl-10 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                    className="w-full pl-10 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     value={formData.buyingPrice}
                     onChange={(e) => setFormData({...formData, buyingPrice: e.target.value})}
                 />
@@ -171,7 +171,7 @@ export default function EditProductPage({ params }) {
                 <span className="absolute left-3 top-3 text-gray-500 font-bold">Rs.</span>
                 <input 
                     type="number" required min="0" step="0.01"
-                    className="w-full pl-10 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                    className="w-full pl-10 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     value={formData.sellingPrice}
                     onChange={(e) => setFormData({...formData, sellingPrice: e.target.value})}
                 />
@@ -185,7 +185,7 @@ export default function EditProductPage({ params }) {
               </label>
               <input 
                 type="number" required min="0" step="0.01"
-                className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 value={formData.stock}
                 onChange={(e) => setFormData({...formData, stock: e.target.value})}
               />

@@ -10,13 +10,13 @@ import { toast } from 'react-toastify';
 
 export default function POSPage() {
     const { currentUser, currentShop } = useStore(); // Shop Name k liye currentShop chahiye
-
+    const [customerName, setCustomerName] = useState("");
     const [products, setProducts] = useState([]);
     const [cart, setCart] = useState([]);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
     const [checkoutLoading, setCheckoutLoading] = useState(false);
-
+    const [invoiceNumber, setInvoiceNumber] = useState("");
     const [isOnline, setIsOnline] = useState(true);
 
     // Modals State
@@ -131,11 +131,10 @@ export default function POSPage() {
         setCheckoutLoading(true);
 
         try {
+            const shortInvoiceNo = Math.floor(100000 + Math.random() * 900000).toString();
             if (isOnline) {
                 // --- ONLINE LOGIC (Firebase Transaction) ---
                 await runTransaction(db, async (transaction) => {
-                    // ... (Yahan apka purana Transaction Code ayega, same wesa hi) ...
-                    // Main short kar raha hun taake confusion na ho
 
                     const reads = [];
                     for (const item of cart) {
@@ -143,6 +142,7 @@ export default function POSPage() {
                         const snapshot = await transaction.get(productRef);
                         reads.push({ snapshot, item });
                     }
+
                     const updates = [];
                     for (const { snapshot, item } of reads) {
                         if (!snapshot.exists()) throw `Error: ${item.name} not found!`;
@@ -150,16 +150,21 @@ export default function POSPage() {
                         if (currentStock < item.qty) throw `Stock Low! ${item.name} only ${currentStock} left.`;
                         updates.push({ ref: snapshot.ref, newStock: currentStock - item.qty });
                     }
+
                     updates.forEach((update) => {
                         transaction.update(update.ref, { stock: update.newStock });
                     });
+
                     const saleRef = doc(collection(db, "sales"));
                     transaction.set(saleRef, {
-                        productId: saleRef.id,
+                        productId: saleRef.id, // Waise isay saleId kehna zyada behtar hai
                         ownerId: currentUser.uid,
                         items: cart,
                         totalAmount: grandTotal,
-                        date: new Date().toISOString()
+                        date: new Date().toISOString(),
+                        // 🔥 NAYI FIELD YAHAN ADD HUI HAI
+                        customerName: customerName || "Walk-in",
+                        invoiceNo: shortInvoiceNo
                     });
                 });
 
@@ -170,7 +175,10 @@ export default function POSPage() {
                     items: cart,
                     totalAmount: grandTotal,
                     date: new Date().toISOString(),
-                    isOffline: true
+                    isOffline: true,
+                    // 🔥 NAYI FIELD OFFLINE MEIN BHI ADD HUI HAI
+                    customerName: customerName || "Walk-in",
+                    invoiceNo: shortInvoiceNo
                 };
                 const pendingSales = JSON.parse(localStorage.getItem("pendingSales") || "[]");
                 pendingSales.push(offlineOrder);
@@ -184,9 +192,8 @@ export default function POSPage() {
                 setProducts(updatedProducts);
             }
 
-            // --- SUCCESS LOGIC (Change Here) ---
-            // Cart clear MAT karo abhi.
-            // Sirf Receipt Modal kholo.
+            // --- SUCCESS LOGIC ---
+            setInvoiceNumber(shortInvoiceNo);
             toast.success("Sale Successful!");
             setShowReceipt(true);
 
@@ -197,7 +204,20 @@ export default function POSPage() {
         setCheckoutLoading(false);
     };
 
+    // POS Page ke andar jahan functions hain
+    const handleDiscountChange = (index, discountValue) => {
+        const newCart = [...cart];
+        // Agar input khali hai toh 0 samjho
+        const discount = parseFloat(discountValue) || 0;
 
+        // Sirf us item par discount lagao
+        newCart[index].discount = discount;
+
+        // Naya Total = (Asal Price - Discount) x Quantity
+        newCart[index].total = (newCart[index].price - discount) * newCart[index].qty;
+
+        setCart(newCart);
+    };
 
     const filteredProducts = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -338,7 +358,18 @@ export default function POSPage() {
                     </button>
                 </div>
 
-                {/* Cart Items List */}
+                {/* --- CUSTOMER NAME FIELD --- */}
+                <div className="p-4 bg-white border-b border-slate-200">
+                    <input
+                        type="text"
+                        placeholder="Enter Customer Name (Optional)"
+                        className="w-full p-2.5 text-sm border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                    />
+                </div>
+
+                {/* --- CART ITEMS LIST --- */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50">
                     {cart.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-2">
@@ -347,24 +378,58 @@ export default function POSPage() {
                         </div>
                     ) : (
                         cart.map((item, index) => (
-                            <div key={index} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                                <div className="flex-1">
-                                    <p className="font-semibold text-slate-700 text-sm">{item.name}</p>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <span className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-medium">
-                                            {item.qty} {item.type === 'weight' ? 'kg' : 'pc'}
-                                        </span>
-                                        <span className="text-xs text-slate-400">x {item.price}</span>
+                            <div key={index} className="flex flex-col bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+
+                                {/* Top Row: Name, Price & Delete */}
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                        <p className="font-semibold text-slate-700 text-sm">{item.name}</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-medium">
+                                                {item.qty} {item.type === 'weight' ? 'kg' : 'pc'}
+                                            </span>
+                                            <span className="text-xs text-slate-400">x Rs. {item.price}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-3">
+                                        <span className="font-bold text-slate-800 text-base">Rs. {Math.round(item.total)}</span>
+                                        <button
+                                            onClick={() => removeFromCart(index)}
+                                            className="text-slate-300 hover:text-rose-500 bg-slate-50 hover:bg-rose-50 p-2 rounded-lg transition-colors"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="font-bold text-slate-800">Rs. {Math.round(item.total)}</span>
-                                    <button
-                                        onClick={() => removeFromCart(index)}
-                                        className="text-slate-300 hover:text-rose-500 bg-slate-50 hover:bg-rose-50 p-2 rounded-lg transition-colors"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
+
+                                {/* Bottom Row: Inputs */}
+                                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-slate-100">
+
+                                    {/* 🛑 COMMENTED QTY INPUT 🛑 
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Qty:</span>
+                        <input 
+                            type="number" 
+                            placeholder="1"
+                            className="w-14 p-1 text-sm border rounded outline-none focus:border-blue-500 bg-slate-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            value={item.qty} 
+                            onChange={(e) => updateQty(index, e.target.value)} 
+                        />
+                    </div>
+                    */}
+
+                                    {/* ✅ ACTIVE DISCOUNT INPUT ✅ */}
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Disc (Rs):</span>
+                                        <input
+                                            type="number"
+                                            placeholder="0"
+                                            className="w-16 p-1 text-sm border rounded outline-none focus:border-blue-500 bg-slate-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            value={item.discount || ""}
+                                            onChange={(e) => handleDiscountChange(index, e.target.value)}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         ))
@@ -373,25 +438,60 @@ export default function POSPage() {
 
                 {/* Cart Footer */}
                 <div className="p-5 bg-white border-t border-slate-100 lg:rounded-b-2xl shadow-[0_-5px_20px_rgba(0,0,0,0.02)] pb-safe">
-                    <div className="flex justify-between items-end mb-4">
+
+                    {/* --- CALCULATIONS FOR CASHIER --- */}
+                    {(() => {
+                        let subTotal = 0;
+                        let totalDiscount = 0;
+
+                        cart.forEach(item => {
+                            subTotal += (item.price * item.qty);
+                            totalDiscount += ((item.discount || 0) * item.qty);
+                        });
+
+                        return (
+                            <div className="mb-4 space-y-2 border-b border-slate-100 pb-4">
+                                {/* Subtotal */}
+                                <div className="flex justify-between items-center text-slate-500">
+                                    <span className="text-sm font-medium">Subtotal</span>
+                                    <span className="font-semibold">Rs. {Math.round(subTotal).toLocaleString()}</span>
+                                </div>
+
+                                {/* Total Discount (Sirf tab dekhega jab discount > 0 hoga) */}
+                                {totalDiscount > 0 && (
+                                    <div className="flex justify-between items-center text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100">
+                                        <span className="text-sm font-bold">Total Discount</span>
+                                        <span className="font-bold">- Rs. {Math.round(totalDiscount).toLocaleString()}</span>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+
+                    {/* --- GRAND TOTAL --- */}
+                    <div className="flex justify-between items-end mb-5">
                         <span className="text-slate-500 text-sm font-medium">Grand Total</span>
-                        <span className="text-3xl font-extrabold text-slate-800">
+                        <span className="text-3xl font-extrabold text-slate-800 tracking-tight">
                             Rs. {Math.round(grandTotal).toLocaleString()}
                         </span>
                     </div>
 
-                    {/* Cart Footer */}
-                    <div className="p-5 bg-white ...">
-                        {/* ... Total ... */}
-
-                        <button
-                            onClick={handleFinalizeSale} // <--- CHANGE: Direct Finalize call
-                            disabled={cart.length === 0 || checkoutLoading}
-                            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-600/30 disabled:opacity-50 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
-                        >
-                            {checkoutLoading ? <Loader2 className="animate-spin" /> : (isOnline ? "Charge & Print" : "Save Offline")}
-                        </button>
-                    </div>
+                    {/* --- BUTTON --- */}
+                    <button
+                        onClick={handleFinalizeSale}
+                        disabled={cart.length === 0 || checkoutLoading}
+                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-600/30 disabled:opacity-50 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
+                    >
+                        {/* Loader Icon ke liye aapke paas jo import hai wo chalega */}
+                        {checkoutLoading ? (
+                            <span className="flex items-center gap-2">
+                                <span className="animate-spin inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full"></span>
+                                Processing...
+                            </span>
+                        ) : (
+                            isOnline ? "Charge & Print" : "Save Offline"
+                        )}
+                    </button>
                 </div>
             </div>
 
@@ -420,7 +520,7 @@ export default function POSPage() {
                                 type="number"
                                 autoFocus
                                 placeholder={selectedProduct.unitType === 'weight' ? "e.g. 0.5" : "e.g. 1"}
-                                className="w-full p-3 border rounded-xl text-3xl font-bold text-center mb-5 focus:ring-2 focus:ring-blue-500 outline-none text-slate-800"
+                                className="w-full p-3 border rounded-xl text-3xl font-bold text-center mb-5 focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 value={qtyInput}
                                 onChange={(e) => setQtyInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleConfirmQty()}
@@ -446,7 +546,7 @@ export default function POSPage() {
                                     </button>
                                 </>
                             ) : (
-                                // QUANTITY BUTTONS (1 Pc, 6 Pcs, 1 Dozen, 2 Dozen)
+                                // QUANTITY BUTTONS (1 Pc, 6 Pcs, 12 Pcs, 24 Pcs)
                                 <>
                                     <button onClick={() => setQtyInput("1")} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 text-xs font-bold transition h-12">
                                         1 Pc
@@ -455,10 +555,10 @@ export default function POSPage() {
                                         6 Pcs
                                     </button>
                                     <button onClick={() => setQtyInput("12")} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 text-xs font-bold transition h-12">
-                                        1 Dozen
+                                        12 Pcs
                                     </button>
                                     <button onClick={() => setQtyInput("24")} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 text-xs font-bold transition h-12">
-                                        2 Dozen
+                                        24 Pcs
                                     </button>
                                 </>
                             )}
@@ -482,94 +582,114 @@ export default function POSPage() {
                     {/* Printable Container */}
                     <div id="printable-receipt" className="bg-white p-4 rounded-xl w-full max-w-[300px] shadow-2xl relative text-black">
 
-                        {/* Close Button (Hidden in Print) */}
+                        {/* Close Button */}
                         <button
-                            onClick={() => { setShowReceipt(false); setCart([]); }}
-                            className="absolute top-2 right-2 p-1 text-gray-400 no-print"
+                            onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); }}
+                            className="absolute top-2 right-2 p-1 text-gray-400 no-print hover:text-gray-700"
                         >
                             <X size={20} />
                         </button>
 
-                        {/* --- SLIP HEADER (Updated) --- */}
-                        <div className="text-center mb-2 border-b border-black pb-2">
-                            {/* 1. Shop Name */}
-                            <h2 className="text-lg font-bold uppercase text-black leading-tight">
+                        {/* --- SLIP HEADER --- */}
+                        <div className="text-center mb-3 border-b border-black pb-3">
+                            <h2 className="text-xl font-bold uppercase text-black leading-tight">
                                 {currentShop?.shopName || "My Shop"}
                             </h2>
+                            {currentShop?.address && <p className="text-[10px] text-gray-800 mt-1">{currentShop.address}</p>}
+                            {currentShop?.contact && <p className="text-[10px] font-bold text-gray-900">Ph: {currentShop.contact}</p>}
 
-                            {/* 2. Address (Agar majood ho toh dikhao) */}
-                            {currentShop?.address && (
-                                <p className="text-[10px] text-gray-800 mt-1">
-                                    Address: {currentShop.address}
+                            <div className="mt-2 text-[10px] text-gray-600 flex flex-col items-center">
+                                <p>{new Date().toLocaleString()}</p>
+                                <p className="font-bold text-black text-[12px] mt-1 tracking-wider">
+                                    Inv #: {invoiceNumber}
                                 </p>
-                            )}
-
-                            {/* 3. Contact Number */}
-                            {currentShop?.contact && (
-                                <p className="text-[10px] font-bold text-gray-900">
-                                    Ph: {currentShop.contact}
-                                </p>
-                            )}
-
-                            {/* 4. Date & Time */}
-                            <p className="text-[9px] text-gray-600 mt-1">
-                                {new Date().toLocaleString()}
-                            </p>
-                        </div>
-
-                        {/* --- SLIP ITEMS (Same as before) --- */}
-                        <div className="space-y-1 mb-2 text-xs max-h-60 overflow-auto text-black">
-                            {cart.map((item, idx) => (
-                                <div key={idx} className="flex justify-between border-b border-dotted border-gray-400 pb-1">
-                                    <span className="truncate w-24 font-medium">{item.name}</span>
-                                    <span className="text-[10px]">{item.qty} x {item.price}</span>
-                                    <span className="font-bold">{Math.round(item.total)}</span>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* --- TOTALS --- */}
-                        <div className="border-t border-black pt-2 mb-4">
-                            <div className="flex justify-between text-lg font-bold text-black">
-                                <span>Total:</span>
-                                <span>Rs. {Math.round(grandTotal)}</span>
+                                {customerName && (
+                                    <p className="font-bold text-black mt-1 uppercase border-b border-dashed border-gray-400 pb-1">
+                                        Cust: {customerName}
+                                    </p>
+                                )}
                             </div>
                         </div>
 
-                        {/* --- FOOTER MESSAGE (Updated) --- */}
-                        <div className="text-center text-[10px] text-black mb-4 whitespace-pre-wrap leading-tight">
-                            {/* Agar User ne Custom Message set kiya hai wo dikhao, warna Default dikhao */}
-                            {currentShop?.receiptMessage ? (
-                                currentShop.receiptMessage
-                            ) : (
-                                <>
-                                    Thank you for shopping!<br />
-                                    No Return / Exchange
-                                </>
-                            )}
-                            <p className="text-black my-1 whitespace-pre-wrap leading-tight">Powered by H-H Partners</p>
-                            <p>For Contact US: 0314-1811181</p>
+                        {/* --- SLIP ITEMS --- */}
+                        <div className="space-y-2 mb-3 text-xs max-h-60 overflow-auto text-black">
+                            {cart.map((item, idx) => {
+                                const finalUnitPrice = item.price - (item.discount || 0);
+                                return (
+                                    <div key={idx} className="flex justify-between items-start border-b border-dotted border-gray-400 pb-1.5">
+                                        <div className="flex flex-col w-[60%]">
+                                            <span className="font-semibold leading-tight">{item.name}</span>
+                                            {item.discount > 0 && (
+                                                <span className="text-[9px] text-gray-600 font-medium">
+                                                    Disc: -Rs. {item.discount} / item
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col items-end w-[40%]">
+                                            <span className="text-[10px]">{item.qty} x {finalUnitPrice}</span>
+                                            <span className="font-bold text-[11px] mt-0.5">{Math.round(item.total)}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
 
-                        {/* --- BUTTONS (Hidden in Print) --- */}
-                        <div className="flex flex-col gap-2 no-print">
+                        {/* --- 💰 PROFESSIONAL TOTALS SECTION 💰 --- */}
+                        {(() => {
+                            // Calculation on the fly
+                            let subTotal = 0;
+                            let totalDiscount = 0;
 
-                            {/* Print Button */}
-                            <button
-                                onClick={() => window.print()}
-                                className="w-full py-3 bg-green-600 text-white rounded-lg font-bold flex justify-center items-center gap-2 hover:bg-green-700"
-                            >
+                            cart.forEach(item => {
+                                subTotal += (item.price * item.qty);
+                                totalDiscount += ((item.discount || 0) * item.qty);
+                            });
+
+                            let finalPayable = subTotal - totalDiscount;
+
+                            return (
+                                <div className="border-t border-black pt-2 mb-4 space-y-1">
+
+                                    {/* Subtotal (Asal Bill) */}
+                                    <div className="flex justify-between text-[11px] text-gray-700 font-semibold">
+                                        <span>Subtotal:</span>
+                                        <span>Rs. {Math.round(subTotal)}</span>
+                                    </div>
+
+                                    {/* Customer Ki Bachat (Agar discount diya hai toh dikhao) */}
+                                    {totalDiscount > 0 && (
+                                        <div className="flex justify-between text-[11px] font-bold text-gray-600 border-b border-dotted border-gray-400 pb-1">
+                                            <span>Discount:</span>
+                                            <span>- Rs. {Math.round(totalDiscount)}</span>
+                                        </div>
+                                    )}
+
+                                    {/* Final Grand Total */}
+                                    <div className="flex justify-between text-lg font-bold text-black border-t-2 border-black pt-1 mt-1">
+                                        <span>Total:</span>
+                                        <span>Rs. {Math.round(finalPayable)}</span>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* --- FOOTER MESSAGE --- */}
+                        <div className="text-center text-[10px] text-black mb-4">
+                            <div className="whitespace-pre-wrap leading-tight font-medium mb-2">
+                                {currentShop?.receiptMessage || "Thank you for shopping!\nNo Return / Exchange"}
+                            </div>
+                            <div className="border-t border-dotted border-gray-400 pt-2 mt-2">
+                                <p className="font-bold italic">Powered by H-H Partners</p>
+                                <p>For Contact: 0314-1811181</p>
+                            </div>
+                        </div>
+
+                        {/* --- BUTTONS --- */}
+                        <div className="flex flex-col gap-2 no-print">
+                            <button onClick={() => window.print()} className="w-full py-3 bg-green-600 text-white rounded-lg font-bold flex justify-center items-center gap-2 hover:bg-green-700">
                                 <Printer size={18} /> Print Slip
                             </button>
-
-                            {/* New Order Button */}
-                            <button
-                                onClick={() => {
-                                    setShowReceipt(false);
-                                    setCart([]);
-                                }}
-                                className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700"
-                            >
+                            <button onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); setInvoiceNumber(""); }} className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">
                                 New Order (Clear Cart)
                             </button>
                         </div>

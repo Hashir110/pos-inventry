@@ -13,7 +13,7 @@ function ExpiredContent() {
   const title = isTrial ? "Free Trial Expired!" : "License Expired";
   
   const message = isTrial 
-    ? "Aapka 7 din ka muft trial khatam ho chuka hai. Apne system ko regular chalane aur data mehfooz rakhne ke liye package upgrade karein."
+    ? "Aapka 3 din ka muft trial khatam ho chuka hai. Apne system ko regular chalane aur data mehfooz rakhne ke liye package upgrade karein."
     : "Aapke software ka license expire ho chuka hai. Bara-e-meharbani service continue rakhne ke liye apni monthly payment clear karein.";
     
   const Icon = isTrial ? Clock : Lock;
