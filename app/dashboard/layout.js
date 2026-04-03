@@ -115,6 +115,28 @@ export default function DashboardLayout({ children }) {
         return () => clearInterval(interval);
     }, []);
 
+    useEffect(() => {
+        const handleResize = () => {
+            // Agar screen choti (mobile/tablet) hai toh default menu BAND (false) rakho
+            if (window.innerWidth < 768) {
+                setSidebarOpen(false);
+            } 
+            // Agar screen bari (desktop/laptop) hai toh default menu KHULA (true) rakho
+            else {
+                setSidebarOpen(true);
+            }
+        };
+
+        // 1. Page load hotay hi check karo
+        handleResize();
+
+        // 2. Jab bhi user inspect kare ya screen choti/bari kare, automatically adjust karo
+        window.addEventListener('resize', handleResize);
+
+        // Cleanup function
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     // 3. SYNC FUNCTION (Upload Offline Data)
     const handleSync = async () => {
         if (pendingCount === 0) return;
@@ -198,23 +220,44 @@ export default function DashboardLayout({ children }) {
     return (
         <div className="flex h-screen bg-slate-50 font-sans">
 
-            {/* --- SIDEBAR (Modern Dark Theme) --- */}
+            {/* --- MOBILE OVERLAY (Black Dhundla Background) --- */}
+            {/* Jab mobile menu khula hoga, toh peechay ka hissa dhundla ho jayega */}
+            {isSidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-20 md:hidden"
+                    onClick={() => setSidebarOpen(false)} // Bahar click karne se band
+                />
+            )}
+
             <aside
-                className={`${isSidebarOpen ? "w-72" : "w-20"} transition-all duration-300 bg-slate-900 text-white flex flex-col shadow-xl z-20 hidden md:flex`}
+               className={`
+                    ${isSidebarOpen ? "translate-x-0 w-72" : "-translate-x-full w-72 md:translate-x-0 md:w-20"} 
+                    transition-all duration-300 ease-in-out bg-slate-900 text-white flex flex-col shadow-xl 
+                    fixed md:relative z-30 h-full shrink-0
+                `}
             >
                 {/* Brand Logo */}
-                <div className="h-20 flex items-center px-6 border-b border-slate-800">
+                <div className="h-20 flex items-center justify-between px-6 border-b border-slate-800">
                     <div className="flex items-center gap-3 overflow-hidden">
                         <div className="bg-blue-600 p-2 rounded-lg shrink-0">
                             <Store className="text-white" size={24} />
                         </div>
-                        {isSidebarOpen && (
+                        {/* Mobile par hamesha naam dikhao agar khula hai, werna md wali shart */}
+                        {(isSidebarOpen || window.innerWidth > 768) && (
                             <div>
                                 <h1 className="font-bold text-lg leading-tight truncate w-40">{currentShop?.shopName || "Loading..."}</h1>
                                 <p className="text-xs text-slate-400">POS System</p>
                             </div>
                         )}
                     </div>
+
+                    {/* Mobile Close Button (X) inside sidebar */}
+                    <button
+                        className="md:hidden text-slate-400 hover:text-white"
+                        onClick={() => setSidebarOpen(false)}
+                    >
+                        <X size={24} />
+                    </button>
                 </div>
 
                 {/* Sync Status Alert */}
@@ -235,7 +278,7 @@ export default function DashboardLayout({ children }) {
                 )}
 
                 {/* Navigation */}
-                <nav className="flex-1 px-4 py-6 space-y-2">
+                <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
                     {navItems.map((item) => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href;
@@ -243,6 +286,10 @@ export default function DashboardLayout({ children }) {
                             <Link
                                 key={item.href}
                                 href={item.href}
+                                onClick={() => {
+                                    // Mobile par link click hone ke baad sidebar khud band ho jaye
+                                    if (window.innerWidth < 768) setSidebarOpen(false);
+                                }}
                                 className={`flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all duration-200 group ${isActive
                                     ? "bg-blue-600 text-white shadow-lg shadow-blue-900/20"
                                     : "text-slate-400 hover:bg-slate-800 hover:text-white"
@@ -316,7 +363,10 @@ export default function DashboardLayout({ children }) {
                 {/* Mobile Header (Only visible on small screens) */}
                 <header className="h-16 bg-white border-b px-4 flex items-center justify-between md:hidden shrink-0 z-10">
                     <span className="font-bold text-slate-800">{currentShop?.shopName}</span>
-                    <button onClick={() => setSidebarOpen(!isSidebarOpen)} className="p-2 bg-slate-100 rounded-md">
+                    <button
+                        onClick={() => setSidebarOpen(true)} // Toggle ki jagah true kar diya
+                        className="p-2 bg-slate-100 rounded-md hover:bg-slate-200 transition"
+                    >
                         <Menu className="text-slate-600" />
                     </button>
                 </header>
