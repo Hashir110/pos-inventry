@@ -66,52 +66,39 @@ export default function AddProductPage() {
       <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
         <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-          {/* Name */}
+          {/* Product Name */}
           <div className="col-span-2">
-            <label className="text-sm font-semibold text-gray-700">Product Name</label>
+            <label className="text-sm font-semibold text-gray-700">Mobile Model Name</label>
             <input
               type="text" required
               className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              placeholder="e.g. Rice / Panadol"
+              placeholder="e.g. iPhone 15 Pro Max / Samsung S24"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             />
           </div>
 
-          {/* Unit Type */}
+          {/* IMEI Number (Naya Field) */}
           <div className="col-span-2">
-            <label className="text-sm font-semibold text-gray-700 mb-2 block">Item Unit Type</label>
-            <div className="flex gap-4">
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, unitType: 'weight' })}
-                className={`flex-1 p-4 rounded-xl border flex items-center justify-center gap-2 transition-all ${formData.unitType === 'weight' ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold ring-2 ring-blue-200' : 'bg-gray-50 hover:bg-gray-100'}`}
-              >
-                <Scale size={24} />
-                <span>By Weight (KG)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, unitType: 'count' })}
-                className={`flex-1 p-4 rounded-xl border flex items-center justify-center gap-2 transition-all ${formData.unitType === 'count' ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold ring-2 ring-blue-200' : 'bg-gray-50 hover:bg-gray-100'}`}
-              >
-                <Hash size={24} />
-                <span>By Quantity (PCS)</span>
-              </button>
-            </div>
+            <label className="text-sm font-semibold text-gray-700">IMEI Number / Serial No.</label>
+            <input
+              type="text"
+              className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="Enter 15-digit IMEI"
+              value={formData.imei}
+              onChange={(e) => setFormData({ ...formData, imei: e.target.value })}
+            />
           </div>
 
-          {/* Prices */}
-          {/* 👇 Ye wrapper mobile par 1 aur desktop par 2 columns karega */}
+          {/* Prices Section */}
           <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-
             {/* Buying Price */}
             <div className="w-full">
               <label className="text-sm font-semibold text-gray-700">Buying Price</label>
               <div className="relative mt-1">
                 <span className="absolute left-3 top-3 text-gray-500 font-bold">Rs.</span>
                 <input
-                  type="number" required min="0" step="0.01"
+                  type="number" required min="0"
                   className="w-full pl-10 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   value={formData.buyingPrice}
                   onChange={(e) => setFormData({ ...formData, buyingPrice: e.target.value })}
@@ -125,7 +112,7 @@ export default function AddProductPage() {
               <div className="relative mt-1">
                 <span className="absolute left-3 top-3 text-gray-500 font-bold">Rs.</span>
                 <input
-                  type="number" required min="0" step="0.01"
+                  type="number" required min="0"
                   className="w-full pl-10 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   value={formData.sellingPrice}
                   onChange={(e) => setFormData({ ...formData, sellingPrice: e.target.value })}
@@ -134,14 +121,15 @@ export default function AddProductPage() {
             </div>
           </div>
 
-          {/* Stock */}
+          {/* Stock (Pieces mein) */}
           <div className="col-span-2">
             <label className="text-sm font-semibold text-gray-700">
-              Initial Stock ({formData.unitType === 'weight' ? 'Kg' : 'Pieces'})
+              Initial Stock (PCs)
             </label>
             <input
-              type="number" required min="0" step="0.01"
+              type="number" required min="0"
               className="w-full mt-1 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              placeholder="How many units?"
               value={formData.stock}
               onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
             />

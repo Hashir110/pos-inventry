@@ -11,6 +11,7 @@ import { toast } from 'react-toastify';
 export default function POSPage() {
     const { currentUser, currentShop } = useStore(); // Shop Name k liye currentShop chahiye
     const [customerName, setCustomerName] = useState("");
+    const [IMEI, setIMEI] = useState(); // Naya state for IMEI
     const [products, setProducts] = useState([]);
     const [cart, setCart] = useState([]);
     const [search, setSearch] = useState("");
@@ -392,13 +393,20 @@ export default function POSPage() {
                 </div>
 
                 {/* --- CUSTOMER NAME FIELD --- */}
-                <div className="p-4 bg-white border-b border-slate-200">
+                <div className="p-4 bg-white border-b border-slate-200 flex flex-col gap-3">
                     <input
                         type="text"
                         placeholder="Enter Customer Name (Optional)"
-                        className="w-full p-2.5 text-sm border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                        className="w-full h-11 px-3 text-sm border border-slate-300 rounded-lg outline-none focus:border-blue-500 font-medium transition-colors"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
+                    />
+                    <input
+                        type="text"
+                        placeholder="Enter IMEI Number"
+                        className="w-full h-11 px-3 text-sm border border-slate-300 rounded-lg outline-none focus:border-blue-500 font-medium transition-colors"
+                        value={IMEI || ""}
+                        onChange={(e) => setIMEI(e.target.value)}
                     />
                 </div>
 
@@ -553,49 +561,12 @@ export default function POSPage() {
                             <input
                                 type="number"
                                 autoFocus
-                                placeholder={selectedProduct.unitType === 'weight' ? "e.g. 0.5" : "e.g. 1"}
+                                placeholder={selectedProduct.unitType === 'weight' ? "ex:1" : "ex:1"}
                                 className="w-full p-3 border rounded-xl text-3xl font-bold text-center mb-5 focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 value={qtyInput}
                                 onChange={(e) => setQtyInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleConfirmQty()}
                             />
-                        </div>
-
-                        {/* --- QUICK ACTION BUTTONS (RESTORED) --- */}
-                        <div className="grid grid-cols-4 gap-2 mb-6">
-                            {selectedProduct.unitType === 'weight' ? (
-                                // WEIGHT BUTTONS (250g, Half Kg, 1Kg, 5Kg)
-                                <>
-                                    <button onClick={() => setQtyInput("0.25")} className="p-2 bg-orange-50 border border-orange-200 text-orange-700 rounded-lg hover:bg-orange-100 text-xs font-bold transition h-12">
-                                        250g
-                                    </button>
-                                    <button onClick={() => setQtyInput("0.5")} className="p-2 bg-orange-50 border border-orange-200 text-orange-700 rounded-lg hover:bg-orange-100 text-xs font-bold transition h-12">
-                                        Half Kg
-                                    </button>
-                                    <button onClick={() => setQtyInput("1")} className="p-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-100 text-xs font-bold transition h-12">
-                                        1 Kg
-                                    </button>
-                                    <button onClick={() => setQtyInput("5")} className="p-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-100 text-xs font-bold transition h-12">
-                                        5 Kg
-                                    </button>
-                                </>
-                            ) : (
-                                // QUANTITY BUTTONS (1 Pc, 6 Pcs, 12 Pcs, 24 Pcs)
-                                <>
-                                    <button onClick={() => setQtyInput("1")} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 text-xs font-bold transition h-12">
-                                        1 Pc
-                                    </button>
-                                    <button onClick={() => setQtyInput("6")} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 text-xs font-bold transition h-12">
-                                        6 Pcs
-                                    </button>
-                                    <button onClick={() => setQtyInput("12")} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 text-xs font-bold transition h-12">
-                                        12 Pcs
-                                    </button>
-                                    <button onClick={() => setQtyInput("24")} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 text-xs font-bold transition h-12">
-                                        24 Pcs
-                                    </button>
-                                </>
-                            )}
                         </div>
 
                         {/* Add Button */}
@@ -618,7 +589,7 @@ export default function POSPage() {
 
                         {/* Close Button */}
                         <button
-                            onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); }}
+                            onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); setIMEI() }}
                             className="absolute top-2 right-2 p-1 text-gray-400 no-print hover:text-gray-700"
                         >
                             <X size={20} />
@@ -642,6 +613,12 @@ export default function POSPage() {
                                         Cust: {customerName}
                                     </p>
                                 )}
+                                    {IMEI && (
+                                    <p className="font-bold text-black mt-1 uppercase border-b border-dashed border-gray-400 pb-1">
+                                        IMEI NO: {IMEI}
+                                    </p>
+                                )}
+
                             </div>
                         </div>
 
@@ -713,7 +690,7 @@ export default function POSPage() {
                                 {currentShop?.receiptMessage || "Thank you for shopping!\nNo Return / Exchange"}
                             </div>
                             <div className="border-t border-dotted border-gray-400 pt-2 mt-2">
-                                <p className="font-bold italic">Powered by H-H Partners</p>
+                                <p className="font-bold italic">Powered by S-H Partners</p>
                                 <p>For Contact: 0314-1811181</p>
                             </div>
                         </div>
@@ -723,7 +700,7 @@ export default function POSPage() {
                             <button onClick={() => window.print()} className="w-full py-3 bg-green-600 text-white rounded-lg font-bold flex justify-center items-center gap-2 hover:bg-green-700">
                                 <Printer size={18} /> Print Slip
                             </button>
-                            <button onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); setInvoiceNumber(""); }} className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">
+                            <button onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); setIMEI(); setInvoiceNumber(""); }} className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">
                                 New Order (Clear Cart)
                             </button>
                         </div>
