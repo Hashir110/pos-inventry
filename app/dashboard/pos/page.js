@@ -553,49 +553,12 @@ export default function POSPage() {
                             <input
                                 type="number"
                                 autoFocus
-                                placeholder={selectedProduct.unitType === 'weight' ? "e.g. 0.5" : "e.g. 1"}
+                                placeholder={selectedProduct.unitType === 'weight' ? "ex: 0.5" : "ex: 1"}
                                 className="w-full p-3 border rounded-xl text-3xl font-bold text-center mb-5 focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 value={qtyInput}
                                 onChange={(e) => setQtyInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleConfirmQty()}
                             />
-                        </div>
-
-                        {/* --- QUICK ACTION BUTTONS (RESTORED) --- */}
-                        <div className="grid grid-cols-4 gap-2 mb-6">
-                            {selectedProduct.unitType === 'weight' ? (
-                                // WEIGHT BUTTONS (250g, Half Kg, 1Kg, 5Kg)
-                                <>
-                                    <button onClick={() => setQtyInput("0.25")} className="p-2 bg-orange-50 border border-orange-200 text-orange-700 rounded-lg hover:bg-orange-100 text-xs font-bold transition h-12">
-                                        250g
-                                    </button>
-                                    <button onClick={() => setQtyInput("0.5")} className="p-2 bg-orange-50 border border-orange-200 text-orange-700 rounded-lg hover:bg-orange-100 text-xs font-bold transition h-12">
-                                        Half Kg
-                                    </button>
-                                    <button onClick={() => setQtyInput("1")} className="p-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-100 text-xs font-bold transition h-12">
-                                        1 Kg
-                                    </button>
-                                    <button onClick={() => setQtyInput("5")} className="p-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-100 text-xs font-bold transition h-12">
-                                        5 Kg
-                                    </button>
-                                </>
-                            ) : (
-                                // QUANTITY BUTTONS (1 Pc, 6 Pcs, 12 Pcs, 24 Pcs)
-                                <>
-                                    <button onClick={() => setQtyInput("1")} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 text-xs font-bold transition h-12">
-                                        1 Pc
-                                    </button>
-                                    <button onClick={() => setQtyInput("6")} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 text-xs font-bold transition h-12">
-                                        6 Pcs
-                                    </button>
-                                    <button onClick={() => setQtyInput("12")} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 text-xs font-bold transition h-12">
-                                        12 Pcs
-                                    </button>
-                                    <button onClick={() => setQtyInput("24")} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-700 text-xs font-bold transition h-12">
-                                        24 Pcs
-                                    </button>
-                                </>
-                            )}
                         </div>
 
                         {/* Add Button */}
