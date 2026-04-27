@@ -11,6 +11,7 @@ import { toast } from 'react-toastify';
 export default function POSPage() {
     const { currentUser, currentShop } = useStore(); // Shop Name k liye currentShop chahiye
     const [customerName, setCustomerName] = useState("");
+    const [description, setDescription] = useState("");
     const [products, setProducts] = useState([]);
     const [cart, setCart] = useState([]);
     const [search, setSearch] = useState("");
@@ -96,7 +97,11 @@ export default function POSPage() {
         if (existingItemIndex !== -1) {
             const newCart = [...cart];
             newCart[existingItemIndex].qty += qty;
-            newCart[existingItemIndex].total = newCart[existingItemIndex].qty * finalPrice;
+
+            // 🔥 FIX 1: Discount ko yaad rakho. Agar pehle se discount hai toh wo minus karo.
+            const currentDiscount = newCart[existingItemIndex].discount || 0;
+            newCart[existingItemIndex].total = (newCart[existingItemIndex].qty * finalPrice) - currentDiscount;
+
             setCart(newCart);
         } else {
             setCart([...cart, {
@@ -105,6 +110,7 @@ export default function POSPage() {
                 qty: qty,
                 price: finalPrice,
                 buyingPrice: product.buyingPrice,
+                discount: 0, // Shuru mein discount 0 hoga
                 total: qty * finalPrice,
                 type: product.unitType
             }]);
@@ -164,6 +170,7 @@ export default function POSPage() {
                         date: new Date().toISOString(),
                         // 🔥 NAYI FIELD YAHAN ADD HUI HAI
                         customerName: customerName || "Walk-in",
+                        description: description || "",
                         invoiceNo: shortInvoiceNo
                     });
                 });
@@ -178,6 +185,7 @@ export default function POSPage() {
                     isOffline: true,
                     // 🔥 NAYI FIELD OFFLINE MEIN BHI ADD HUI HAI
                     customerName: customerName || "Walk-in",
+                    description: description || "",
                     invoiceNo: shortInvoiceNo
                 };
                 const pendingSales = JSON.parse(localStorage.getItem("pendingSales") || "[]");
@@ -207,18 +215,14 @@ export default function POSPage() {
     // POS Page ke andar jahan functions hain
     const handleDiscountChange = (index, discountValue) => {
         const newCart = [...cart];
-        // Agar input khali hai toh 0 samjho
         const discount = parseFloat(discountValue) || 0;
 
         newCart[index].discount = discount;
 
-        // 🔥 FIX 1: Naya Total = (Asal Price x Quantity) - Flat Discount
+        // 🔥 FIX 2: Flat Discount Logic
         newCart[index].total = (newCart[index].price * newCart[index].qty) - discount;
 
-        // Safety Check: Agar ghalti se 100 ki cheez par 150 discount likh de, toh total minus mein na jaye (0 ho jaye)
-        if (newCart[index].total < 0) {
-            newCart[index].total = 0;
-        }
+        if (newCart[index].total < 0) newCart[index].total = 0;
 
         setCart(newCart);
     };
@@ -391,15 +395,27 @@ export default function POSPage() {
                     </button>
                 </div>
 
-                {/* --- CUSTOMER NAME FIELD --- */}
-                <div className="p-4 bg-white border-b border-slate-200">
-                    <input
-                        type="text"
-                        placeholder="Enter Customer Name (Optional)"
-                        className="w-full p-2.5 text-sm border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-medium"
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                    />
+                <div className="p-4 bg-white border-b border-slate-200 space-y-3">
+                    <div>
+                        <input
+                            type="text"
+                            placeholder="Enter Customer Name (Optional)"
+                            className="w-full p-2.5 text-sm border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                            value={customerName}
+                            onChange={(e) => setCustomerName(e.target.value)}
+                        />
+                    </div>
+
+                    {/* --- DESCRIPTION / NOTES FIELD --- */}
+                    <div>
+                        <textarea
+                            placeholder="Add Description / Special Notes..."
+                            rows="2"
+                            className="w-full p-2.5 text-sm border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 font-medium resize-none"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                        />
+                    </div>
                 </div>
 
                 {/* --- CART ITEMS LIST --- */}
@@ -581,7 +597,7 @@ export default function POSPage() {
 
                         {/* Close Button */}
                         <button
-                            onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); }}
+                            onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); setDescription("") }}
                             className="absolute top-2 right-2 p-1 text-gray-400 no-print hover:text-gray-700"
                         >
                             <X size={20} />
@@ -639,9 +655,11 @@ export default function POSPage() {
 
                             cart.forEach(item => {
                                 subTotal += (item.price * item.qty);
-                                totalDiscount += ((item.discount || 0) * item.qty);
+                                // ✅ FIX: Sirf flat discount jama karein, qty se multiply NA KAREIN
+                                totalDiscount += (item.discount || 0);
                             });
 
+                            // ✅ FIX: Ab finalPayable bilkul sahi aayega (Subtotal - Flat Discount)
                             let finalPayable = subTotal - totalDiscount;
 
                             return (
@@ -653,7 +671,7 @@ export default function POSPage() {
                                         <span>Rs. {Math.round(subTotal)}</span>
                                     </div>
 
-                                    {/* Customer Ki Bachat (Agar discount diya hai toh dikhao) */}
+                                    {/* Customer Ki Bachat (Flat Discount dikhayega) */}
                                     {totalDiscount > 0 && (
                                         <div className="flex justify-between text-[11px] font-bold text-gray-600 border-b border-dotted border-gray-400 pb-1">
                                             <span>Discount:</span>
@@ -686,7 +704,7 @@ export default function POSPage() {
                             <button onClick={() => window.print()} className="w-full py-3 bg-green-600 text-white rounded-lg font-bold flex justify-center items-center gap-2 hover:bg-green-700">
                                 <Printer size={18} /> Print Slip
                             </button>
-                            <button onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); setInvoiceNumber(""); }} className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">
+                            <button onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); setDescription(""); setInvoiceNumber(""); }} className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">
                                 New Order (Clear Cart)
                             </button>
                         </div>

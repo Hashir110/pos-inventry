@@ -1,12 +1,14 @@
 "use client";
 import { useState } from 'react';
-import { db , auth} from '../../lib/firebase'; // Apni config path set karein
+import { db, auth } from '../../lib/firebase'; // Apni config path set karein
 import { doc, getDoc, updateDoc, increment, addDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { toast } from 'react-toastify';
-import { Search, RotateCcw, AlertCircle } from 'lucide-react';
+import { Search, RotateCcw, AlertCircle, Eye, FileText, X } from 'lucide-react';
 
 export default function ReturnsPage() {
     const [invoiceId, setInvoiceId] = useState('');
+    const [isDesModalOpen, setIsDesModalOpen] = useState(false);
+    const [selectedDescription, setSelectedDescription] = useState("");
     const [saleData, setSaleData] = useState(null);
     const [loading, setLoading] = useState(false);
     const currentUser = auth.currentUser;
@@ -90,7 +92,7 @@ export default function ReturnsPage() {
             await updateDoc(saleRef, {
                 items: updatedItems,
                 refundedAmount: increment(refundAmount),
-                ownerId: saleData.ownerId 
+                ownerId: saleData.ownerId
             });
 
             // 4. Returns Collection Add
@@ -101,7 +103,7 @@ export default function ReturnsPage() {
                 unitPrice: unitPrice,
                 refundAmount: refundAmount,
                 date: new Date().toISOString(),
-                ownerId: saleData.ownerId 
+                ownerId: saleData.ownerId
             });
 
             toast.success(`Returned ${returnQty} x ${item.name} Successfully!`);
@@ -148,6 +150,24 @@ export default function ReturnsPage() {
                         <div>
                             <p className="text-sm text-gray-500">Invoice ID</p>
                             <p className="font-mono font-bold text-lg text-blue-600">#{saleData.invoiceNo}</p>
+
+                            {/* 🔥 FIXED: Description Preview Yahan Invoice ID ke niche honi chahiye */}
+                            <div className="mt-2 flex items-center gap-2">
+                                <p className="text-xs text-gray-500 truncate max-w-[150px]">
+                                    {saleData.description || "No notes available"}
+                                </p>
+                                {saleData.description && (
+                                    <button
+                                        onClick={() => {
+                                            setSelectedDescription(saleData.description);
+                                            setIsDesModalOpen(true);
+                                        }}
+                                        className="text-blue-600 hover:text-blue-800 p-1 bg-blue-50 rounded transition-colors"
+                                    >
+                                        <Eye size={14} />
+                                    </button>
+                                )}
+                            </div>
                         </div>
                         <div className="text-right">
                             <p className="text-sm text-gray-500">Date</p>
@@ -163,7 +183,6 @@ export default function ReturnsPage() {
                                 <tr>
                                     <th className="p-3">Item</th>
                                     <th className="p-3">Price</th>
-                                    {/* 🔥 NAYA COLUMN: Discount */}
                                     <th className="p-3">Discount</th>
                                     <th className="p-3">Sold Qty</th>
                                     <th className="p-3">Returned</th>
@@ -178,20 +197,20 @@ export default function ReturnsPage() {
                                     return (
                                         <tr key={index} className="hover:bg-gray-50 transition">
                                             <td className="p-3 font-medium text-gray-800">{item.name}</td>
-                                            
-                                            <td className="p-3 text-gray-600">Rs. {item.total || item.price}</td>
-                                            
-                                            {/* 🔥 NAYA CELL: Discount Ki Value */}
+
+                                            {/* ✅ FIXED: Yahan sirf price aani chahiye */}
+                                            <td className="p-3 text-gray-600">Rs. {item.price}</td>
+
                                             <td className="p-3 font-medium text-emerald-600">
                                                 {item.discount > 0 ? `- Rs. ${item.discount}` : '-'}
                                             </td>
-                                            
+
                                             <td className="p-3">{item.qty}</td>
-                                            
+
                                             <td className="p-3 text-red-500 font-bold">
                                                 {alreadyReturned > 0 ? `-${alreadyReturned}` : '-'}
                                             </td>
-                                            
+
                                             <td className="p-3 text-right">
                                                 {canReturn ? (
                                                     <button
@@ -212,6 +231,38 @@ export default function ReturnsPage() {
                     </div>
                 </div>
             )}
+
+            {/* --- DESCRIPTION VIEW MODAL (Table se bahar) --- */}
+            {isDesModalOpen && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in duration-200">
+                        <div className="bg-slate-900 p-4 text-white flex justify-between items-center">
+                            <h3 className="font-bold flex items-center gap-2">
+                                <FileText size={18} className="text-blue-400" />
+                                Sale Description / Notes
+                            </h3>
+                            <button onClick={() => setIsDesModalOpen(false)} className="hover:bg-slate-800 p-1 rounded-full">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-6">
+                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 min-h-[100px] max-h-[300px] overflow-y-auto">
+                                <p className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">
+                                    {selectedDescription || "No notes for this sale."}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setIsDesModalOpen(false)}
+                                className="w-full mt-6 bg-slate-900 text-white py-2.5 rounded-xl font-bold hover:bg-slate-800 transition"
+                            >
+                                Close Preview
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
+
+
     );
 }
