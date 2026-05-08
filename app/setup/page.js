@@ -64,10 +64,10 @@ export default function SetupPage() {
 
     setSubmitting(true);
     try {
-      // --- 🔥 7 DAYS TRIAL LOGIC ---
+      // --- 🔥 30 DAYS TRIAL LOGIC ---
       const today = new Date();
       const expiryDate = new Date(today);
-      expiryDate.setDate(expiryDate.getDate() + 3); // 3 din add kiye
+      expiryDate.setDate(expiryDate.getDate() + 30); // 30 din add kiye
 
       // Form data mein dates mix karein
       const finalDataToSave = {
@@ -84,7 +84,7 @@ export default function SetupPage() {
       setCurrentShop({ ...finalDataToSave, uid: user.uid });
 
       // 3. Dashboard bhejo
-      toast.success("Account Created! 3-Day Free Trial Started 🎉");
+      toast.success("Account Created! 30-Day Free Trial Started 🎉");
       router.push("/dashboard");
 
     } catch (error) {
