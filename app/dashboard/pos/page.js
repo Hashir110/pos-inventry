@@ -72,9 +72,15 @@ export default function POSPage() {
     }, [currentUser]);
     // 2. Product Click
     const handleProductClick = (product) => {
-        setSelectedProduct(product);
-        setQtyInput("");
-    };
+    // 1. Modal open karne wali logic ko bypass karo
+    // setSelectedProduct(product); <-- Isko ab zaroorat nahi
+    
+    // 2. Direct addToCart function call karo with 1 quantity
+    addToCart(product, 1);
+
+    // 3. Optional: Agar user ko feedback dena hai toh console ya toast laga lo
+    console.log(`${product.name} added to cart`);
+};
 
     // 3. Confirm Qty
     // 3. Confirm Quantity Logic (Updated)
@@ -228,6 +234,24 @@ export default function POSPage() {
     };
 
     const filteredProducts = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+
+    const updateQty = (index, newQty) => {
+    const newCart = [...cart];
+    const qty = parseFloat(newQty);
+
+    // Agar qty 0 se kam ho jaye toh item remove na ho (user khud delete kare) ya 1 par ruk jaye
+    if (isNaN(qty) || qty < 1) {
+        newCart[index].qty = 1;
+    } else {
+        newCart[index].qty = qty;
+    }
+
+    // Total recalculate (Price * Qty - Flat Discount)
+    const discount = newCart[index].discount || 0;
+    newCart[index].total = (newCart[index].price * newCart[index].qty) - discount;
+
+    setCart(newCart);
+};
 
     const handlePrint = () => {
     console.log("Print command initiated...");
@@ -439,70 +463,73 @@ export default function POSPage() {
 
                 {/* --- CART ITEMS LIST --- */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50">
-                    {cart.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-2">
-                            <ShoppingCart size={48} className="opacity-20" />
-                            <p className="text-sm font-medium">Empty Cart</p>
-                        </div>
-                    ) : (
-                        cart.map((item, index) => (
-                            <div key={index} className="flex flex-col bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+    {cart.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-2">
+            <ShoppingCart size={48} className="opacity-20" />
+            <p className="text-sm font-medium">Empty Cart</p>
+        </div>
+    ) : (
+        cart.map((item, index) => (
+            <div key={index} className="flex flex-col bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
 
-                                {/* Top Row: Name, Price & Delete */}
-                                <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                        <p className="font-semibold text-slate-700 text-sm">{item.name}</p>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-medium">
-                                                {item.qty} {item.type === 'weight' ? 'kg' : 'pc'}
-                                            </span>
-                                            <span className="text-xs text-slate-400">x Rs. {item.price}</span>
-                                        </div>
-                                    </div>
+                {/* Top Row: Name & Delete */}
+                <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                        <p className="font-semibold text-slate-700 text-sm">{item.name}</p>
+                        <p className="text-[10px] text-slate-400">Unit Price: Rs. {item.price}</p>
+                    </div>
+                    <button
+                        onClick={() => removeFromCart(index)}
+                        className="text-slate-300 hover:text-rose-500 p-1.5"
+                    >
+                        <Trash2 size={16} />
+                    </button>
+                </div>
 
-                                    <div className="flex items-center gap-3">
-                                        <span className="font-bold text-slate-800 text-base">Rs. {Math.round(item.total)}</span>
-                                        <button
-                                            onClick={() => removeFromCart(index)}
-                                            className="text-slate-300 hover:text-rose-500 bg-slate-50 hover:bg-rose-50 p-2 rounded-lg transition-colors"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Bottom Row: Inputs */}
-                                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-slate-100">
-
-                                    {/* 🛑 COMMENTED QTY INPUT 🛑 
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Qty:</span>
+                {/* Bottom Row: Qty Controls & Discount */}
+                <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                    
+                    {/* QTY CONTROLS (+ / - / Input) */}
+                    <div className="flex items-center gap-1">
+                        <button 
+                            onClick={() => updateQty(index, item.qty - 1)}
+                            className="w-7 h-7 flex items-center justify-center bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-600 font-bold"
+                        >-</button>
+                        
                         <input 
-                            type="number" 
-                            placeholder="1"
-                            className="w-14 p-1 text-sm border rounded outline-none focus:border-blue-500 bg-slate-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            value={item.qty} 
-                            onChange={(e) => updateQty(index, e.target.value)} 
+    type="number" 
+    className="w-12 h-7 text-center text-sm font-bold border rounded-lg outline-none focus:border-blue-500 bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+    value={item.qty} 
+    onChange={(e) => updateQty(index, e.target.value)} 
+/>
+
+                        <button 
+                            onClick={() => updateQty(index, item.qty + 1)}
+                            className="w-7 h-7 flex items-center justify-center bg-blue-100 rounded-lg hover:bg-blue-200 text-blue-600 font-bold"
+                        >+</button>
+                    </div>
+
+                    {/* DISCOUNT INPUT */}
+                    <div className="flex items-center gap-1.5 border-l pl-3">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Disc:</span>
+                        <input
+                            type="number"
+                            placeholder="0"
+                            className="w-14 h-7 p-1 text-sm font-bold border rounded-lg outline-none focus:border-blue-500 bg-slate-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            value={item.discount || ""}
+                            onChange={(e) => handleDiscountChange(index, e.target.value)}
                         />
                     </div>
-                    */}
 
-                                    {/* ✅ ACTIVE DISCOUNT INPUT ✅ */}
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Disc (Rs):</span>
-                                        <input
-                                            type="number"
-                                            placeholder="0"
-                                            className="w-16 p-1 text-sm border rounded outline-none focus:border-blue-500 bg-slate-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                            value={item.discount || ""}
-                                            onChange={(e) => handleDiscountChange(index, e.target.value)}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        ))
-                    )}
+                    {/* ITEM TOTAL */}
+                    <div className="text-right">
+                        <p className="text-xs font-bold text-slate-800">Rs. {Math.round(item.total)}</p>
+                    </div>
                 </div>
+            </div>
+        ))
+    )}
+</div>
 
                 {/* Cart Footer */}
                 <div className="p-5 bg-white border-t border-slate-100 lg:rounded-b-2xl shadow-[0_-5px_20px_rgba(0,0,0,0.02)] pb-safe">

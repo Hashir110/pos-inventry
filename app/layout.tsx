@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "POS Inventory Management",
-  description: "Manage your inventory with ease using our POS system.",
+  title: "ASAAN POS Inventory Management",
+  description: "Manage your inventory with ease using our ASAAN POS system.",
 };
 
 export default function RootLayout({

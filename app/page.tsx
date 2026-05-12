@@ -139,7 +139,7 @@ export default function LoginPage() {
           </div>
           
           <div className="mt-auto pt-6 text-center text-xs text-gray-400">
-            &copy; {new Date().getFullYear()} Smart POS System. All rights reserved.
+            &copy; {new Date().getFullYear()} ASAAN POS System. All rights reserved.
           </div>
         </div>
 
