@@ -28,3 +28,36 @@ body {
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
+
+@media print {
+    /* 1. Baqi poori screen ko hide karo */
+    body * {
+        visibility: hidden;
+    }
+
+    /* 2. Sirf Receipt wale div ko dikhao (Id check karlein apne code mein) */
+    #receipt-modal, #receipt-modal * {
+        visibility: visible;
+    }
+
+    /* 3. Receipt ko top-left corner mein set karo */
+    #receipt-modal {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 80mm; /* Thermal printer ka standard size */
+        margin: 0;
+        padding: 5mm;
+    }
+
+    /* 4. Extra white spaces aur buttons hatao */
+    .no-print {
+        display: none !important;
+    }
+
+    /* 5. Paper margins set karo */
+    @page {
+        size: auto;
+        margin: 0mm;
+    }
+}

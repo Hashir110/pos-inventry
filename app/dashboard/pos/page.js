@@ -229,6 +229,25 @@ export default function POSPage() {
 
     const filteredProducts = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
 
+    const handlePrint = () => {
+    console.log("Print command initiated...");
+
+    // Browser ke print event ko sunne ke liye
+    const beforePrint = () => console.log("Preparing document for printing...");
+    const afterPrint = () => {
+        console.log("Print dialog closed or command sent.");
+        // Note: Ye ye nahi batata ke print nikla ya nahi, sirf ye ke dialogue band ho gaya.
+    };
+
+    window.onbeforeprint = beforePrint;
+    window.onafterprint = afterPrint;
+
+    try {
+        window.print();
+    } catch (error) {
+        console.error("Printer Error or Browser Blocked:", error);
+    }
+};
     return (
         <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] lg:h-[calc(100vh-100px)] gap-4 relative">
             {/* Print Styles */}
@@ -700,8 +719,8 @@ export default function POSPage() {
                         </div>
 
                         {/* --- BUTTONS --- */}
-                        <div className="flex flex-col gap-2 no-print">
-                            <button onClick={() => window.print()} className="w-full py-3 bg-green-600 text-white rounded-lg font-bold flex justify-center items-center gap-2 hover:bg-green-700">
+                        <div id="receipt-modal" className="flex flex-col gap-2 no-print">
+                            <button onClick={handlePrint} className="w-full py-3 bg-green-600 text-white rounded-lg font-bold flex justify-center items-center gap-2 hover:bg-green-700">
                                 <Printer size={18} /> Print Slip
                             </button>
                             <button onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); setDescription(""); setInvoiceNumber(""); }} className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">
