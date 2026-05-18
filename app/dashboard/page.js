@@ -16,7 +16,10 @@ import {
     Wallet,
     EyeOff,
     Eye,
-    X
+    X,
+    Banknote,
+    CreditCard,
+    History
 } from "lucide-react";
 
 export default function DashboardHome() {
@@ -40,7 +43,10 @@ export default function DashboardHome() {
         netProfit: 0,
         totalInvoices: 0,
         lowStockCount: 0,
-        expenses: 0
+        expenses: 0,
+        cashSales: 0,
+        bankSales: 0,
+        udharSales: 0
     });
 
     // Invoices List
@@ -101,74 +107,72 @@ export default function DashboardHome() {
             // 1. Calculate Sales & Gross Profit
             let totalRevenue = 0;
             let grossProfit = 0;
+            let cashSum = 0;
+        let bankSum = 0;
+        let udharSum = 0;
 
             allSales.forEach(sale => {
-                // A. Net Sales Calculation
-                // Asal Sale - Wapas kiya gaya paisa
-                const originalAmount = sale.totalAmount || 0;
-                const refunded = sale.refundedAmount || 0; // Ye field humne return process mein banayi thi
+            const netSaleAmount = (sale.totalAmount || 0) - (sale.refundedAmount || 0);
+            totalRevenue += netSaleAmount;
 
-                totalRevenue += (originalAmount - refunded);
+            // Debugging ke liye console lagao (Baad mein hata dena)
+            // console.log(`Sale ID: ${sale.id}, Method in DB: "${sale.paymentMethod}", Amount: ${netSaleAmount}`);
 
-                // B. Profit Calculation (Item wise)
-                if (sale.items) {
-                    sale.items.forEach(item => {
-                        const buying = parseFloat(item.buyingPrice || 0);
-                        // Price check (sellingPrice ya price)
-                        const selling = parseFloat(item.sellingPrice || item.price || 0);
+            // 🔥 Logic Fix: Trim use karein taake extra space ka masla na ho
+            const method = sale.paymentMethod ? sale.paymentMethod.trim() : "Cash";
 
-                        const originalQty = parseFloat(item.qty || 0);
-                        const returnedQty = parseFloat(item.returnedQty || 0); // Jo wapas aa gaya
+            if (method === "Cash") {
+                cashSum += netSaleAmount;
+            } else if (method === "Bank Account") {
+                bankSum += netSaleAmount;
+            } else if (method === "Udhar") {
+                udharSum += netSaleAmount;
+            } else {
+                // Agar koi aisa method aa jaye jo humne define nahi kiya (Unknown)
+                // Toh usay bhi Cash mein hi daal dete hain ya alag handle karein
+                cashSum += netSaleAmount;
+            }
 
-                        // Asal mein kitna bika? (Sold - Returned)
-                        const actualSoldQty = originalQty - returnedQty;
-
-                        if (actualSoldQty > 0) {
-                            // Profit sirf us maal ka juro jo abhi bhi customer ke paas hai
-                            grossProfit += (selling - buying) * actualSoldQty;
-                        }
-                    });
+            // Profit logic
+            sale.items?.forEach(item => {
+                const actualQty = (parseFloat(item.qty) || 0) - (parseFloat(item.returnedQty) || 0);
+                if (actualQty > 0) {
+                    const b = parseFloat(item.buyingPrice) || 0;
+                    const s = parseFloat(item.sellingPrice || item.price) || 0;
+                    grossProfit += (s - b) * actualQty;
                 }
             });
+        });
 
-            // 2. Calculate Total Expenses
-            let totalExpenseSum = 0;
-            allExpenses.forEach(exp => {
-                totalExpenseSum += (parseFloat(exp.amount) || 0);
-            });
+        // Expenses sum
+        const totalExpenseSum = allExpenses.reduce((sum, exp) => sum + (parseFloat(exp.amount) || 0), 0);
 
-            // 3. Calculate FINAL Net Profit
-            const finalNetProfit = grossProfit - totalExpenseSum;
-            // --- C. GET LOW STOCK (Optimized) ---
-            // Isay bhi optimize kar diya hai: Pura products fetch karne ke bajaye query karo
-            const productsQuery = query(
-                collection(db, "products"),
-                where("ownerId", "==", currentUser.uid),
-                where("stock", "<", 5) // Sirf kam stock wale fetch karo
-            );
-            // Note: Is query ke liye bhi Index mangega shayad
-            // Agar ye index error de, toh filhal purana method use karein,
-            // Lekin best practice yehi hai.
-            const productsSnap = await getDocs(productsQuery);
-            let lowStock = productsSnap.size; // Direct count mil gaya
+        // Low Stock (Try/Catch ke andar taake agar ye fail ho toh baki data dikhay)
+        let lowStock = 0;
+        try {
+            const pQuery = query(collection(db, "products"), where("ownerId", "==", currentUser.uid), where("stock", "<", 5));
+            const pSnap = await getDocs(pQuery);
+            lowStock = pSnap.size;
+        } catch (e) { console.log("Stock query failed, likely needs index"); }
 
-            // --- UPDATE STATE ---
-            setStats({
-                totalSales: totalRevenue,
-                netProfit: finalNetProfit,
-                totalInvoices: allSales.length,
-                lowStockCount: lowStock,
-                totalExpenses: totalExpenseSum
-            });
-            setInvoices(allSales);
+        setStats({
+            totalSales: totalRevenue,
+            netProfit: grossProfit - totalExpenseSum,
+            totalInvoices: allSales.length,
+            lowStockCount: lowStock,
+            totalExpenses: totalExpenseSum,
+            cashSales: cashSum,
+            bankSales: bankSum,
+            udharSales: udharSum
+        });
+        setInvoices(allSales);
 
-        } catch (error) {
-            console.error("Error fetching dashboard:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
+    } catch (error) {
+        console.error("Dashboard Fetch Error:", error);
+    } finally {
+        setLoading(false);
+    }
+};
     // Initial Load
     useEffect(() => {
         fetchDashboardData();
@@ -278,59 +282,94 @@ export default function DashboardHome() {
             </div>
 
             {/* 3. Stats Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-                <StatCard
-                    title="TOTAL SALES"
-                    value={`Rs ${Math.round(stats.totalSales).toLocaleString()}`}
-                    subtitle="Total revenue"
-                    icon={DollarSign}
-                    theme="blue"
-                    loading={loading}
-                    isPrivate={true}           // Yeh card private hai
-                    isVisible={showSales}      // State se control hoga
-                    onToggle={() => handleToggle('sales')}
-                />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"> {/* lg:grid-cols-4 se 4-4 ki row banegi */}
+    
+    {/* 1. TOTAL SALES */}
+    <StatCard
+        title="TOTAL SALES"
+        value={`Rs ${Math.round(stats.totalSales).toLocaleString()}`}
+        subtitle="Total revenue"
+        icon={DollarSign}
+        theme="blue"
+        loading={loading}
+        isPrivate={true}
+        isVisible={showSales}
+        onToggle={() => handleToggle('sales')}
+    />
 
-                {/* NEW EXPENSE CARD */}
-                <StatCard
-                    title="EXPENSES"
-                    value={`Rs ${Math.round(stats.totalExpenses).toLocaleString()}`}
-                    subtitle="Total costs"
-                    icon={Wallet}
-                    theme="red" // Red theme for expenses
-                    loading={loading}
-                />
+    {/* 2. EXPENSES */}
+    <StatCard
+        title="EXPENSES"
+        value={`Rs ${Math.round(stats.totalExpenses).toLocaleString()}`}
+        subtitle="Total costs"
+        icon={Wallet}
+        theme="red"
+        loading={loading}
+    />
 
-                <StatCard
-                    title="NET PROFIT"
-                    value={`Rs ${Math.round(stats.netProfit).toLocaleString()}`}
-                    subtitle="Sales Profit - Expenses"
-                    icon={TrendingUp}
-                    theme="green"
-                    loading={loading}
-                    isPrivate={true}           // Yeh card private hai
-                    isVisible={showProfit}     // State se control hoga
-                    onToggle={() => handleToggle('profit')}
-                />
+    {/* 3. NET PROFIT */}
+    <StatCard
+        title="NET PROFIT"
+        value={`Rs ${Math.round(stats.netProfit).toLocaleString()}`}
+        subtitle="Sales Profit - Expenses"
+        icon={TrendingUp}
+        theme="green"
+        loading={loading}
+        isPrivate={true}
+        isVisible={showProfit}
+        onToggle={() => handleToggle('profit')}
+    />
 
-                <StatCard
-                    title="LOW STOCK"
-                    value={stats.lowStockCount}
-                    subtitle="Items need restock"
-                    icon={Package}
-                    theme="orange"
-                    loading={loading}
-                />
+    {/* 4. CASH IN HAND */}
+    <StatCard
+        title="CASH SALES"
+        value={`Rs ${Math.round(stats.cashSales || 0).toLocaleString()}`}
+        subtitle="Cash in drawer"
+        icon={Banknote} // Import Banknote from lucide-react
+        theme="emerald"
+        loading={loading}
+    />
 
-                <StatCard
-                    title="INVOICES"
-                    value={stats.totalInvoices}
-                    subtitle="Total bills created"
-                    icon={FileText}
-                    theme="purple"
-                    loading={loading}
-                />
-            </div>
+    {/* 5. BANK PAYMENTS */}
+    <StatCard
+        title="BANK/ONLINE"
+        value={`Rs ${Math.round(stats.bankSales || 0).toLocaleString()}`}
+        subtitle="Transferred to bank"
+        icon={CreditCard} // Import CreditCard from lucide-react
+        theme="cyan"
+        loading={loading}
+    />
+
+    {/* 6. UDHAR (DEBT) */}
+    <StatCard
+        title="TOTAL UDHAR"
+        value={`Rs ${Math.round(stats.udharSales || 0).toLocaleString()}`}
+        subtitle="Pending payments"
+        icon={History} // Import History from lucide-react
+        theme="amber"
+        loading={loading}
+    />
+
+    {/* 7. LOW STOCK */}
+    <StatCard
+        title="LOW STOCK"
+        value={stats.lowStockCount}
+        subtitle="Items need restock"
+        icon={Package}
+        theme="orange"
+        loading={loading}
+    />
+
+    {/* 8. INVOICES */}
+    <StatCard
+        title="INVOICES"
+        value={stats.totalInvoices}
+        subtitle="Total bills created"
+        icon={FileText}
+        theme="purple"
+        loading={loading}
+    />
+</div>
 
             {/* 4. All Invoices Section */}
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col overflow-hidden">

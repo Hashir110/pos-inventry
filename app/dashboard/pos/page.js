@@ -10,6 +10,7 @@ import { toast } from 'react-toastify';
 
 export default function POSPage() {
     const { currentUser, currentShop } = useStore(); // Shop Name k liye currentShop chahiye
+    const [paymentMethod, setPaymentMethod] = useState("Cash"); // Default "Cash" rakhte hain
     const [customerName, setCustomerName] = useState("");
     const [description, setDescription] = useState("");
     const [products, setProducts] = useState([]);
@@ -177,7 +178,8 @@ export default function POSPage() {
                         // 🔥 NAYI FIELD YAHAN ADD HUI HAI
                         customerName: customerName || "Walk-in",
                         description: description || "",
-                        invoiceNo: shortInvoiceNo
+                        invoiceNo: shortInvoiceNo,
+                        paymentMethod: paymentMethod
                     });
                 });
 
@@ -192,7 +194,8 @@ export default function POSPage() {
                     // 🔥 NAYI FIELD OFFLINE MEIN BHI ADD HUI HAI
                     customerName: customerName || "Walk-in",
                     description: description || "",
-                    invoiceNo: shortInvoiceNo
+                    invoiceNo: shortInvoiceNo,
+                    paymentMethod: paymentMethod
                 };
                 const pendingSales = JSON.parse(localStorage.getItem("pendingSales") || "[]");
                 pendingSales.push(offlineOrder);
@@ -459,63 +462,66 @@ export default function POSPage() {
                             onChange={(e) => setDescription(e.target.value)}
                         />
                     </div>
+                    
                 </div>
 
+
+
                 {/* --- CART ITEMS LIST --- */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50">
+               <div className="flex-1 overflow-y-auto p-2 space-y-2 bg-slate-50/50"> {/* Padding kam ki: p-4 -> p-2 */}
     {cart.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full text-slate-300 gap-2">
-            <ShoppingCart size={48} className="opacity-20" />
-            <p className="text-sm font-medium">Empty Cart</p>
+            <ShoppingCart size={40} className="opacity-20" />
+            <p className="text-xs font-medium">Empty Cart</p>
         </div>
     ) : (
         cart.map((item, index) => (
-            <div key={index} className="flex flex-col bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+            <div key={index} className="flex flex-col bg-white p-2 rounded-lg border border-slate-200 shadow-sm"> {/* p-3 -> p-2 */}
 
                 {/* Top Row: Name & Delete */}
                 <div className="flex justify-between items-start">
                     <div className="flex-1">
-                        <p className="font-semibold text-slate-700 text-sm">{item.name}</p>
-                        <p className="text-[10px] text-slate-400">Unit Price: Rs. {item.price}</p>
+                        <p className="font-bold text-slate-700 text-xs leading-tight">{item.name}</p>
+                        <p className="text-[9px] text-slate-400">Rs. {item.price}/pc</p>
                     </div>
                     <button
                         onClick={() => removeFromCart(index)}
-                        className="text-slate-300 hover:text-rose-500 p-1.5"
+                        className="text-slate-300 hover:text-rose-500 p-1"
                     >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                     </button>
                 </div>
 
                 {/* Bottom Row: Qty Controls & Discount */}
-                <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-50"> {/* mt-3 -> mt-2 */}
                     
-                    {/* QTY CONTROLS (+ / - / Input) */}
+                    {/* QTY CONTROLS */}
                     <div className="flex items-center gap-1">
                         <button 
                             onClick={() => updateQty(index, item.qty - 1)}
-                            className="w-7 h-7 flex items-center justify-center bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-600 font-bold"
+                            className="w-6 h-6 flex items-center justify-center bg-slate-100 rounded-md hover:bg-slate-200 text-slate-600 text-xs font-bold"
                         >-</button>
                         
                         <input 
-    type="number" 
-    className="w-12 h-7 text-center text-sm font-bold border rounded-lg outline-none focus:border-blue-500 bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-    value={item.qty} 
-    onChange={(e) => updateQty(index, e.target.value)} 
-/>
+                            type="number" 
+                            className="w-10 h-6 text-center text-xs font-bold border rounded-md outline-none focus:border-blue-500 bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            value={item.qty} 
+                            onChange={(e) => updateQty(index, e.target.value)} 
+                        />
 
                         <button 
                             onClick={() => updateQty(index, item.qty + 1)}
-                            className="w-7 h-7 flex items-center justify-center bg-blue-100 rounded-lg hover:bg-blue-200 text-blue-600 font-bold"
+                            className="w-6 h-6 flex items-center justify-center bg-blue-100 rounded-md hover:bg-blue-200 text-blue-600 text-xs font-bold"
                         >+</button>
                     </div>
 
                     {/* DISCOUNT INPUT */}
-                    <div className="flex items-center gap-1.5 border-l pl-3">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">Disc:</span>
+                    <div className="flex items-center gap-1 border-l pl-2">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">Disc:</span>
                         <input
                             type="number"
                             placeholder="0"
-                            className="w-14 h-7 p-1 text-sm font-bold border rounded-lg outline-none focus:border-blue-500 bg-slate-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            className="w-12 h-6 p-1 text-[11px] font-bold border rounded-md outline-none focus:border-blue-500 bg-slate-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             value={item.discount || ""}
                             onChange={(e) => handleDiscountChange(index, e.target.value)}
                         />
@@ -532,63 +538,74 @@ export default function POSPage() {
 </div>
 
                 {/* Cart Footer */}
-                <div className="p-5 bg-white border-t border-slate-100 lg:rounded-b-2xl shadow-[0_-5px_20px_rgba(0,0,0,0.02)] pb-safe">
+               <div className="p-3 bg-white border-t border-slate-100 lg:rounded-b-2xl shadow-[0_-5px_20px_rgba(0,0,0,0.02)] pb-safe"> {/* p-5 -> p-3 */}
 
-                    {/* --- CALCULATIONS FOR CASHIER --- */}
-                    {(() => {
-                        let subTotal = 0;
-                        let totalDiscount = 0;
+    {/* --- PAYMENT METHOD --- */}
+    <div className="mb-3 space-y-1"> {/* p-4/border-t hata kar margins adjust kiye */}
+        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-1">Payment Method</label>
+        <div className="relative">
+            <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
+            >
+                <option value="Cash">💵 Cash</option>
+                <option value="Bank Account">🏦 Bank / Online</option>
+                <option value="Udhar">📝 Udhar</option>
+            </select>
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                <ChevronDown size={14} />
+            </div>
+        </div>
+    </div>
 
-                        cart.forEach(item => {
-                            subTotal += (item.price * item.qty);
-                            // 🔥 FIX 2: Yahan se '* item.qty' HATA DIYA HAI. Ab sirf flat discount jama hoga.
-                            totalDiscount += (item.discount || 0);
-                        });
+    {/* --- CALCULATIONS --- */}
+    {(() => {
+        let subTotal = 0;
+        let totalDiscount = 0;
+        cart.forEach(item => {
+            subTotal += (item.price * item.qty);
+            totalDiscount += (item.discount || 0);
+        });
 
-                        return (
-                            <div className="mb-4 space-y-2 border-b border-slate-100 pb-4">
-                                {/* Subtotal */}
-                                <div className="flex justify-between items-center text-slate-500">
-                                    <span className="text-sm font-medium">Subtotal</span>
-                                    <span className="font-semibold">Rs. {Math.round(subTotal).toLocaleString()}</span>
-                                </div>
-
-                                {/* Total Discount (Sirf tab dekhega jab discount > 0 hoga) */}
-                                {totalDiscount > 0 && (
-                                    <div className="flex justify-between items-center text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-100">
-                                        <span className="text-sm font-bold">Total Discount</span>
-                                        <span className="font-bold">- Rs. {Math.round(totalDiscount).toLocaleString()}</span>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })()}
-
-                    {/* --- GRAND TOTAL --- */}
-                    <div className="flex justify-between items-end mb-5">
-                        <span className="text-slate-500 text-sm font-medium">Grand Total</span>
-                        <span className="text-3xl font-extrabold text-slate-800 tracking-tight">
-                            Rs. {Math.round(grandTotal).toLocaleString()}
-                        </span>
-                    </div>
-
-                    {/* --- BUTTON --- */}
-                    <button
-                        onClick={handleFinalizeSale}
-                        disabled={cart.length === 0 || checkoutLoading}
-                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-blue-600/30 disabled:opacity-50 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
-                    >
-                        {/* Loader Icon ke liye aapke paas jo import hai wo chalega */}
-                        {checkoutLoading ? (
-                            <span className="flex items-center gap-2">
-                                <span className="animate-spin inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full"></span>
-                                Processing...
-                            </span>
-                        ) : (
-                            isOnline ? "Charge & Print" : "Save Offline"
-                        )}
-                    </button>
+        return (
+            <div className="mb-3 space-y-1 border-b border-slate-50 pb-2">
+                <div className="flex justify-between items-center text-slate-500 text-[11px]">
+                    <span>Subtotal</span>
+                    <span className="font-semibold">Rs. {Math.round(subTotal).toLocaleString()}</span>
                 </div>
+
+                {totalDiscount > 0 && (
+                    <div className="flex justify-between items-center text-emerald-600 text-[11px] font-bold">
+                        <span>Total Discount</span>
+                        <span>- Rs. {Math.round(totalDiscount).toLocaleString()}</span>
+                    </div>
+                )}
+            </div>
+        );
+    })()}
+
+    {/* --- GRAND TOTAL --- */}
+    <div className="flex justify-between items-center mb-3 px-1"> {/* mb-5 -> mb-3, items-end -> items-center */}
+        <span className="text-slate-400 text-[11px] font-bold uppercase">Grand Total</span>
+        <span className="text-xl font-black text-slate-800 tracking-tight"> {/* 3xl -> xl */}
+            Rs. {Math.round(grandTotal).toLocaleString()}
+        </span>
+    </div>
+
+    {/* --- BUTTON --- */}
+    <button
+        onClick={handleFinalizeSale}
+        disabled={cart.length === 0 || checkoutLoading}
+        className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-base shadow-md disabled:opacity-50 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
+    >
+        {checkoutLoading ? (
+            <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+        ) : (
+            isOnline ? "Charge & Print" : "Save Offline"
+        )}
+    </button>
+</div>
             </div>
 
             {/* --- MODALS (Quantity & Receipt) --- */}
