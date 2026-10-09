@@ -1,0 +1,102 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Existing doc ka malik
+    function isOwner() {
+      return signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    // Read: doc maujood nahi (resource null) to bhi allow, taake transaction mein "kya yeh pehle se hai?"
+    // check chal sake. Maujood doc sirf uska malik padh sakta hai.
+    function canRead() {
+      return signedIn() && (resource == null || resource.data.ownerId == request.auth.uid);
+    }
+
+    // Naya doc banate waqt ownerId apni uid hi honi chahiye
+    function createsOwn() {
+      return signedIn() && request.resource.data.ownerId == request.auth.uid;
+    }
+
+    // Update mein ownerId badli nahi honi chahiye
+    function keepsOwner() {
+      return request.resource.data.ownerId == resource.data.ownerId;
+    }
+
+    // --- Shop profile: users/{uid} ---
+    // licenseExpiry / createdAt / uid / email client se kabhi change nahi honge.
+    // Renew karne ke liye Firebase console (ya admin SDK) se licenseExpiry edit karein.
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email;
+
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['shopName', 'contact', 'address', 'receiptMessage', 'invoiceCounter']);
+
+      allow delete: if false;
+    }
+
+    // --- Products ---
+    match /products/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update: if isOwner() && keepsOwner();
+      allow delete: if isOwner();
+    }
+
+    // --- Sales ---
+    match /sales/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      // Update sirf returns ke liye: items (returnedQty) aur refundedAmount
+      allow update: if isOwner() && keepsOwner()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['items', 'refundedAmount']);
+      allow delete: if isOwner();
+    }
+
+    // --- Returns (sirf add + read, edit/delete nahi) ---
+    match /returns/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update, delete: if false;
+    }
+
+    // --- Customers (Udhar khata) ---
+    match /customers/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update: if isOwner() && keepsOwner();
+      allow delete: if isOwner();
+    }
+
+    // --- Payments (customer se wasooli): sirf add + read ---
+    match /payments/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update, delete: if false;
+    }
+
+    // --- Expenses ---
+    match /expenses/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update: if isOwner() && keepsOwner();
+      allow delete: if isOwner();
+    }
+
+    // Baaki sab band
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -27,14 +27,14 @@ function ExpiredContent() {
             <Icon className={`h-10 w-10 ${iconColor}`} />
         </div>
         
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">{title}</h1>
-        <p className="text-gray-500 mb-6 leading-relaxed">
+        <h1 className="text-2xl font-extrabold text-stone-900 mb-2">{title}</h1>
+        <p className="text-stone-500 mb-6 leading-relaxed">
           {message}
         </p>
 
-        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-            <p className="text-sm text-gray-500 mb-2">Contact Support:</p>
-            <div className="flex items-center justify-center gap-2 text-xl font-bold text-blue-600 tracking-wide">
+        <div className="bg-stone-50 p-4 rounded-xl border border-stone-200">
+            <p className="text-sm text-stone-500 mb-2">Contact Support:</p>
+            <div className="flex items-center justify-center gap-2 text-xl font-bold text-brand-600 tracking-wide">
                 <Phone size={20} />
                 <span>0314-2811181</span> 
             </div>
@@ -42,7 +42,7 @@ function ExpiredContent() {
         
         <button 
             onClick={() => window.location.href = "/"}
-            className="mt-6 text-sm text-gray-400 hover:text-gray-700 font-medium underline transition-colors"
+            className="mt-6 text-sm text-stone-400 hover:text-stone-700 font-medium underline transition-colors"
         >
             Logout & Go to Home
         </button>
@@ -53,9 +53,9 @@ function ExpiredContent() {
 // 2. Main page mein us component ko <Suspense> ke andar wrap kar diya
 export default function LicenseExpiredPage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4 text-center">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-stone-50 p-4 text-center">
       {/* Fallback mein aap loading state dikha sakte hain jab tak URL params load na hon */}
-      <Suspense fallback={<div className="text-gray-500">Loading...</div>}>
+      <Suspense fallback={<div className="text-stone-500">Loading...</div>}>
         <ExpiredContent />
       </Suspense>
     </div>

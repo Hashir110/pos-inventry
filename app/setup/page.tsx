@@ -5,6 +5,8 @@ import { useStore } from "../store/useStore";
 import { createShopProfile, getUserShopProfile } from "../lib/authService"; // getUserShopProfile import kiya
 import { auth } from "../lib/firebase";
 import { useRouter } from "next/navigation";
+import type { User } from "firebase/auth";
+import type { Shop } from "../types";
 import { Loader2 } from "lucide-react";
 // Is line ko code ke top par likhein:
 import { toast } from 'react-toastify';
@@ -18,7 +20,7 @@ export default function SetupPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true); // Loading state add ki
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
 
   // 1. Security Check (User + Existing Shop)
   useEffect(() => {
@@ -27,7 +29,14 @@ export default function SetupPage() {
         setUser(u);
 
         // CHECK: Kya is bande ki shop pehle se hai?
-        const existingShop = await getUserShopProfile(u.uid);
+        let existingShop: Shop | null;
+        try {
+          existingShop = await getUserShopProfile(u.uid);
+        } catch (error) {
+          console.error("Profile check failed:", error);
+          router.replace("/dashboard"); // dashboard retry screen dikhayega
+          return;
+        }
 
         if (existingShop) {
           // --- 🔥 EXPIRE CHECK (Agar koi direct /setup URL type karke aaye) ---
@@ -37,7 +46,7 @@ export default function SetupPage() {
 
             if (now > expiry) {
               toast.error("Aapka Trial khatam ho chuka hai!");
-              router.replace("/expired?type=trial"); // Expired page par bhej do
+              router.replace("/license-expired?type=trial"); // Expired page par bhej do
               return;
             }
           }
@@ -58,7 +67,7 @@ export default function SetupPage() {
     return () => unsubscribe();
   }, []);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
@@ -77,11 +86,9 @@ export default function SetupPage() {
       };
       // -----------------------------
 
-      // 1. Firebase mn save karo (Ab finalDataToSave bhejna hai)
-      await createShopProfile(user, finalDataToSave);
-
-      // 2. Store update karo
-      setCurrentShop({ ...finalDataToSave, uid: user.uid });
+      // 1. Firebase mn save karo, 2. Store update karo
+      const savedShop = await createShopProfile(user, finalDataToSave);
+      setCurrentShop(savedShop);
 
       // 3. Dashboard bhejo
       toast.success("Account Created! 30-Day Free Trial Started 🎉");
@@ -89,7 +96,7 @@ export default function SetupPage() {
 
     } catch (error) {
       console.error(error);
-      toast.error("Error: " + error.message);
+      toast.error("Error: " + (error instanceof Error ? error.message : "setup failed"));
     } finally {
       setSubmitting(false); // Finally block use karna zyada behtar hai
     }
@@ -98,27 +105,27 @@ export default function SetupPage() {
   // Jab tak check chal raha hai, Loading dikhao
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-        <span className="ml-2 text-gray-600">Checking Profile...</span>
+      <div className="flex h-screen items-center justify-center bg-stone-50">
+        <Loader2 className="h-10 w-10 animate-spin text-brand-600" />
+        <span className="ml-2 text-stone-600">Checking Profile...</span>
       </div>
     );
   }
 
   // Asli Form (Jo sirf New Users ko dikhega)
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-stone-50 p-4">
       <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-lg">
-        <h2 className="mb-6 text-2xl font-bold text-gray-800">Shop Setup</h2>
-        <p className="mb-4 text-sm text-gray-500">Welcome! Apni dukan setup karein.</p>
+        <h2 className="mb-6 text-2xl font-extrabold text-stone-900">Shop Setup</h2>
+        <p className="mb-4 text-sm text-stone-500">Welcome! Apni dukan setup karein.</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Dukan ka Naam</label>
+            <label className="block text-sm font-medium text-stone-700">Dukan ka Naam</label>
             <input
               type="text"
               required
-              className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              className="mt-1 block w-full rounded-md border border-stone-300 p-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
               value={formData.shopName}
               onChange={(e) => setFormData({ ...formData, shopName: e.target.value })}
               placeholder="e.g. Bismillah General Store"
@@ -126,9 +133,9 @@ export default function SetupPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Business Type</label>
+            <label className="block text-sm font-medium text-stone-700">Business Type</label>
             <select
-              className="mt-1 block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              className="mt-1 block w-full rounded-md border border-stone-300 p-2 shadow-sm focus:border-brand-500 focus:ring-brand-500"
               value={formData.businessType}
               onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
             >
@@ -142,7 +149,7 @@ export default function SetupPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:bg-gray-400"
+            className="w-full rounded-md bg-brand-600 px-4 py-2 text-white hover:bg-brand-700 disabled:bg-stone-400"
           >
             {submitting ? "Creating..." : "Start Shop"}
           </button>

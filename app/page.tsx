@@ -1,7 +1,7 @@
 "use client"; // Client side logic k liye zaroori hai
 
-import { useEffect, useState } from "react";
-import { signInWithPopup, onAuthStateChanged } from "firebase/auth";
+import { useCallback, useEffect, useState } from "react";
+import { signInWithPopup, onAuthStateChanged, type User } from "firebase/auth";
 import { getUserShopProfile } from "../app/lib/authService"; // Jo pichle step mn banaya tha
 import { useStore } from "../app/store/useStore"; // Global state
 import { useRouter } from "next/navigation";
@@ -14,7 +14,31 @@ export default function LoginPage() {
   const { setCurrentUser, setCurrentShop } = useStore();
   const [loading, setLoading] = useState(true);
 
-  // 1. Check if user is already logged in
+  // 1. Profile Check Logic
+  const checkUserProfile = useCallback(
+    async (user: User) => {
+      setLoading(true);
+      setCurrentUser(user);
+
+      try {
+        const shopProfile = await getUserShopProfile(user.uid);
+        if (shopProfile) {
+          setCurrentShop(shopProfile);
+          router.push("/dashboard");
+        } else {
+          router.push("/setup");
+        }
+      } catch (error) {
+        // Offline/network error: dashboard khud cache se load karne ki koshish karega ya retry dikhayega
+        console.error("Profile check failed:", error);
+        router.push("/dashboard");
+      }
+      setLoading(false);
+    },
+    [router, setCurrentUser, setCurrentShop]
+  );
+
+  // 2. Check if user is already logged in
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -24,46 +48,29 @@ export default function LoginPage() {
       }
     });
     return () => unsubscribe();
-  }, []);
-
-  // 2. Profile Check Logic
-  const checkUserProfile = async (user: any) => {
-    setLoading(true);
-    setCurrentUser(user);
-
-    const shopProfile = await getUserShopProfile(user.uid);
-
-    if (shopProfile) {
-      setCurrentShop(shopProfile);
-      router.push("/dashboard");
-    } else {
-      router.push("/setup");
-    }
-    setLoading(false);
-  };
-
+  }, [checkUserProfile]);
   // 3. Google Login Handler
   const handleGoogleLogin = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       checkUserProfile(result.user);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Login Failed", error);
-      toast.error("Login Failed: " + error.message);
+      toast.error("Login Failed: " + (error instanceof Error ? error.message : "unknown error"));
     }
   };
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-600" />
-        <span className="ml-2 text-gray-600 font-medium">Loading System...</span>
+      <div className="flex h-screen items-center justify-center bg-stone-50">
+        <Loader2 className="h-10 w-10 animate-spin text-brand-600" />
+        <span className="ml-2 text-stone-600 font-medium">Loading System...</span>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 font-sans">
+    <div className="min-h-screen bg-stone-100 flex items-center justify-center p-4 font-sans">
       
       {/* Main Card Container */}
       <div className="bg-white rounded-3xl shadow-2xl overflow-hidden max-w-5xl w-full flex flex-col md:flex-row min-h-[600px]">
@@ -73,29 +80,29 @@ export default function LoginPage() {
           
           {/* Logo / Brand Top Left */}
           <div className="absolute top-8 left-8 flex items-center gap-2">
-             <div className="bg-blue-600 p-1.5 rounded-lg">
+             <div className="bg-brand-600 p-1.5 rounded-lg">
                 <Store className="text-white h-5 w-5" />
              </div>
-             <span className="font-bold text-gray-700 text-sm tracking-wide">SMART POS</span>
+             <span className="font-bold text-stone-700 text-sm tracking-wide">ASAAN POS</span>
           </div>
 
           <div className="mt-6 md:mt-0"> {/* Top margin kam kiya */}
             
             {/* Heading Spacing Reduced */}
-            {/* <h4 className="text-sm font-semibold text-blue-600 uppercase tracking-wider mb-2 ml-6">Welcome Back</h4> */}
-            <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-3 mt-12"> {/* mt-8 -> mt-4, mb-4 -> mb-3 */}
+            {/* <h4 className="text-sm font-semibold text-brand-600 uppercase tracking-wider mb-2 ml-6">Welcome Back</h4> */}
+            <h1 className="text-3xl md:text-4xl font-extrabold text-stone-900 mb-3 mt-12"> {/* mt-8 -> mt-4, mb-4 -> mb-3 */}
               Login to your account
             </h1>
             
             {/* Paragraph Spacing Reduced */}
-            <p className="text-gray-500 mb-6 leading-relaxed text-sm md:text-base"> {/* mb-8 -> mb-6 */}
+            <p className="text-stone-500 mb-6 leading-relaxed text-sm md:text-base"> {/* mb-8 -> mb-6 */}
               Manage your inventory, track sales, and handle your point of sale operations efficiently.
             </p>
 
             {/* Login Button */}
             <button
               onClick={handleGoogleLogin}
-              className="group relative w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-200 p-3.5 rounded-xl hover:border-blue-600 hover:bg-blue-50 transition-all duration-300 shadow-sm hover:shadow-md"
+              className="group relative w-full flex items-center justify-center gap-3 bg-white border-2 border-stone-200 p-3.5 rounded-xl hover:border-brand-600 hover:bg-brand-50 transition-all duration-300 shadow-sm hover:shadow-md"
             >
               {/* Google Icon */}
               <svg className="h-5 w-5" viewBox="0 0 24 24"> {/* Icon size thora adjust kiya */}
@@ -116,29 +123,29 @@ export default function LoginPage() {
                   fill="#EA4335"
                 />
               </svg>
-              <span className="font-bold text-gray-700 text-base md:text-lg group-hover:text-blue-700 transition-colors">
+              <span className="font-bold text-stone-700 text-base md:text-lg group-hover:text-brand-700 transition-colors">
                 Continue with Google
               </span>
             </button>
 
             {/* Features List Spacing Reduced */}
             <div className="mt-8 space-y-2.5"> {/* mt-10 -> mt-8, space-y-3 -> space-y-2.5 */}
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <div className="flex items-center gap-2 text-sm text-stone-500">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                     <span>Real-time Inventory Tracking</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <div className="flex items-center gap-2 text-sm text-stone-500">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                     <span>Fast POS Billing</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <div className="flex items-center gap-2 text-sm text-stone-500">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                     <span>Offline Support</span>
                 </div>
             </div>
           </div>
           
-          <div className="mt-auto pt-6 text-center text-xs text-gray-400">
+          <div className="mt-auto pt-6 text-center text-xs text-stone-400">
             &copy; {new Date().getFullYear()} ASAAN POS System. All rights reserved.
           </div>
         </div>
@@ -147,11 +154,11 @@ export default function LoginPage() {
        
        
        {/* --- RIGHT SIDE: ILLUSTRATION --- */}
-        <div className="hidden md:flex w-1/2 bg-blue-600 relative items-center justify-center p-10 overflow-hidden">
+        <div className="hidden md:flex w-1/2 bg-ink relative items-center justify-center p-10 overflow-hidden">
             
             {/* Background Decoration Circles */}
-            <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-blue-500 rounded-full opacity-50 blur-3xl"></div>
-            <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-blue-700 rounded-full opacity-50 blur-3xl"></div>
+            <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-brand-500 rounded-full opacity-50 blur-3xl"></div>
+            <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-ink-700 rounded-full opacity-50 blur-3xl"></div>
             
             <div className="relative z-10 text-center text-white flex flex-col items-center">
                 {/* Illustration Image */}
@@ -163,7 +170,7 @@ export default function LoginPage() {
                 />
                 
                 <h2 className="text-3xl font-bold mb-3">Manage Shop Effortlessly</h2>
-                <p className="text-blue-100 text-lg max-w-sm">
+                <p className="text-brand-100 text-lg max-w-sm">
                     One place to manage inventory, orders, and customer details.
                 </p>
             </div>
