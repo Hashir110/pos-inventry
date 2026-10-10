@@ -32,7 +32,9 @@ export interface Product {
   name: string;
   buyingPrice: number;
   sellingPrice: number;
-  stock: number;
+  stock: number; // Purane records compatibility
+  gudamStock?: number; // Warehouse stock
+  shopStock?: number; // Dukan stock
   unitType: UnitType;
   /** Optional: POS par category tabs ke liye (e.g. "Atta", "Drinks") */
   category?: string;
@@ -54,6 +56,7 @@ export interface SaleItem {
   /** Purani sales mein price ya product id in naamon se bhi mil sakti hai */
   sellingPrice?: number;
   productId?: string;
+  dispatchFrom?: "gudam" | "shop";
 }
 
 /** sales/{id} */
@@ -73,6 +76,7 @@ export interface Sale {
   paymentMethod: PaymentMethod;
   isOffline?: boolean;
   syncedAt?: string;
+  gatePassGenerated?: boolean;
 }
 
 /** Offline queue mein pada sale (abhi Firestore mein nahi gaya) */
@@ -122,4 +126,84 @@ export interface CustomerPayment {
   method: "Cash" | "Bank Account";
   note?: string;
   date: string;
+}
+
+/** gate_passes/{id} — Gudam dispatch parchi record */
+export interface GatePass {
+  id: string;
+  ownerId: string;
+  gatePassNo: string;
+  saleId?: string;
+  customerName: string;
+  customerId?: string;
+  items: Array<{
+    productId: string;
+    productName: string;
+    qty: number;
+    unit?: string;
+  }>;
+  date: string;
+  vehicleNo?: string;
+  driverName?: string;
+  status: "Issued" | "Dispatched" | "Cancelled";
+  notes?: string;
+}
+
+/** suppliers/{id} — Jin parties se maal lety hain */
+export interface Supplier {
+  id: string;
+  ownerId: string;
+  name: string;
+  phone?: string;
+  address?: string;
+  /** Humne is supplier ke kitne paise dene hain */
+  balance: number;
+  createdAt: string;
+}
+
+/** supplier_purchases/{id} — Supplier se maal khareedne ki entry */
+export interface SupplierPurchase {
+  id: string;
+  ownerId: string;
+  supplierId: string;
+  supplierName: string;
+  billNo?: string;
+  items: Array<{
+    productId?: string;
+    productName: string;
+    qty: number;
+    buyingPrice: number;
+    total: number;
+    destinationLocation: "gudam" | "shop";
+  }>;
+  totalAmount: number;
+  paidAmount: number;
+  balanceAmount: number; // totalAmount - paidAmount
+  date: string;
+  notes?: string;
+}
+
+/** supplier_payments/{id} — Supplier ko paise dene ki entry (Payout) */
+export interface SupplierPayment {
+  id: string;
+  ownerId: string;
+  supplierId: string;
+  supplierName: string;
+  amount: number;
+  method: "Cash" | "Bank Account";
+  note?: string;
+  date: string;
+}
+
+/** stock_transfers/{id} — Gudam <-> Dukan stock transfer log */
+export interface StockTransfer {
+  id: string;
+  ownerId: string;
+  productId: string;
+  productName: string;
+  qty: number;
+  fromLocation: "gudam" | "shop";
+  toLocation: "gudam" | "shop";
+  date: string;
+  note?: string;
 }

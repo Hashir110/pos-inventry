@@ -220,6 +220,10 @@ export const listRecentSales = async (ownerId: string, max = 50): Promise<Sale[]
   return toSales(snap.docs);
 };
 
+export const listSales = async (ownerId: string): Promise<Sale[]> => {
+  return listRecentSales(ownerId, 500);
+};
+
 /** `fromIso` se (aur agar diya ho to `toIso` tak) ki sales, naye pehle */
 export const listSalesInRange = async (
   ownerId: string,

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { History, Plus, Search, Users, Wallet, X } from "lucide-react";
 import { toast } from "react-toastify";
 import { useStore } from "../../store/useStore";
+import { useLanguage } from "../../store/useLanguage";
 import PageHeader from "../../components/PageHeader";
 import {
   addCustomer,
@@ -25,6 +26,7 @@ const formatDate = (iso: string) =>
 
 export default function UdharPage() {
   const { currentUser } = useStore();
+  const { t } = useLanguage();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -101,13 +103,31 @@ export default function UdharPage() {
     setPayNote("");
   };
 
+  const [printPayment, setPrintPayment] = useState<{
+    customerName: string;
+    amount: number;
+    method: string;
+    note?: string;
+    date: string;
+  } | null>(null);
+
   const handlePay = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || !payFor) return;
     setPaying(true);
+    const amt = parseFloat(payAmount);
     try {
-      await receivePayment(currentUser.uid, payFor.id, parseFloat(payAmount), payMethod, payNote);
+      await receivePayment(currentUser.uid, payFor.id, amt, payMethod, payNote);
       toast.success(`Rs. ${payAmount} wasool ho gaye`);
+      
+      setPrintPayment({
+        customerName: payFor.name,
+        amount: amt,
+        method: payMethod,
+        note: payNote,
+        date: new Date().toISOString(),
+      });
+
       setPayFor(null);
       fetchCustomers();
     } catch (error) {
@@ -135,16 +155,16 @@ export default function UdharPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
-        title="Udhar Khata"
-        subtitle="Customers ka udhar aur wasooli"
+        title={t("creditLedger")}
+        subtitle={t("manageCustomerBalances")}
         actions={
           <>
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Total baqi udhar</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700">{t("totalReceivable")}</p>
               <p className="tabular text-lg font-extrabold text-stone-900">{formatMoney(totalOutstanding)}</p>
             </div>
             <div className="rounded-xl border border-stone-200 bg-white px-4 py-2 shadow-card">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500">Udhar wale</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500">{t("customersCount")}</p>
               <p className="tabular text-lg font-extrabold text-stone-900">{debtors}</p>
             </div>
           </>
@@ -156,7 +176,7 @@ export default function UdharPage() {
         className="bg-white p-5 rounded-2xl shadow-card border border-stone-200 flex flex-col md:flex-row gap-3 md:items-end"
       >
         <div className="flex-1">
-          <label className="text-xs font-semibold text-stone-500 mb-1 block">Customer ka naam</label>
+          <label className="text-xs font-semibold text-stone-500 mb-1 block">{t("customerNameCol")}</label>
           <input
             required
             value={newName}
@@ -166,7 +186,7 @@ export default function UdharPage() {
           />
         </div>
         <div className="w-full md:w-52">
-          <label className="text-xs font-semibold text-stone-500 mb-1 block">Phone (optional)</label>
+          <label className="text-xs font-semibold text-stone-500 mb-1 block">{t("phone")}</label>
           <input
             type="tel"
             value={newPhone}
@@ -180,7 +200,7 @@ export default function UdharPage() {
           disabled={adding}
           className="px-6 py-2.5 bg-ink text-white rounded-lg hover:bg-ink-800 font-bold flex items-center justify-center gap-2 disabled:opacity-50"
         >
-          <Plus size={18} /> {adding ? "Adding..." : "Add Customer"}
+          <Plus size={18} /> {adding ? t("creating") : t("addCustomerBtn")}
         </button>
       </form>
 
@@ -188,14 +208,14 @@ export default function UdharPage() {
       <div className="card overflow-hidden">
         <div className="p-4 border-b bg-stone-50/50 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <h3 className="font-bold text-stone-700 flex items-center gap-2">
-            <Users size={18} /> Customers ({customers.length})
+            <Users size={18} /> {t("customersCount")} ({customers.length})
           </h3>
           <div className="relative w-full md:w-64">
             <Search className="absolute left-3 top-2.5 text-stone-400" size={16} />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Naam ya phone..."
+              placeholder={t("search")}
               className="w-full pl-9 pr-3 py-2 border border-stone-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
@@ -205,10 +225,10 @@ export default function UdharPage() {
           <table className="w-full text-left text-sm">
             <thead className="bg-stone-50 border-b">
               <tr>
-                <th className="p-4 font-semibold text-stone-600">Naam</th>
-                <th className="p-4 font-semibold text-stone-600">Phone</th>
-                <th className="p-4 font-semibold text-stone-600">Baqi Udhar</th>
-                <th className="p-4 font-semibold text-stone-600 text-right">Action</th>
+                <th className="p-4 font-semibold text-stone-600">{t("customerNameCol")}</th>
+                <th className="p-4 font-semibold text-stone-600">{t("phoneCol")}</th>
+                <th className="p-4 font-semibold text-stone-600">{t("balanceCol")}</th>
+                <th className="p-4 font-semibold text-stone-600 text-right">{t("action")}</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -349,6 +369,48 @@ export default function UdharPage() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Wasooli Printable Receipt Modal */}
+      {printPayment && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-pop w-full max-w-sm overflow-hidden">
+            <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-emerald-50">
+              <h3 className="font-extrabold text-emerald-900 text-sm">
+                Wasooli Receipt Voucher
+              </h3>
+              <button onClick={() => setPrintPayment(null)} className="rounded-lg p-1 text-stone-400 hover:bg-stone-200">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 text-center space-y-4" id="wasooli-receipt">
+              <div className="border-b pb-3">
+                <h2 className="font-black text-lg text-stone-900 uppercase tracking-wide">
+                  WASOOLI RECEIPT
+                </h2>
+                <p className="text-xs text-stone-500 font-bold">
+                  Date: {new Date(printPayment.date).toLocaleDateString()}
+                </p>
+              </div>
+
+              <div className="space-y-2 text-left text-xs bg-stone-50 p-4 rounded-xl border border-stone-200">
+                <p><span className="font-bold text-stone-500">Party Name:</span> <b className="text-stone-900 text-sm">{printPayment.customerName}</b></p>
+                <p><span className="font-bold text-stone-500">Amount Received:</span> <b className="text-emerald-700 text-base">Rs. {printPayment.amount.toLocaleString()}</b></p>
+                <p><span className="font-bold text-stone-500">Payment Mode:</span> <b className="text-stone-800">{printPayment.method}</b></p>
+                {printPayment.note && <p><span className="font-bold text-stone-500">Note:</span> {printPayment.note}</p>}
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setPrintPayment(null)} className="btn-ghost flex-1 text-xs">
+                  Close
+                </button>
+                <button onClick={() => window.print()} className="btn-primary flex-1 text-xs font-bold">
+                  Print Receipt
+                </button>
+              </div>
             </div>
           </div>
         </div>

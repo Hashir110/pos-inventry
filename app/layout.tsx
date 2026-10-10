@@ -21,6 +21,9 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   title: "ASAAN POS Inventory Management",
   description: "Manage your inventory with ease using our ASAAN POS system.",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export const viewport: Viewport = {

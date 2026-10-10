@@ -3,6 +3,7 @@ import {
   collection,
   doc,
   getDocs,
+  onSnapshot,
   query,
   runTransaction,
   where,
@@ -17,6 +18,20 @@ export const listCustomers = async (ownerId: string): Promise<Customer[]> => {
     .map((d) => ({ id: d.id, ...d.data() }) as Customer)
     .sort((a, b) => a.name.localeCompare(b.name));
 };
+
+export const subscribeCustomers = (
+  ownerId: string,
+  onData: (customers: Customer[]) => void
+): (() => void) =>
+  onSnapshot(
+    query(collection(db, "customers"), where("ownerId", "==", ownerId)),
+    (snap) => {
+      const items = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }) as Customer)
+        .sort((a, b) => a.name.localeCompare(b.name));
+      onData(items);
+    }
+  );
 
 export const addCustomer = async (
   ownerId: string,

@@ -7,9 +7,11 @@ import { toast } from "react-toastify";
 import ProductForm from "../../../../components/ProductForm";
 import PageHeader from "../../../../components/PageHeader";
 import { getProduct, updateProduct, type ProductInput } from "../../../../lib/services/products";
+import { useLanguage } from "../../../../store/useLanguage";
 
 export default function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: productId } = use(params);
+  const { t } = useLanguage();
   const router = useRouter();
 
   const [product, setProduct] = useState<ProductInput | null>(null);
@@ -60,7 +62,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center gap-2 text-brand-600">
-        <Loader2 className="animate-spin" /> Loading product...
+        <Loader2 className="animate-spin" /> {t("loading")}
       </div>
     );
   }
@@ -70,11 +72,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   return (
     <div>
       <PageHeader
-        title="Product Edit"
-        subtitle="Qeemat ya stock badlein"
+        title={t("navEditProduct")}
+        subtitle={t("editProductSubtitle")}
         actions={
           <button onClick={() => router.back()} className="btn-ghost !py-2.5">
-            <ArrowLeft size={16} /> Wapis
+            <ArrowLeft size={16} /> {t("back")}
           </button>
         }
       />

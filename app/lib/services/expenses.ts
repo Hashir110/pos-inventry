@@ -4,6 +4,7 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   where,
@@ -24,6 +25,18 @@ export const listExpenses = async (ownerId: string): Promise<Expense[]> => {
   );
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Expense);
 };
+
+export const subscribeExpenses = (
+  ownerId: string,
+  onData: (expenses: Expense[]) => void
+): (() => void) =>
+  onSnapshot(
+    query(collection(db, "expenses"), where("ownerId", "==", ownerId)),
+    (snap) => {
+      const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Expense);
+      onData(items);
+    }
+  );
 
 /** `fromIso` se (aur agar diya ho to `toIso` tak) ke kharche */
 export const listExpensesInRange = async (

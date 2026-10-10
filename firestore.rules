@@ -57,10 +57,10 @@ service cloud.firestore {
     match /sales/{id} {
       allow read: if canRead();
       allow create: if createsOwn();
-      // Update sirf returns ke liye: items (returnedQty) aur refundedAmount
+      // Update: items, refundedAmount, aur gatePassGenerated
       allow update: if isOwner() && keepsOwner()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['items', 'refundedAmount']);
+             .hasOnly(['items', 'refundedAmount', 'gatePassGenerated']);
       allow delete: if isOwner();
     }
 
@@ -92,6 +92,44 @@ service cloud.firestore {
       allow create: if createsOwn();
       allow update: if isOwner() && keepsOwner();
       allow delete: if isOwner();
+    }
+
+    // --- Gate Passes ---
+    match /gate_passes/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update: if isOwner() && keepsOwner();
+      allow delete: if isOwner();
+    }
+
+    // --- Suppliers ---
+    match /suppliers/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update: if isOwner() && keepsOwner();
+      allow delete: if isOwner();
+    }
+
+    // --- Supplier Purchases ---
+    match /supplier_purchases/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update: if isOwner() && keepsOwner();
+      allow delete: if isOwner();
+    }
+
+    // --- Supplier Payments ---
+    match /supplier_payments/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update, delete: if false;
+    }
+
+    // --- Stock Transfers ---
+    match /stock_transfers/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update, delete: if false;
     }
 
     // Baaki sab band

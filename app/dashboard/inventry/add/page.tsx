@@ -7,9 +7,11 @@ import ProductForm from "../../../components/ProductForm";
 import PageHeader from "../../../components/PageHeader";
 import { addProduct, type ProductInput } from "../../../lib/services/products";
 import { useStore } from "../../../store/useStore";
+import { useLanguage } from "../../../store/useLanguage";
 
 export default function AddProductPage() {
   const { currentUser } = useStore();
+  const { t } = useLanguage();
   const router = useRouter();
 
   const handleSubmit = async (values: ProductInput) => {
@@ -30,11 +32,11 @@ export default function AddProductPage() {
   return (
     <div>
       <PageHeader
-        title="Naya Product"
-        subtitle="Inventory mein item shamil karein"
+        title={t("newProduct")}
+        subtitle={t("addProductSubtitle")}
         actions={
           <button onClick={() => router.back()} className="btn-ghost !py-2.5">
-            <ArrowLeft size={16} /> Wapis
+            <ArrowLeft size={16} /> {t("back")}
           </button>
         }
       />

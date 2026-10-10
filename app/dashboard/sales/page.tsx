@@ -9,6 +9,7 @@ import { saleNetAmount, saleProfit } from "../../lib/calc";
 import StatCard from "../../components/StatCard";
 import PageHeader from "../../components/PageHeader";
 import { useStore } from "../../store/useStore";
+import { useLanguage } from "../../store/useLanguage";
 import type { Sale } from "../../types";
 
 type SaleRow = Sale & { profit: number };
@@ -47,6 +48,7 @@ const paymentInfo = (sale: Sale) => {
 
 export default function SalesHistoryPage() {
   const { currentUser, currentShop } = useStore();
+  const { t } = useLanguage();
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -137,11 +139,11 @@ export default function SalesHistoryPage() {
   return (
     <div>
       <PageHeader
-        title="Sales History"
-        subtitle="Pichle 50 bills — dekhne ke liye aankh par click karein"
+        title={t("salesHistory")}
+        subtitle={t("viewPastSales")}
         actions={
           <Link href="/dashboard/pos" className="btn-primary">
-            <Plus size={18} /> Naya Bill
+            <Plus size={18} /> {t("newSale")}
           </Link>
         }
       />
@@ -149,9 +151,9 @@ export default function SalesHistoryPage() {
       {/* Stats */}
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard
-          title="Total Sale (Recent)"
+          title={t("totalSales")}
           value={money(stats.totalRevenue)}
-          subtitle="Refund minus karke"
+          subtitle={t("afterRefunds")}
           icon={TrendingUp}
           theme="blue"
           loading={loading}
@@ -160,9 +162,9 @@ export default function SalesHistoryPage() {
           onToggle={() => handleToggle("revenue")}
         />
         <StatCard
-          title="Total Profit (Recent)"
+          title={t("totalProfitRecent")}
           value={money(stats.totalProfit)}
-          subtitle="Discount aur return ke baad"
+          subtitle={t("afterRefunds")}
           icon={DollarSign}
           theme="green"
           loading={loading}
@@ -171,9 +173,9 @@ export default function SalesHistoryPage() {
           onToggle={() => handleToggle("profit")}
         />
         <StatCard
-          title="Total Orders"
+          title={t("totalOrders")}
           value={stats.totalOrders}
-          subtitle="Pichle 50 bills"
+          subtitle={t("invoices")}
           icon={ShoppingBag}
           theme="amber"
           loading={loading}
@@ -188,7 +190,7 @@ export default function SalesHistoryPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
             <input
               type="text"
-              placeholder="Invoice ya customer dhoondein..."
+              placeholder={t("filterCustomerInvoice")}
               className="field pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -201,19 +203,19 @@ export default function SalesHistoryPage() {
               onChange={(e) => setPayFilter(e.target.value as PayFilter)}
               className="field w-auto cursor-pointer"
             >
-              <option value="all">Payment: Sab</option>
-              <option value="Cash">Cash</option>
-              <option value="Bank Account">Bank / Online</option>
-              <option value="Udhar">Udhar</option>
+              <option value="all">{t("allPayments")}</option>
+              <option value="Cash">{t("cash")}</option>
+              <option value="Bank Account">{t("bankOnline")}</option>
+              <option value="Udhar">{t("udhar")}</option>
             </select>
             <select
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value as SortKey)}
               className="field w-auto cursor-pointer"
             >
-              <option value="new">Sort: Naye pehle</option>
-              <option value="old">Sort: Purane pehle</option>
-              <option value="high">Sort: Bara bill pehle</option>
+              <option value="new">{t("sortNewest")}</option>
+              <option value="old">Sort: Oldest</option>
+              <option value="high">Sort: Highest Amount</option>
             </select>
           </div>
         </div>
@@ -222,14 +224,14 @@ export default function SalesHistoryPage() {
           <table className="w-full text-left text-sm">
             <thead className="border-b border-stone-200">
               <tr>
-                <th className="p-4">Customer</th>
-                <th className="p-4">Invoice</th>
-                <th className="p-4">Date</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-right">Grand Total</th>
-                <th className="p-4 text-right">Paid</th>
-                <th className="p-4 text-right">Due</th>
-                <th className="p-4">Payment</th>
+                <th className="p-4">{t("customer")}</th>
+                <th className="p-4">{t("invoices")}</th>
+                <th className="p-4">{t("date")}</th>
+                <th className="p-4">{t("status")}</th>
+                <th className="p-4 text-right">{t("grandTotal")}</th>
+                <th className="p-4 text-right">{t("paid")}</th>
+                <th className="p-4 text-right">{t("due")}</th>
+                <th className="p-4">{t("paymentBreakdown")}</th>
                 <th className="p-4 text-right"></th>
               </tr>
             </thead>

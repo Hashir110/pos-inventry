@@ -5,6 +5,7 @@ import { createOnlineSale, queueOfflineSale } from "../../lib/services/sales";
 import { subscribeProducts } from "../../lib/services/products";
 import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 import { useStore } from "../../store/useStore";
+import { useLanguage } from "../../store/useLanguage";
 import { Search, ShoppingCart, Trash2, X, Printer, ChevronUp, ChevronDown, Banknote, Landmark, HandCoins, Plus, Minus, RotateCcw, StickyNote } from "lucide-react";
 // Is line ko code ke top par likhein:
 import { toast } from 'react-toastify';
@@ -13,6 +14,7 @@ import type { Customer, PaymentMethod, Product, SaleItem } from '../../types';
 
 export default function POSPage() {
     const { currentUser, currentShop } = useStore(); // Shop Name k liye currentShop chahiye
+    const { t } = useLanguage();
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash"); // Default "Cash" rakhte hain
     const [customerName, setCustomerName] = useState("");
     // Udhar sale ke liye customer list
@@ -313,14 +315,14 @@ export default function POSPage() {
                 {/* Top: title + search + reset */}
                 <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                     <div className="min-w-0 sm:mr-auto">
-                        <h1 className="text-lg font-bold text-stone-900">Products</h1>
-                        <p className="text-xs text-stone-500">Item par click karke bill mein daalein</p>
+                        <h1 className="text-lg font-bold text-stone-900">{t("products")}</h1>
+                        <p className="text-xs text-stone-500">{t("clickToAdd")}</p>
                     </div>
                     <div className="relative w-full sm:w-72">
                         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" size={17} />
                         <input
                             type="text"
-                            placeholder="Item dhoondein..."
+                            placeholder={t("searchItemsPlaceholder")}
                             className="field pl-10"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -330,15 +332,15 @@ export default function POSPage() {
                         onClick={resetOrder}
                         disabled={cart.length === 0}
                         className="btn-ghost !py-2.5"
-                        title="Order saaf karein"
+                        title={t("reset")}
                     >
-                        <RotateCcw size={16} /> Reset
+                        <RotateCcw size={16} /> {t("reset")}
                     </button>
                 </div>
 
                 {/* Category tabs */}
                 <div className="-mt-1 flex gap-2 overflow-x-auto pb-1">
-                    {[{ key: "all", label: "Sab" }, ...categories.map(c => ({ key: c, label: c }))].map(tab => (
+                    {[{ key: "all", label: t("all") }, ...categories.map(c => ({ key: c, label: c }))].map(tab => (
                         <button
                             key={tab.key}
                             onClick={() => setActiveCategory(tab.key)}
@@ -355,11 +357,11 @@ export default function POSPage() {
                 {/* Products Grid */}
                 <div className="flex-1 overflow-y-auto pb-24 lg:pb-2">
                     {loading ? (
-                        <div className="flex h-full items-center justify-center font-medium text-stone-400">Loading...</div>
+                        <div className="flex h-full items-center justify-center font-medium text-stone-400">{t("loading")}</div>
                     ) : filteredProducts.length === 0 ? (
                         <div className="card flex h-64 flex-col items-center justify-center gap-2 text-stone-400">
                             <Search size={36} className="opacity-30" />
-                            <p className="text-sm font-medium">Koi item nahi mila</p>
+                            <p className="text-sm font-medium">{t("noItemsFound")}</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
@@ -446,15 +448,15 @@ export default function POSPage() {
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-stone-200 p-4">
                     <div>
-                        <h2 className="text-lg font-bold text-stone-900">Order List</h2>
-                        <p className="text-xs text-stone-500">Naya bill • {cart.length} item{cart.length === 1 ? "" : "s"}</p>
+                        <h2 className="text-lg font-bold text-stone-900">{t("orderList")}</h2>
+                        <p className="text-xs text-stone-500">{t("newBill")} • {cart.length} {t("items")}</p>
                     </div>
                     <div className="flex items-center gap-1">
                         <button
                             onClick={resetOrder}
                             disabled={cart.length === 0}
                             className="rounded-lg p-2 text-stone-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
-                            title="Order saaf karein"
+                            title={t("reset")}
                         >
                             <Trash2 size={18} />
                         </button>
@@ -466,24 +468,24 @@ export default function POSPage() {
 
                 {/* Customer */}
                 <div className="space-y-2 border-b border-stone-200 p-4">
-                    <label className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Customer</label>
+                    <label className="text-[11px] font-bold uppercase tracking-widest text-stone-400">{t("customer")}</label>
                     <div className="flex gap-2">
                         <select
                             value={customerId}
                             onChange={(e) => handleSelectCustomer(e.target.value)}
                             className="field flex-1 cursor-pointer"
                         >
-                            <option value="">Walk-in Customer</option>
+                            <option value="">{t("walkInCustomer")}</option>
                             {customers.map(c => (
                                 <option key={c.id} value={c.id}>
-                                    {c.name} {c.balance > 0 ? `(baqi Rs. ${Math.round(c.balance).toLocaleString()})` : ""}
+                                    {c.name} {c.balance > 0 ? `(${t("due")} Rs. ${Math.round(c.balance).toLocaleString()})` : ""}
                                 </option>
                             ))}
                         </select>
                         <button
                             onClick={() => setShowNewCustomer(v => !v)}
                             className="btn-ghost !px-3"
-                            title="Naya customer"
+                            title={t("newCustomer")}
                         >
                             <Plus size={18} />
                         </button>
@@ -493,21 +495,21 @@ export default function POSPage() {
                         <div className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-3">
                             <input
                                 type="text"
-                                placeholder="Naya customer ka naam"
+                                placeholder={t("newCustomerName")}
                                 value={newCustomerName}
                                 onChange={(e) => setNewCustomerName(e.target.value)}
                                 className="field !py-2"
                             />
                             <input
                                 type="tel"
-                                placeholder="Phone (optional)"
+                                placeholder={t("phone")}
                                 value={newCustomerPhone}
                                 onChange={(e) => setNewCustomerPhone(e.target.value)}
                                 className="field !py-2"
                             />
                             <div className="flex gap-2">
-                                <button onClick={handleAddCustomer} className="btn-primary flex-1 !py-2">Save</button>
-                                <button onClick={() => setShowNewCustomer(false)} className="btn-ghost flex-1 !py-2">Cancel</button>
+                                <button onClick={handleAddCustomer} className="btn-primary flex-1 !py-2">{t("save")}</button>
+                                <button onClick={() => setShowNewCustomer(false)} className="btn-ghost flex-1 !py-2">{t("cancel")}</button>
                             </div>
                         </div>
                     )}
@@ -518,8 +520,8 @@ export default function POSPage() {
                     {cart.length === 0 ? (
                         <div className="flex h-full flex-col items-center justify-center gap-2 text-stone-300">
                             <ShoppingCart size={40} />
-                            <p className="text-sm font-semibold text-stone-400">Bill khali hai</p>
-                            <p className="text-xs text-stone-400">Kisi item par click karein</p>
+                            <p className="text-sm font-semibold text-stone-400">{t("cartEmpty")}</p>
+                            <p className="text-xs text-stone-400">{t("clickItemToAdd")}</p>
                         </div>
                     ) : (
                         <div className="space-y-2">
@@ -591,17 +593,17 @@ export default function POSPage() {
                         return (
                             <div className="space-y-1.5 text-sm">
                                 <div className="flex justify-between text-stone-500">
-                                    <span>Sub Total</span>
+                                    <span>{t("subtotal")}</span>
                                     <span className="tabular font-semibold text-stone-700">Rs. {Math.round(subTotal).toLocaleString()}</span>
                                 </div>
                                 <div className="flex justify-between text-stone-500">
-                                    <span>Discount</span>
+                                    <span>{t("discount")}</span>
                                     <span className={`tabular font-semibold ${totalDiscount > 0 ? 'text-emerald-600' : 'text-stone-700'}`}>
                                         {totalDiscount > 0 ? '− ' : ''}Rs. {Math.round(totalDiscount).toLocaleString()}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between border-t border-dashed border-stone-300 pt-2.5">
-                                    <span className="text-sm font-bold text-stone-900">Grand Total</span>
+                                    <span className="text-sm font-bold text-stone-900">{t("grandTotal")}</span>
                                     <span className="tabular font-display text-2xl font-bold text-stone-900">
                                         Rs. {Math.round(grandTotal).toLocaleString()}
                                     </span>
@@ -613,7 +615,7 @@ export default function POSPage() {
                     {/* Note */}
                     {showNote ? (
                         <textarea
-                            placeholder="Bill ke liye note..."
+                            placeholder={t("notePlaceholder")}
                             rows={2}
                             className="field resize-none"
                             value={description}
@@ -621,16 +623,16 @@ export default function POSPage() {
                         />
                     ) : (
                         <button onClick={() => setShowNote(true)} className="flex items-center gap-1.5 text-xs font-bold text-stone-500 hover:text-brand-700">
-                            <StickyNote size={14} /> Note jodein
+                            <StickyNote size={14} /> {t("addNote")}
                         </button>
                     )}
 
                     {/* Payment method */}
                     <div className="grid grid-cols-3 gap-2">
                         {([
-                            { value: "Cash", label: "Cash", icon: Banknote },
-                            { value: "Bank Account", label: "Bank", icon: Landmark },
-                            { value: "Udhar", label: "Udhar", icon: HandCoins },
+                            { value: "Cash", label: t("cash"), icon: Banknote },
+                            { value: "Bank Account", label: t("bankOnline"), icon: Landmark },
+                            { value: "Udhar", label: t("udhar"), icon: HandCoins },
                         ] as { value: PaymentMethod; label: string; icon: typeof Banknote }[]).map(opt => {
                             const Icon = opt.icon;
                             const active = paymentMethod === opt.value;
@@ -655,7 +657,7 @@ export default function POSPage() {
 
                     {paymentMethod === "Udhar" && !customerId && (
                         <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                            Udhar ke liye upar se customer chunein.
+                            {t("selectCustomerForCredit")}
                         </p>
                     )}
 
@@ -667,9 +669,9 @@ export default function POSPage() {
                         {checkoutLoading ? (
                             <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
                         ) : isOnline ? (
-                            `Payment • Rs. ${Math.round(grandTotal).toLocaleString()}`
+                            t("paymentTotal", { amount: Math.round(grandTotal).toLocaleString() })
                         ) : (
-                            "Offline Save Karein"
+                            t("saveOffline")
                         )}
                     </button>
                 </div>
@@ -734,29 +736,24 @@ export default function POSPage() {
 
                         {/* --- 💰 PROFESSIONAL TOTALS SECTION 💰 --- */}
                         {(() => {
-                            // Calculation on the fly
                             let subTotal = 0;
                             let totalDiscount = 0;
 
                             cart.forEach(item => {
                                 subTotal += (item.price * item.qty);
-                                // ✅ FIX: Sirf flat discount jama karein, qty se multiply NA KAREIN
                                 totalDiscount += (item.discount || 0);
                             });
 
-                            // ✅ FIX: Ab finalPayable bilkul sahi aayega (Subtotal - Flat Discount)
                             const finalPayable = subTotal - totalDiscount;
 
                             return (
                                 <div className="border-t border-black pt-2 mb-4 space-y-1">
 
-                                    {/* Subtotal (Asal Bill) */}
                                     <div className="flex justify-between text-[11px] text-stone-700 font-semibold">
                                         <span>Subtotal:</span>
                                         <span>Rs. {Math.round(subTotal)}</span>
                                     </div>
 
-                                    {/* Customer Ki Bachat (Flat Discount dikhayega) */}
                                     {totalDiscount > 0 && (
                                         <div className="flex justify-between text-[11px] font-bold text-stone-600 border-b border-dotted border-stone-400 pb-1">
                                             <span>Discount:</span>
@@ -764,7 +761,6 @@ export default function POSPage() {
                                         </div>
                                     )}
 
-                                    {/* Final Grand Total */}
                                     <div className="flex justify-between text-lg font-bold text-black border-t-2 border-black pt-1 mt-1">
                                         <span>Total:</span>
                                         <span>Rs. {Math.round(finalPayable)}</span>
@@ -787,10 +783,10 @@ export default function POSPage() {
                         {/* --- BUTTONS --- */}
                         <div id="receipt-modal" className="flex flex-col gap-2 no-print">
                             <button onClick={handlePrint} className="w-full py-3 bg-green-600 text-white rounded-lg font-bold flex justify-center items-center gap-2 hover:bg-green-700">
-                                <Printer size={18} /> Print Slip
+                                <Printer size={18} /> {t("printSlip")}
                             </button>
                             <button onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); setCustomerId(""); setDescription(""); setInvoiceNumber(""); }} className="w-full py-3 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700">
-                                New Order (Clear Cart)
+                                {t("clearCart")}
                             </button>
                         </div>
                     </div>

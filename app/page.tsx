@@ -7,11 +7,14 @@ import { useStore } from "../app/store/useStore"; // Global state
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Loader2, Store } from "lucide-react"; // Icons
 import { auth, googleProvider } from "../app/lib/firebase";
-// Is line ko code ke top par likhein:
 import { toast } from 'react-toastify';
+import { useLanguage } from "./store/useLanguage";
+import LanguageSwitcher from "./components/LanguageSwitcher";
+
 export default function LoginPage() {
   const router = useRouter();
   const { setCurrentUser, setCurrentShop } = useStore();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
 
   // 1. Profile Check Logic
@@ -78,25 +81,22 @@ export default function LoginPage() {
         {/* --- LEFT SIDE: LOGIN FORM --- */}
         <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center bg-white relative">
           
-          {/* Logo / Brand Top Left */}
-          <div className="absolute top-8 left-8 flex items-center gap-2">
-             <div className="bg-brand-600 p-1.5 rounded-lg">
-                <Store className="text-white h-5 w-5" />
-             </div>
-             <span className="font-bold text-stone-700 text-sm tracking-wide">ASAAN POS</span>
+          {/* Logo / Brand Top Left & Language Switcher Top Right */}
+          <div className="absolute top-6 left-6 flex items-center gap-2">
+             <img src="/logoPos.png" alt="ASAAN POS" className="h-[50px] w-auto object-contain" />
           </div>
 
-          <div className="mt-6 md:mt-0"> {/* Top margin kam kiya */}
-            
-            {/* Heading Spacing Reduced */}
-            {/* <h4 className="text-sm font-semibold text-brand-600 uppercase tracking-wider mb-2 ml-6">Welcome Back</h4> */}
-            <h1 className="text-3xl md:text-4xl font-extrabold text-stone-900 mb-3 mt-12"> {/* mt-8 -> mt-4, mb-4 -> mb-3 */}
-              Login to your account
+          <div className="absolute top-6 right-6">
+             <LanguageSwitcher />
+          </div>
+
+          <div className="mt-12 md:mt-6">
+            <h1 className="text-3xl md:text-4xl font-extrabold text-stone-900 mb-3 mt-8">
+              {t("loginTitle")}
             </h1>
             
-            {/* Paragraph Spacing Reduced */}
-            <p className="text-stone-500 mb-6 leading-relaxed text-sm md:text-base"> {/* mb-8 -> mb-6 */}
-              Manage your inventory, track sales, and handle your point of sale operations efficiently.
+            <p className="text-stone-500 mb-6 leading-relaxed text-sm md:text-base">
+              {t("loginSubtitle")}
             </p>
 
             {/* Login Button */}
@@ -104,8 +104,7 @@ export default function LoginPage() {
               onClick={handleGoogleLogin}
               className="group relative w-full flex items-center justify-center gap-3 bg-white border-2 border-stone-200 p-3.5 rounded-xl hover:border-brand-600 hover:bg-brand-50 transition-all duration-300 shadow-sm hover:shadow-md"
             >
-              {/* Google Icon */}
-              <svg className="h-5 w-5" viewBox="0 0 24 24"> {/* Icon size thora adjust kiya */}
+              <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
                   fill="#4285F4"
@@ -124,54 +123,47 @@ export default function LoginPage() {
                 />
               </svg>
               <span className="font-bold text-stone-700 text-base md:text-lg group-hover:text-brand-700 transition-colors">
-                Continue with Google
+                {t("continueWithGoogle")}
               </span>
             </button>
 
-            {/* Features List Spacing Reduced */}
-            <div className="mt-8 space-y-2.5"> {/* mt-10 -> mt-8, space-y-3 -> space-y-2.5 */}
+            {/* Features List */}
+            <div className="mt-8 space-y-2.5">
                 <div className="flex items-center gap-2 text-sm text-stone-500">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    <span>Real-time Inventory Tracking</span>
+                    <span>{t("featureInventory")}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-stone-500">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    <span>Fast POS Billing</span>
+                    <span>{t("featureBilling")}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-stone-500">
                     <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    <span>Offline Support</span>
+                    <span>{t("featureOffline")}</span>
                 </div>
             </div>
           </div>
           
           <div className="mt-auto pt-6 text-center text-xs text-stone-400">
-            &copy; {new Date().getFullYear()} ASAAN POS System. All rights reserved.
+            &copy; {new Date().getFullYear()} ASAAN POS System. {t("rightsReserved")}
           </div>
         </div>
 
         {/* --- RIGHT SIDE: ILLUSTRATION --- */}
-       
-       
-       {/* --- RIGHT SIDE: ILLUSTRATION --- */}
         <div className="hidden md:flex w-1/2 bg-ink relative items-center justify-center p-10 overflow-hidden">
-            
-            {/* Background Decoration Circles */}
             <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-brand-500 rounded-full opacity-50 blur-3xl"></div>
             <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-ink-700 rounded-full opacity-50 blur-3xl"></div>
             
             <div className="relative z-10 text-center text-white flex flex-col items-center">
-                {/* Illustration Image */}
-                {/* Ensure 'login-image.png' is inside your 'public' folder */}
                 <img 
                     src="/login-image.png" 
                     alt="POS Dashboard 3D Character"
                     className="w-full max-w-[400px] object-contain mb-6 drop-shadow-2xl animate-in slide-in-from-right duration-700 hover:scale-105 transition-transform"
                 />
                 
-                <h2 className="text-3xl font-bold mb-3">Manage Shop Effortlessly</h2>
+                <h2 className="text-3xl font-bold mb-3">{t("heroTitle")}</h2>
                 <p className="text-brand-100 text-lg max-w-sm">
-                    One place to manage inventory, orders, and customer details.
+                    {t("heroSubtitle")}
                 </p>
             </div>
         </div>

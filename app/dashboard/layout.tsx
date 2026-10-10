@@ -25,14 +25,21 @@ import {
     RotateCcw,
     Users,
     Receipt,
-    PackagePlus
+    PackagePlus,
+    FileText,
+    Truck,
+    TrendingUp,
+    HandCoins
 } from "lucide-react";
 import Link from "next/link";
 import type { Shop } from "../types";
-// Is line ko code ke top par likhein:
 import { toast } from 'react-toastify';
+import { useLanguage } from "../store/useLanguage";
+import LanguageSwitcher from "../components/LanguageSwitcher";
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const { currentShop, setCurrentUser, setCurrentShop } = useStore();
+    const { t } = useLanguage();
     const router = useRouter();
     const pathname = usePathname();
     const [loading, setLoading] = useState(true);
@@ -181,54 +188,56 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (loadError) {
         return (
             <div className="flex h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-                <p className="text-lg font-bold text-stone-800">Shop ka data load nahi hua</p>
+                <p className="text-lg font-bold text-stone-800">{t("shopDataLoadFailed")}</p>
                 <p className="text-sm text-stone-500">
-                    Internet check karein. Pehli baar login ke liye internet zaroori hai.
+                    {t("checkInternetNotice")}
                 </p>
                 <button
                     onClick={() => window.location.reload()}
                     className="rounded-lg bg-brand-600 px-5 py-2 font-bold text-white hover:bg-brand-700"
                 >
-                    Dobara koshish karein
+                    {t("retry")}
                 </button>
             </div>
         );
     }
     if (loading) {
-        return <div className="flex h-screen items-center justify-center">Loading Shop...</div>;
+        return <div className="flex h-screen items-center justify-center">{t("loading")}</div>;
     }
 
-    // Navigation: sections mein baanta hua taake dhoondna asaan ho
     const navSections = [
         {
-            title: "Bikri",
+            title: t("navSales"),
             items: [
-                { name: "POS (Sale)", href: "/dashboard/pos", icon: ShoppingCart },
-                { name: "Sales History", href: "/dashboard/sales", icon: Receipt },
-                { name: "Returns", href: "/dashboard/returns", icon: RotateCcw },
-                { name: "Udhar Khata", href: "/dashboard/udhar", icon: Users },
+                { name: t("navPos"), href: "/dashboard/pos", icon: ShoppingCart },
+                { name: t("navSalesHistory"), href: "/dashboard/sales", icon: Receipt },
+                { name: "Gate Pass (Gudam)", href: "/dashboard/gate-pass", icon: FileText },
+                { name: t("navReturns"), href: "/dashboard/returns", icon: RotateCcw },
+                { name: t("navUdhar") + " / Wasooli", href: "/dashboard/udhar", icon: HandCoins },
             ],
         },
         {
-            title: "Stock",
+            title: t("navStock"),
             items: [
-                { name: "Inventory", href: "/dashboard/inventry", icon: Package },
-                { name: "Add Product", href: "/dashboard/inventry/add", icon: PackagePlus },
+                { name: t("navInventory"), href: "/dashboard/inventry", icon: Package },
+                { name: t("navAddProduct"), href: "/dashboard/inventry/add", icon: PackagePlus },
             ],
         },
         {
-            title: "Hisaab",
+            title: "Traders & Accounts",
             items: [
-                { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-                { name: "Expenses", href: "/dashboard/expenses", icon: Wallet },
-                { name: "Settings", href: "/dashboard/settings", icon: Settings },
+                { name: "Suppliers (Maal Udhar)", href: "/dashboard/suppliers", icon: Truck },
+                { name: t("navExpenses"), href: "/dashboard/expenses", icon: Wallet },
+                { name: t("navDashboard"), href: "/dashboard", icon: LayoutDashboard },
+                { name: "Secret Profit Audit", href: "/dashboard/admin/profit", icon: TrendingUp },
+                { name: t("navSettings"), href: "/dashboard/settings", icon: Settings },
             ],
         },
     ];
 
     const currentPage =
         navSections.flatMap((s) => s.items).find((i) => i.href === pathname)?.name ??
-        (pathname.includes("/inventry/edit") ? "Edit Product" : "Dashboard");
+        (pathname.includes("/inventry/edit") ? t("navEditProduct") : t("navDashboard"));
     const shopInitial = (currentShop?.shopName || "S").trim().charAt(0).toUpperCase();
     const licenseExpired = daysOverdue > 0;
 
@@ -253,15 +262,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             >
                 {/* Brand */}
                 <div className="h-16 flex items-center justify-between px-4 border-b border-stone-200 shrink-0">
-                    <Link href="/dashboard" className="flex items-center gap-3 overflow-hidden">
-                        <div className="bg-brand-600 p-2 rounded-xl shrink-0">
-                            <Store className="text-white" size={20} />
-                        </div>
-                        {isSidebarOpen && (
-                            <span className="text-lg font-extrabold tracking-tight text-stone-900">
-                                ASAAN <span className="text-brand-600">POS</span>
-                            </span>
-                        )}
+                    <Link href="/dashboard" className="flex items-center gap-2 overflow-hidden py-1">
+                        <img
+                            src="/logoPos.png"
+                            alt="ASAAN POS"
+                            className={`h-[48px] w-auto object-contain shrink-0 ${isSidebarOpen ? "max-w-[200px]" : "max-w-[44px] overflow-hidden"}`}
+                        />
                     </Link>
                     <button
                         className="md:hidden text-stone-400 hover:text-stone-700"
@@ -384,6 +390,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
 
                     <div className="flex items-center gap-2 md:gap-3">
+                        {/* Language Switcher */}
+                        <LanguageSwitcher />
+
                         {/* Sync (offline sales) */}
                         {pendingCount > 0 && (
                             <button
@@ -392,7 +401,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 transition disabled:opacity-60"
                             >
                                 <RefreshCw size={15} className={isSyncing ? "animate-spin" : ""} />
-                                <span className="hidden sm:inline">Sync Needed</span>
+                                <span className="hidden sm:inline">{t("syncNeeded")}</span>
                                 <span className="rounded-full bg-amber-500 px-1.5 text-white">{pendingCount}</span>
                             </button>
                         )}
@@ -400,12 +409,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         {/* Online status */}
                         <div className={`hidden sm:flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${isOnline ? "bg-emerald-50 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
                             <span className={`h-2 w-2 rounded-full ${isOnline ? "bg-emerald-500" : "bg-amber-500"}`} />
-                            {isOnline ? "Online" : "Offline"}
+                            {isOnline ? t("online") : t("offline")}
                         </div>
 
                         {pathname !== "/dashboard/pos" && (
                             <Link href="/dashboard/pos" className="btn-primary !py-2">
-                                <ShoppingCart size={16} /> <span className="hidden sm:inline">New Sale</span>
+                                <ShoppingCart size={16} /> <span className="hidden sm:inline">{t("newSale")}</span>
                             </Link>
                         )}
                     </div>

@@ -9,6 +9,8 @@ import { listSalesInRange } from "../lib/services/sales";
 import { listExpensesInRange } from "../lib/services/expenses";
 import { countLowStock } from "../lib/services/products";
 import { saleNetAmount, saleProfit } from "../lib/calc";
+import { useLanguage } from "../store/useLanguage";
+import { DualSeriesCanvasChart } from "../components/CanvasDiagram";
 import {
     DollarSign,
     Package,
@@ -27,6 +29,7 @@ import {
 
 export default function DashboardHome() {
     const { currentUser, currentShop } = useStore();
+    const { t } = useLanguage();
     const [loading, setLoading] = useState(true);
 
     // Date Filters
@@ -199,12 +202,23 @@ export default function DashboardHome() {
         return "bg-emerald-100 text-emerald-800";
     };
 
+    const salesTrendData = (() => {
+        const map: Record<string, number> = {};
+        [...invoices].reverse().forEach((inv) => {
+            if (!inv.date) return;
+            const d = new Date(inv.date);
+            const dayLabel = `${d.getDate()} ${d.toLocaleString("default", { month: "short" })}`;
+            map[dayLabel] = (map[dayLabel] || 0) + saleNetAmount(inv);
+        });
+        return Object.entries(map).map(([label, amount]) => ({ label, amount })).slice(-10);
+    })();
+
     return (
         <div className="space-y-6">
 
             <PageHeader
-                title="Dashboard"
-                subtitle={`${currentShop?.shopName || "Your shop"} ka overview • ${startDate && endDate ? "Chuni hui muddat" : "Is mahine ka"}`}
+                title={t("navDashboard")}
+                subtitle={t("dashboardOverview", { shop: currentShop?.shopName || "Your shop", period: startDate && endDate ? t("selectedPeriod") : t("thisMonth") })}
                 actions={
                     <>
                         <div className="flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-1.5 shadow-card">
@@ -224,7 +238,7 @@ export default function DashboardHome() {
                             />
                         </div>
                         <button onClick={applyFilter} className="btn-dark !py-2.5">
-                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Filter size={15} />} Apply
+                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Filter size={15} />} {t("apply")}
                         </button>
                     </>
                 }
@@ -233,9 +247,9 @@ export default function DashboardHome() {
             {/* Main numbers */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard
-                    title="Total Sales"
+                    title={t("totalSales")}
                     value={money(stats.totalSales)}
-                    subtitle="Refund minus karke"
+                    subtitle={t("afterRefunds")}
                     icon={DollarSign}
                     theme="blue"
                     loading={loading}
@@ -244,9 +258,9 @@ export default function DashboardHome() {
                     onToggle={() => handleToggle('sales')}
                 />
                 <StatCard
-                    title="Net Profit"
+                    title={t("netProfit")}
                     value={money(stats.netProfit)}
-                    subtitle="Profit minus expenses"
+                    subtitle={t("profitMinusExpenses")}
                     icon={TrendingUp}
                     theme="green"
                     loading={loading}
@@ -255,28 +269,67 @@ export default function DashboardHome() {
                     onToggle={() => handleToggle('profit')}
                 />
                 <StatCard
-                    title="Expenses"
+                    title={t("expenses")}
                     value={money(stats.totalExpenses)}
-                    subtitle="Total kharche"
+                    subtitle={t("totalExpenses")}
                     icon={Wallet}
                     theme="red"
                     loading={loading}
                 />
                 <StatCard
-                    title="Invoices"
+                    title={t("invoices")}
                     value={stats.totalInvoices}
-                    subtitle="Bills bane"
+                    subtitle={t("billsGenerated")}
                     icon={FileText}
                     theme="purple"
                     loading={loading}
                 />
             </div>
 
+            {/* Interactive Canvas Diagram Chart matching Reference Image Design */}
+            <DualSeriesCanvasChart
+                title="Sales & Profit Trends"
+                series1Label="Sales Volume"
+                series2Label="Pure Profit"
+                series1Color="#fe9f43"
+                series2Color="#10b981"
+                data={
+                    invoices.length > 0
+                        ? (() => {
+                            const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+                            const map1: Record<string, number> = {};
+                            const map2: Record<string, number> = {};
+                            invoices.forEach((inv) => {
+                                if (!inv.date) return;
+                                const d = new Date(inv.date);
+                                const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
+                                map1[dayName] = (map1[dayName] || 0) + saleNetAmount(inv);
+                                map2[dayName] = (map2[dayName] || 0) + saleProfit(inv);
+                            });
+                            return days.map((day) => ({
+                                label: day,
+                                val1: Math.round((map1[day] || 0) / 1000), // Scale in thousands for clean Y-axis
+                                val2: Math.round((map2[day] || 0) / 1000),
+                            }));
+                        })()
+                        : [
+                            { label: "Mon", val1: 0, val2: 5 },
+                            { label: "Tue", val1: 18, val2: 14 },
+                            { label: "Wed", val1: 10, val2: 0 },
+                            { label: "Thu", val1: 38, val2: 42 },
+                            { label: "Fri", val1: 26, val2: 29 },
+                            { label: "Sat", val1: 60, val2: 62 },
+                            { label: "Sun", val1: 50, val2: 52 },
+                        ]
+                }
+                height={220}
+            />
+
             {/* Payment split + low stock */}
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <div className="card p-5 lg:col-span-2">
                     <div className="mb-4 flex items-center justify-between">
-                        <h3 className="text-base font-bold text-stone-900">Paisa kahan aaya</h3>
+                        <h3 className="text-base font-bold text-stone-900">{t("paymentBreakdown")}</h3>
                         <span className="tabular text-sm font-bold text-stone-500">{money(paymentTotal)}</span>
                     </div>
 
@@ -314,13 +367,13 @@ export default function DashboardHome() {
                             <span className="rounded-lg bg-orange-100 p-2 text-orange-700">
                                 <Package size={18} />
                             </span>
-                            <h3 className="text-base font-bold text-stone-900">Low Stock</h3>
+                            <h3 className="text-base font-bold text-stone-900">{t("lowStock")}</h3>
                         </div>
                         <p className="tabular text-4xl font-extrabold text-stone-900">{loading ? "…" : stats.lowStockCount}</p>
-                        <p className="mt-1 text-sm text-stone-500">items 5 se kam bache hain</p>
+                        <p className="mt-1 text-sm text-stone-500">{t("itemsLowStock")}</p>
                     </div>
                     <a href="/dashboard/inventry" className="btn-ghost mt-5 !py-2.5">
-                        Inventory dekhein
+                        {t("viewInventory")}
                     </a>
                 </div>
             </div>
@@ -330,7 +383,7 @@ export default function DashboardHome() {
                 <div className="flex flex-col gap-3 border-b border-stone-200 p-5 sm:flex-row sm:items-center sm:justify-between">
                     <h3 className="flex items-center gap-2 text-base font-bold text-stone-900">
                         <FileText className="h-4 w-4 text-stone-400" />
-                        Recent Invoices
+                        {t("recentInvoices")}
                     </h3>
 
                     <div className="relative w-full sm:w-64">
@@ -338,7 +391,7 @@ export default function DashboardHome() {
                         <input
                             type="text"
                             className="field !py-2 pl-9"
-                            placeholder="Invoice ID dhoondein..."
+                            placeholder={t("searchInvoicesPlaceholder")}
                             value={searchInvoice}
                             onChange={(e) => setSearchInvoice(e.target.value)}
                         />
@@ -347,27 +400,27 @@ export default function DashboardHome() {
 
                 <div className="overflow-x-auto">
                     {loading ? (
-                        <div className="p-10 text-center text-stone-400">Loading data...</div>
+                        <div className="p-10 text-center text-stone-400">{t("loading")}</div>
                     ) : filteredInvoicesList.length === 0 ? (
                         <div className="flex flex-col items-center justify-center p-12 text-center">
                             <div className="mb-3 rounded-full bg-stone-100 p-4">
                                 <FileText className="h-8 w-8 text-stone-400" />
                             </div>
-                            <p className="text-sm font-medium text-stone-500">Is muddat mein koi invoice nahi</p>
+                            <p className="text-sm font-medium text-stone-500">{t("noInvoicesPeriod")}</p>
                             <a href="/dashboard/pos" className="btn-primary mt-4 !py-2">
-                                Nayi sale shuru karein
+                                {t("startNewSale")}
                             </a>
                         </div>
                     ) : (
                         <table className="w-full text-left text-sm">
                             <thead className="border-b border-stone-200">
                                 <tr>
-                                    <th className="p-4">Date</th>
-                                    <th className="p-4">Invoice</th>
-                                    <th className="p-4">Customer</th>
-                                    <th className="p-4">Payment</th>
-                                    <th className="p-4">Items</th>
-                                    <th className="p-4 text-right">Amount</th>
+                                    <th className="p-4">{t("date")}</th>
+                                    <th className="p-4">{t("invoices")}</th>
+                                    <th className="p-4">{t("customer")}</th>
+                                    <th className="p-4">{t("paymentBreakdown")}</th>
+                                    <th className="p-4">{t("items")}</th>
+                                    <th className="p-4 text-right">{t("amount")}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-stone-100">
@@ -393,7 +446,7 @@ export default function DashboardHome() {
                 {filteredInvoicesList.length > 0 && (
                     <div className="border-t border-stone-200 bg-stone-50/60 p-3 text-center">
                         <a href="/dashboard/sales" className="text-xs font-bold uppercase tracking-wide text-brand-700 hover:text-brand-800">
-                            Poori Sales History dekhein →
+                            {t("viewAllSalesHistory")}
                         </a>
                     </div>
                 )}
@@ -409,8 +462,8 @@ export default function DashboardHome() {
                             <X size={20} />
                         </button>
 
-                        <h3 className="mb-1 text-lg font-extrabold text-stone-900">Security Check</h3>
-                        <p className="mb-4 text-sm text-stone-500">Yeh raqam dekhne ke liye dashboard password likhein.</p>
+                        <h3 className="mb-1 text-lg font-extrabold text-stone-900">{t("securityCheck")}</h3>
+                        <p className="mb-4 text-sm text-stone-500">{t("enterPasswordToView")}</p>
 
                         <form onSubmit={verifyPassword}>
                             <input
@@ -422,7 +475,7 @@ export default function DashboardHome() {
                                 onChange={(e) => setPassInput(e.target.value)}
                             />
                             <button type="submit" className="btn-primary w-full !py-3">
-                                Unlock
+                                {t("unlock")}
                             </button>
                         </form>
                     </div>
