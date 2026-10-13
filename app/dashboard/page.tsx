@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import DataTable from "../components/DataTable";
 import { useStore } from "../store/useStore";
 import { toast } from 'react-toastify';
 import StatCard from "../components/StatCard";
@@ -379,13 +380,29 @@ export default function DashboardHome() {
             </div>
 
             {/* Recent invoices */}
-            <div className="card overflow-hidden">
-                <div className="flex flex-col gap-3 border-b border-stone-200 p-5 sm:flex-row sm:items-center sm:justify-between">
+            <DataTable
+                data={filteredInvoicesList.slice(0, 6)}
+                rowKey={(inv) => inv.id}
+                paginate={false}
+                loading={loading}
+                emptyText={
+                    <div className="flex flex-col items-center justify-center py-2">
+                        <div className="mb-3 rounded-full bg-stone-100 p-4">
+                            <FileText className="h-8 w-8 text-stone-400" />
+                        </div>
+                        <p className="text-sm font-medium text-stone-500">{t("noInvoicesPeriod")}</p>
+                        <a href="/dashboard/pos" className="btn-primary mt-4 !py-2">
+                            {t("startNewSale")}
+                        </a>
+                    </div>
+                }
+                toolbarLeft={
                     <h3 className="flex items-center gap-2 text-base font-bold text-stone-900">
                         <FileText className="h-4 w-4 text-stone-400" />
                         {t("recentInvoices")}
                     </h3>
-
+                }
+                toolbarRight={
                     <div className="relative w-full sm:w-64">
                         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                         <input
@@ -396,61 +413,33 @@ export default function DashboardHome() {
                             onChange={(e) => setSearchInvoice(e.target.value)}
                         />
                     </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                    {loading ? (
-                        <div className="p-10 text-center text-stone-400">{t("loading")}</div>
-                    ) : filteredInvoicesList.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center p-12 text-center">
-                            <div className="mb-3 rounded-full bg-stone-100 p-4">
-                                <FileText className="h-8 w-8 text-stone-400" />
-                            </div>
-                            <p className="text-sm font-medium text-stone-500">{t("noInvoicesPeriod")}</p>
-                            <a href="/dashboard/pos" className="btn-primary mt-4 !py-2">
-                                {t("startNewSale")}
+                }
+                footer={
+                    filteredInvoicesList.length > 0 && (
+                        <div className="border-t border-stone-100 p-3 text-center">
+                            <a href="/dashboard/sales" className="text-xs font-bold uppercase tracking-wide text-brand-700 hover:text-brand-800">
+                                {t("viewAllSalesHistory")}
                             </a>
                         </div>
-                    ) : (
-                        <table className="w-full text-left text-sm">
-                            <thead className="border-b border-stone-200">
-                                <tr>
-                                    <th className="p-4">{t("date")}</th>
-                                    <th className="p-4">{t("invoices")}</th>
-                                    <th className="p-4">{t("customer")}</th>
-                                    <th className="p-4">{t("paymentBreakdown")}</th>
-                                    <th className="p-4">{t("items")}</th>
-                                    <th className="p-4 text-right">{t("amount")}</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-stone-100">
-                                {filteredInvoicesList.slice(0, 6).map((inv) => (
-                                    <tr key={inv.id} className="hover:bg-stone-50">
-                                        <td className="p-4 text-stone-600">{formatDate(inv.date)}</td>
-                                        <td className="p-4 font-mono text-xs font-semibold text-stone-500">#{inv.invoiceNo || "-"}</td>
-                                        <td className="p-4 font-semibold text-stone-800">{inv.customerName || "Walk-in"}</td>
-                                        <td className="p-4">
-                                            <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${methodBadge(inv.paymentMethod)}`}>
-                                                {inv.paymentMethod === "Bank Account" ? "Bank" : inv.paymentMethod || "Cash"}
-                                            </span>
-                                        </td>
-                                        <td className="p-4 text-stone-600">{inv.items?.length || 0}</td>
-                                        <td className="p-4 text-right font-extrabold text-stone-900">{money(inv.totalAmount)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
-                </div>
-
-                {filteredInvoicesList.length > 0 && (
-                    <div className="border-t border-stone-200 bg-stone-50/60 p-3 text-center">
-                        <a href="/dashboard/sales" className="text-xs font-bold uppercase tracking-wide text-brand-700 hover:text-brand-800">
-                            {t("viewAllSalesHistory")}
-                        </a>
-                    </div>
-                )}
-            </div>
+                    )
+                }
+                columns={[
+                    { key: "date", header: t("date"), cell: (inv) => <span className="text-stone-600">{formatDate(inv.date)}</span> },
+                    { key: "inv", header: t("invoices"), cell: (inv) => <span className="font-mono text-xs font-semibold text-stone-500">#{inv.invoiceNo || "-"}</span> },
+                    { key: "customer", header: t("customer"), cell: (inv) => <span className="font-semibold text-stone-800">{inv.customerName || "Walk-in"}</span> },
+                    {
+                        key: "pay",
+                        header: t("paymentBreakdown"),
+                        cell: (inv) => (
+                            <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${methodBadge(inv.paymentMethod)}`}>
+                                {inv.paymentMethod === "Bank Account" ? "Bank" : inv.paymentMethod || "Cash"}
+                            </span>
+                        ),
+                    },
+                    { key: "items", header: t("items"), cell: (inv) => <span className="text-stone-600">{inv.items?.length || 0}</span> },
+                    { key: "amount", header: t("amount"), align: "right", cell: (inv) => <span className="font-extrabold text-stone-900">{money(inv.totalAmount)}</span> },
+                ]}
+            />
 
             {isPassModalOpen && (
                 <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">

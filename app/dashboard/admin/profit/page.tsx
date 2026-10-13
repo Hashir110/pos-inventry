@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import DataTable from "../../../components/DataTable";
 import { useStore } from "../../../store/useStore";
 import { subscribeProducts } from "../../../lib/services/products";
 import { listSales } from "../../../lib/services/sales";
@@ -217,58 +218,32 @@ export default function AdminProfitPage() {
       />
 
       {/* Item-wise Buying vs Selling Rate & Profit Margin Audit */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm space-y-4">
-        <h2 className="text-sm font-extrabold text-stone-900 uppercase tracking-wider border-b pb-3">
-          📦 Product-Wise Secret Profit Audit Table
-        </h2>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-stone-100 text-stone-700 font-bold uppercase">
-              <tr>
-                <th className="p-3">Item Name</th>
-                <th className="p-3">Category</th>
-                <th className="p-3 text-right">Buying Rate (Rs.)</th>
-                <th className="p-3 text-right">Selling Rate (Rs.)</th>
-                <th className="p-3 text-right">Profit Per Unit</th>
-                <th className="p-3 text-center">Gudam Stock</th>
-                <th className="p-3 text-center">Shop Stock</th>
-                <th className="p-3 text-right font-black">Stock Asset Value (Buying)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {products.map((p) => {
-                const marginPerUnit = p.sellingPrice - p.buyingPrice;
-                const gudam = p.gudamStock ?? 0;
-                const shop = p.shopStock ?? p.stock ?? 0;
-                const totalStock = gudam + shop;
-                const totalAssetBuyingValue = totalStock * p.buyingPrice;
-
-                return (
-                  <tr key={p.id} className="hover:bg-stone-50">
-                    <td className="p-3 font-bold text-stone-900">{p.name}</td>
-                    <td className="p-3 text-stone-500">{p.category || "General"}</td>
-                    <td className="p-3 text-right font-bold text-amber-700">
-                      Rs. {p.buyingPrice.toLocaleString()}
-                    </td>
-                    <td className="p-3 text-right font-bold text-stone-900">
-                      Rs. {p.sellingPrice.toLocaleString()}
-                    </td>
-                    <td className="p-3 text-right font-extrabold text-emerald-700">
-                      + Rs. {marginPerUnit.toLocaleString()}
-                    </td>
-                    <td className="p-3 text-center font-bold text-stone-700">{gudam}</td>
-                    <td className="p-3 text-center font-bold text-stone-700">{shop}</td>
-                    <td className="p-3 text-right font-extrabold text-stone-900">
-                      Rs. {totalAssetBuyingValue.toLocaleString()}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        data={products}
+        rowKey={(p) => p.id}
+        toolbarLeft={
+          <h2 className="text-sm font-extrabold text-stone-900 uppercase tracking-wider">📦 Product-Wise Secret Profit Audit Table</h2>
+        }
+        columns={[
+          { key: "name", header: "Item Name", cell: (p) => <span className="font-bold text-stone-900">{p.name}</span> },
+          { key: "cat", header: "Category", cell: (p) => <span className="text-stone-500">{p.category || "General"}</span> },
+          { key: "buy", header: "Buying Rate (Rs.)", align: "right", cell: (p) => <span className="font-bold text-amber-700">Rs. {p.buyingPrice.toLocaleString()}</span> },
+          { key: "sell", header: "Selling Rate (Rs.)", align: "right", cell: (p) => <span className="font-bold text-stone-900">Rs. {p.sellingPrice.toLocaleString()}</span> },
+          { key: "margin", header: "Profit Per Unit", align: "right", cell: (p) => <span className="font-extrabold text-emerald-700">+ Rs. {(p.sellingPrice - p.buyingPrice).toLocaleString()}</span> },
+          { key: "gudam", header: "Gudam Stock", align: "center", cell: (p) => <span className="font-bold text-stone-700">{p.gudamStock ?? 0}</span> },
+          { key: "shop", header: "Shop Stock", align: "center", cell: (p) => <span className="font-bold text-stone-700">{p.shopStock ?? p.stock ?? 0}</span> },
+          {
+            key: "asset",
+            header: "Stock Asset Value (Buying)",
+            align: "right",
+            cell: (p) => (
+              <span className="font-extrabold text-stone-900">
+                Rs. {(((p.gudamStock ?? 0) + (p.shopStock ?? p.stock ?? 0)) * p.buyingPrice).toLocaleString()}
+              </span>
+            ),
+          },
+        ]}
+      />
     </div>
   );
 }

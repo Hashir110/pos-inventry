@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
@@ -9,7 +10,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../firebase";
-import type { Customer, CustomerPayment } from "../../types";
+import type { Customer, CustomerPayment, Sale } from "../../types";
 
 /** Naam ke hisaab se (A-Z) */
 export const listCustomers = async (ownerId: string): Promise<Customer[]> => {
@@ -83,6 +84,26 @@ export const receivePayment = async (
       date: new Date().toISOString(),
     });
   });
+};
+
+export const getCustomer = async (customerId: string): Promise<Customer | null> => {
+  const snap = await getDoc(doc(db, "customers", customerId));
+  return snap.exists() ? ({ id: snap.id, ...snap.data() } as Customer) : null;
+};
+
+/** Ek customer ko udhar par diye gaye sales, naye pehle */
+export const listCustomerCreditSales = async (ownerId: string, customerId: string): Promise<Sale[]> => {
+  const snap = await getDocs(
+    query(
+      collection(db, "sales"),
+      where("ownerId", "==", ownerId),
+      where("customerId", "==", customerId)
+    )
+  );
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }) as Sale)
+    .filter((s) => s.paymentMethod === "Udhar")
+    .sort((a, b) => b.date.localeCompare(a.date));
 };
 
 /** Ek customer ki payments, naye pehle */

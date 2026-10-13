@@ -1,4 +1,4 @@
-"use client"; // <--- Ye Zaroori hai
+"use client";
 
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -6,16 +6,16 @@ import 'react-toastify/dist/ReactToastify.css';
 export default function ToastProvider() {
   return (
     <ToastContainer 
-      position="bottom-right" // POS ke liye best jagah
-      autoClose={3000}        // 3 second baad khud band ho jayega
+      position="top-center"
+      autoClose={2500}
       hideProgressBar={false}
       newestOnTop={true}
       closeOnClick
       rtl={false}
-      pauseOnFocusLoss
+      pauseOnFocusLoss={false}
       draggable
       pauseOnHover
-      theme="light"           // Ya "colored" use karein for dark colors
+      theme="light"
     />
   );
 }

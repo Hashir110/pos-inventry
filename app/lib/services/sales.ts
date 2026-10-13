@@ -13,18 +13,14 @@ import {
 import { db } from "../firebase";
 import type { Customer, PaymentMethod, PendingSale, Product, Sale, SaleItem } from "../../types";
 
-/** POS se aane wala sale ka extra data */
 export interface SaleMeta {
   customerName: string;
   description: string;
   paymentMethod: PaymentMethod;
-  /** Udhar sale mein zaroori: kis customer ke khate mein jayega */
   customerId?: string;
 }
 
 const PENDING_KEY = "pendingSales";
-
-// ---------- Offline queue (localStorage) ----------
 
 export const getPendingSales = (): PendingSale[] => {
   try {
@@ -38,13 +34,10 @@ const savePendingSales = (queue: PendingSale[]) => {
   localStorage.setItem(PENDING_KEY, JSON.stringify(queue));
 };
 
-// ---------- Create ----------
-
 const buildMeta = (meta: SaleMeta) => ({
   customerName: meta.customerName || "Walk-in",
   description: meta.description || "",
   paymentMethod: meta.paymentMethod,
-  // Firestore undefined field reject karta hai, isliye sirf Udhar mein add karo
   ...(meta.paymentMethod === "Udhar" && meta.customerId ? { customerId: meta.customerId } : {}),
 });
 
@@ -53,10 +46,6 @@ const isUdharWithCustomer = (paymentMethod: PaymentMethod, customerId?: string):
 
 const roundMoney = (n: number) => Math.round(n * 100) / 100;
 
-/**
- * Online sale: stock check + stock minus + sequential invoice + sale doc, sab ek transaction mein.
- * Return: invoiceNo. Stock kam ho to Error throw hota hai.
- */
 export const createOnlineSale = async (
   ownerId: string,
   cart: SaleItem[],
@@ -66,14 +55,12 @@ export const createOnlineSale = async (
   let invoiceNo = "";
 
   await runTransaction(db, async (transaction) => {
-    // Saari reads pehle (Firestore rule: reads before writes)
     const reads = [];
     for (const item of cart) {
       const snapshot = await transaction.get(doc(db, "products", item.id));
       reads.push({ snapshot, item });
     }
 
-    // Udhar sale: customer ka balance bhi isi transaction mein badhega
     let customerRef = null;
     let customerSnap = null;
     if (isUdharWithCustomer(meta.paymentMethod, meta.customerId)) {
@@ -90,17 +77,37 @@ export const createOnlineSale = async (
     for (const { snapshot, item } of reads) {
       if (!snapshot.exists()) throw new Error(`${item.name} not found!`);
       const stock = (snapshot.data() as Product).stock;
-      if (stock < item.qty) throw new Error(`Stock Low! ${item.name} only ${stock} left.`);
+      const deductQty = (item.type === "weight" && item.totalWeight) ? item.totalWeight : item.qty;
+      if (stock < deductQty) throw new Error(`Stock Low! ${item.name} only ${stock} left.`);
     }
 
-    // Writes
     transaction.update(shopRef, { invoiceCounter: nextInvoice });
     if (customerRef && customerSnap) {
       const balance = (customerSnap.data() as Customer).balance || 0;
       transaction.update(customerRef, { balance: roundMoney(balance + totalAmount) });
     }
     for (const { snapshot, item } of reads) {
-      transaction.update(snapshot.ref, { stock: (snapshot.data() as Product).stock - item.qty });
+      const prod = snapshot.data() as Product;
+      const deductQty = (item.type === "weight" && item.totalWeight) ? item.totalWeight : item.qty;
+      const currentShop = prod.shopStock ?? 0;
+      const currentGudam = prod.gudamStock ?? 0;
+      let newShop = currentShop;
+      let newGudam = currentGudam;
+
+      if (currentShop >= deductQty) {
+        newShop = currentShop - deductQty;
+      } else {
+        const remaining = deductQty - currentShop;
+        newShop = 0;
+        newGudam = Math.max(0, currentGudam - remaining);
+      }
+      const newTotal = newShop + newGudam;
+
+      transaction.update(snapshot.ref, {
+        stock: newTotal,
+        gudamStock: newGudam,
+        shopStock: newShop,
+      });
     }
 
     const saleRef = doc(collection(db, "sales"));
@@ -118,10 +125,6 @@ export const createOnlineSale = async (
   return invoiceNo;
 };
 
-/**
- * Offline sale: local stock se check karke queue mein daal do. Return: temporary invoiceNo.
- * Firestore par sync baad mein syncPendingSales() karta hai.
- */
 export const queueOfflineSale = (
   ownerId: string,
   cart: SaleItem[],
@@ -131,7 +134,8 @@ export const queueOfflineSale = (
 ): string => {
   for (const item of cart) {
     const p = localProducts.find((pr) => pr.id === item.id);
-    if (!p || p.stock < item.qty) {
+    const deductQty = (item.type === "weight" && item.totalWeight) ? item.totalWeight : item.qty;
+    if (!p || p.stock < deductQty) {
       throw new Error(`Stock Low! ${item.name} only ${p ? p.stock : 0} left.`);
     }
   }
@@ -150,13 +154,6 @@ export const queueOfflineSale = (
   return invoiceNo;
 };
 
-// ---------- Sync ----------
-
-/**
- * Queue ke orders ek ek karke upload karta hai. Har order ke baad queue se hat jata hai,
- * aur sale doc ID `ownerId_invoiceNo` hai, to dobara sync par duplicate nahi banta.
- * Return: kitne orders upload hue. Beech mein fail ho to error throw (bacha hua queue mein rehta hai).
- */
 export const syncPendingSales = async (onProgress?: (remaining: number) => void): Promise<number> => {
   let queue = getPendingSales();
   let uploaded = 0;
@@ -166,7 +163,7 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
 
     await runTransaction(db, async (transaction) => {
       const existing = await transaction.get(saleRef);
-      if (existing.exists()) return; // pehle hi upload ho chuka
+      if (existing.exists()) return;
 
       const reads = [];
       for (const item of order.items) {
@@ -181,11 +178,29 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
         customerSnap = await transaction.get(customerRef);
       }
 
-      // Sale pehle hi ho chuki hai, isliye stock minus karna hai chahe 0 se neeche jaye.
-      // Product delete ho chuka ho to sirf us item ka stock update skip hoga.
       for (const { snapshot, item } of reads) {
         if (!snapshot.exists()) continue;
-        transaction.update(snapshot.ref, { stock: (snapshot.data() as Product).stock - item.qty });
+        const prod = snapshot.data() as Product;
+        const deductQty = (item.type === "weight" && item.totalWeight) ? item.totalWeight : item.qty;
+        const currentShop = prod.shopStock ?? 0;
+        const currentGudam = prod.gudamStock ?? 0;
+        let newShop = currentShop;
+        let newGudam = currentGudam;
+
+        if (currentShop >= deductQty) {
+          newShop = currentShop - deductQty;
+        } else {
+          const remaining = deductQty - currentShop;
+          newShop = 0;
+          newGudam = Math.max(0, currentGudam - remaining);
+        }
+        const newTotal = newShop + newGudam;
+
+        transaction.update(snapshot.ref, {
+          stock: newTotal,
+          gudamStock: newGudam,
+          shopStock: newShop,
+        });
       }
 
       if (customerRef && customerSnap?.exists()) {
@@ -207,12 +222,9 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
   return uploaded;
 };
 
-// ---------- Read ----------
-
 const toSales = (docs: { id: string; data: () => unknown }[]): Sale[] =>
   docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Sale, "id">) }));
 
-/** Naye pehle, max `max` sales */
 export const listRecentSales = async (ownerId: string, max = 50): Promise<Sale[]> => {
   const snap = await getDocs(
     query(collection(db, "sales"), where("ownerId", "==", ownerId), orderBy("date", "desc"), limit(max))
@@ -224,7 +236,6 @@ export const listSales = async (ownerId: string): Promise<Sale[]> => {
   return listRecentSales(ownerId, 500);
 };
 
-/** `fromIso` se (aur agar diya ho to `toIso` tak) ki sales, naye pehle */
 export const listSalesInRange = async (
   ownerId: string,
   fromIso: string,
@@ -254,12 +265,8 @@ export const getSaleById = async (id: string): Promise<Sale | null> => {
   return snap.exists() ? { id: snap.id, ...(snap.data() as Omit<Sale, "id">) } : null;
 };
 
-// ---------- Delete ----------
-
-/** Shop ki saari sales ya saare products delete (Settings > Danger Zone) */
 export const clearCollection = async (ownerId: string, name: "products" | "sales"): Promise<void> => {
   const snap = await getDocs(query(collection(db, name), where("ownerId", "==", ownerId)));
-  // Batch ki limit 500 hai, isliye tukron mein
   for (let i = 0; i < snap.docs.length; i += 400) {
     const batch = writeBatch(db);
     snap.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));

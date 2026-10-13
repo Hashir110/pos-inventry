@@ -11,7 +11,6 @@ import {
 import { db } from "../firebase";
 import type { GatePass } from "../../types";
 
-/** List all gate passes for shop */
 export const listGatePasses = async (ownerId: string): Promise<GatePass[]> => {
   const snap = await getDocs(
     query(collection(db, "gate_passes"), where("ownerId", "==", ownerId))
@@ -20,7 +19,6 @@ export const listGatePasses = async (ownerId: string): Promise<GatePass[]> => {
   return items.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
 };
 
-/** Subscribe to live gate passes */
 export const subscribeGatePasses = (
   ownerId: string,
   onData: (passes: GatePass[]) => void
@@ -33,12 +31,11 @@ export const subscribeGatePasses = (
       onData(items);
     },
     (err) => {
-      console.warn("GatePass listener warning/permission issue:", err.message);
+      console.warn("GatePass listener warning:", err.message);
     }
   );
 };
 
-/** Issue Gate Pass (Generates Gate Pass & deducts stock from Gudam) */
 export const issueGatePass = async (
   ownerId: string,
   gatePassData: {
@@ -52,21 +49,25 @@ export const issueGatePass = async (
       productId: string;
       productName: string;
       qty: number;
+      weight?: number;
       unit?: string;
     }>;
   }
 ): Promise<GatePass> => {
-  // 1. Generate Gate Pass No (GP-1001, GP-1002, etc.)
   const existingPasses = await listGatePasses(ownerId);
   const nextNo = `GP-${1001 + existingPasses.length}`;
 
-  const newPass: Omit<GatePass, "id"> = {
+  const newPass: Record<string, any> = {
     ownerId,
     gatePassNo: nextNo,
     customerName: gatePassData.customerName,
-    customerId: gatePassData.customerId,
-    saleId: gatePassData.saleId,
-    items: gatePassData.items,
+    items: gatePassData.items.map((i) => ({
+      productId: i.productId,
+      productName: i.productName,
+      qty: Number(i.qty),
+      weight: Number(i.weight || 0),
+      unit: i.unit || "",
+    })),
     date: new Date().toISOString(),
     vehicleNo: gatePassData.vehicleNo || "",
     driverName: gatePassData.driverName || "",
@@ -74,9 +75,15 @@ export const issueGatePass = async (
     notes: gatePassData.notes || "",
   };
 
+  if (gatePassData.customerId) {
+    newPass.customerId = gatePassData.customerId;
+  }
+  if (gatePassData.saleId) {
+    newPass.saleId = gatePassData.saleId;
+  }
+
   const docRef = await addDoc(collection(db, "gate_passes"), newPass);
 
-  // 2. Deduct Gudam stock for each item in the gate pass
   for (const item of gatePassData.items) {
     if (item.productId) {
       const prodSnap = await getDocs(query(collection(db, "products"), where("ownerId", "==", ownerId)));
@@ -86,7 +93,8 @@ export const issueGatePass = async (
         const currentGudam = data.gudamStock ?? 0;
         const currentShop = data.shopStock ?? data.stock ?? 0;
 
-        const newGudam = Math.max(0, currentGudam - item.qty);
+        const deductQty = (data.unitType === "weight" && item.weight) ? item.weight : item.qty;
+        const newGudam = Math.max(0, currentGudam - deductQty);
         const newTotal = newGudam + currentShop;
 
         await updateDoc(doc(db, "products", item.productId), {
@@ -98,7 +106,6 @@ export const issueGatePass = async (
     }
   }
 
-  // 3. Mark sale as gatePassGenerated if saleId provided
   if (gatePassData.saleId) {
     try {
       await updateDoc(doc(db, "sales", gatePassData.saleId), {
@@ -109,5 +116,5 @@ export const issueGatePass = async (
     }
   }
 
-  return { id: docRef.id, ...newPass };
+  return { id: docRef.id, ...newPass } as GatePass;
 };

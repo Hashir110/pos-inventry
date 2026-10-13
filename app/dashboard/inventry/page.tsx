@@ -1,10 +1,11 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeftRight, Package, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { ArrowLeftRight, Package, Pencil, Plus, Search, Trash2, X, Loader2 } from "lucide-react";
 import { toast } from "react-toastify";
 import PageHeader from "../../components/PageHeader";
+import DataTable from "../../components/DataTable";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
 import { deleteProduct, listProducts, transferStock } from "../../lib/services/products";
@@ -20,11 +21,11 @@ export default function InventoryList() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState<StockFilter>("all");
 
-  // Transfer Stock Modal State
   const [transferProd, setTransferProd] = useState<Product | null>(null);
   const [transferQty, setTransferQty] = useState(1);
   const [transferFrom, setTransferFrom] = useState<"gudam" | "shop">("gudam");
   const [transferTo, setTransferTo] = useState<"gudam" | "shop">("shop");
+  const [transferring, setTransferring] = useState(false);
 
   const fetchProducts = useCallback(async () => {
     if (!currentUser) return;
@@ -62,6 +63,7 @@ export default function InventoryList() {
       return;
     }
     try {
+      setTransferring(true);
       await transferStock(transferProd.id, Number(transferQty), transferFrom, transferTo);
       toast.success(
         `${transferQty} units ${transferFrom.toUpperCase()} se ${transferTo.toUpperCase()} transfer ho gaye!`
@@ -70,6 +72,8 @@ export default function InventoryList() {
       fetchProducts();
     } catch (err: any) {
       toast.error(err.message || "Transfer failed");
+    } finally {
+      setTransferring(false);
     }
   };
 
@@ -110,9 +114,17 @@ export default function InventoryList() {
         }
       />
 
-      <div className="card overflow-hidden">
-        {/* Toolbar */}
-        <div className="flex flex-col gap-3 border-b border-stone-200 p-4 md:flex-row md:items-center md:justify-between">
+      <DataTable
+        data={filteredProducts}
+        rowKey={(item) => item.id}
+        loading={loading}
+        emptyText={
+          <div>
+            <Package className="mx-auto mb-2 text-stone-300" size={36} />
+            <p className="text-sm font-medium text-stone-400">{t("noItemsFound")}</p>
+          </div>
+        }
+        toolbarLeft={
           <div className="flex gap-1 rounded-xl bg-stone-100 p-1">
             {tabs.map((tab) => (
               <button
@@ -133,7 +145,8 @@ export default function InventoryList() {
               </button>
             ))}
           </div>
-
+        }
+        toolbarRight={
           <div className="relative w-full md:w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
             <input
@@ -144,124 +157,96 @@ export default function InventoryList() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-        </div>
+        }
+        columns={[
+          { key: "name", header: t("productName"), cell: (item) => <span className="font-bold text-stone-900">{item.name}</span> },
+          {
+            key: "type",
+            header: t("type"),
+            cell: (item) => (
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                  item.unitType === "weight" ? "bg-orange-100 text-orange-800" : "bg-sky-100 text-sky-800"
+                }`}
+              >
+                {item.unitType === "weight" ? "Weight (kg)" : "Count (pcs)"}
+              </span>
+            ),
+          },
+          { key: "buy", header: t("buyingPrice"), align: "right", cell: (item) => <span className="text-stone-500">Rs. {item.buyingPrice}</span> },
+          { key: "sell", header: t("sellingPrice"), align: "right", cell: (item) => <span className="font-bold text-stone-900">Rs. {item.sellingPrice}</span> },
+          {
+            key: "gudam",
+            header: "Gudam Stock",
+            align: "center",
+            cell: (item) => (
+              <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-purple-100 text-purple-800 border border-purple-200">
+                {item.gudamStock ?? 0} {item.unitType === "weight" ? "kg" : "pcs"}
+              </span>
+            ),
+          },
+          {
+            key: "shop",
+            header: "Dukan Stock",
+            align: "center",
+            cell: (item) => (
+              <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
+                {item.shopStock ?? item.stock ?? 0} {item.unitType === "weight" ? "kg" : "pcs"}
+              </span>
+            ),
+          },
+          {
+            key: "total",
+            header: "Total Stock",
+            align: "right",
+            cell: (item) => {
+              const unit = item.unitType === "weight" ? "kg" : "pcs";
+              const out = item.stock <= 0;
+              const low = !out && item.stock < 5;
+              return (
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                    out ? "bg-red-100 text-red-700" : low ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                  }`}
+                >
+                  {out ? t("outOfStock") : `${item.stock} ${unit}`}
+                </span>
+              );
+            },
+          },
+          {
+            key: "actions",
+            header: t("action"),
+            align: "right",
+            cell: (item) => (
+              <div className="flex justify-end gap-1">
+                <button
+                  onClick={() => setTransferProd(item)}
+                  className="rounded-lg p-2 text-purple-600 hover:bg-purple-50"
+                  title="Gudam <-> Dukan Transfer"
+                >
+                  <ArrowLeftRight size={17} />
+                </button>
+                <Link
+                  href={`/dashboard/inventry/edit/${item.id}`}
+                  className="rounded-lg p-2 text-stone-500 hover:bg-stone-100 hover:text-brand-700"
+                  title={t("edit")}
+                >
+                  <Pencil size={17} />
+                </Link>
+                <button
+                  onClick={() => handleDelete(item)}
+                  className="rounded-lg p-2 text-stone-500 hover:bg-red-50 hover:text-red-600"
+                  title={t("delete")}
+                >
+                  <Trash2 size={17} />
+                </button>
+              </div>
+            ),
+          },
+        ]}
+      />
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-stone-200 bg-stone-50 font-bold uppercase text-xs">
-              <tr>
-                <th className="p-4">{t("productName")}</th>
-                <th className="p-4">{t("type")}</th>
-                <th className="p-4 text-right">{t("buyingPrice")}</th>
-                <th className="p-4 text-right">{t("sellingPrice")}</th>
-                <th className="p-4 text-center">Gudam Stock</th>
-                <th className="p-4 text-center">Dukan Stock</th>
-                <th className="p-4 text-right">Total Stock</th>
-                <th className="p-4 text-right">{t("action")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="p-10 text-center text-stone-400">
-                    {t("loading")}
-                  </td>
-                </tr>
-              ) : filteredProducts.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="p-12 text-center">
-                    <Package className="mx-auto mb-2 text-stone-300" size={36} />
-                    <p className="text-sm font-medium text-stone-400">{t("noItemsFound")}</p>
-                  </td>
-                </tr>
-              ) : (
-                filteredProducts.map((item) => {
-                  const unit = item.unitType === "weight" ? "kg" : "pcs";
-                  const gudam = item.gudamStock ?? 0;
-                  const shop = item.shopStock ?? item.stock ?? 0;
-                  const total = item.stock;
-                  const out = total <= 0;
-                  const low = !out && total < 5;
-
-                  return (
-                    <tr key={item.id} className="hover:bg-stone-50">
-                      <td className="p-4 font-bold text-stone-900">{item.name}</td>
-                      <td className="p-4">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                            item.unitType === "weight" ? "bg-orange-100 text-orange-800" : "bg-sky-100 text-sky-800"
-                          }`}
-                        >
-                          {item.unitType === "weight" ? "Weight (kg)" : "Count (pcs)"}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right text-stone-500">Rs. {item.buyingPrice}</td>
-                      <td className="p-4 text-right font-bold text-stone-900">Rs. {item.sellingPrice}</td>
-                      
-                      {/* Gudam Stock Badge */}
-                      <td className="p-4 text-center">
-                        <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-purple-100 text-purple-800 border border-purple-200">
-                          {gudam} {unit}
-                        </span>
-                      </td>
-
-                      {/* Shop Stock Badge */}
-                      <td className="p-4 text-center">
-                        <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
-                          {shop} {unit}
-                        </span>
-                      </td>
-
-                      {/* Total Stock Badge */}
-                      <td className="p-4 text-right">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                            out
-                              ? "bg-red-100 text-red-700"
-                              : low
-                                ? "bg-amber-100 text-amber-800"
-                                : "bg-emerald-100 text-emerald-800"
-                          }`}
-                        >
-                          {out ? t("outOfStock") : `${total} ${unit}`}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex justify-end gap-1">
-                          <button
-                            onClick={() => setTransferProd(item)}
-                            className="rounded-lg p-2 text-purple-600 hover:bg-purple-50"
-                            title="Gudam <-> Dukan Transfer"
-                          >
-                            <ArrowLeftRight size={17} />
-                          </button>
-                          <Link
-                            href={`/dashboard/inventry/edit/${item.id}`}
-                            className="rounded-lg p-2 text-stone-500 hover:bg-stone-100 hover:text-brand-700"
-                            title={t("edit")}
-                          >
-                            <Pencil size={17} />
-                          </Link>
-                          <button
-                            onClick={() => handleDelete(item)}
-                            className="rounded-lg p-2 text-stone-500 hover:bg-red-50 hover:text-red-600"
-                            title={t("delete")}
-                          >
-                            <Trash2 size={17} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Stock Transfer Modal */}
       {transferProd && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-pop w-full max-w-md overflow-hidden">
@@ -336,8 +321,16 @@ export default function InventoryList() {
                 <button type="button" onClick={() => setTransferProd(null)} className="btn-ghost flex-1 text-xs">
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary flex-1 text-xs font-bold !bg-purple-600 hover:!bg-purple-700">
-                  Confirm Transfer
+                <button
+                  type="submit"
+                  disabled={transferring}
+                  className="btn-primary flex-1 text-xs font-bold !bg-purple-600 hover:!bg-purple-700 min-h-[38px] flex items-center justify-center"
+                >
+                  {transferring ? (
+                    <Loader2 className="animate-spin text-white" size={16} />
+                  ) : (
+                    "Confirm Transfer"
+                  )}
                 </button>
               </div>
             </form>

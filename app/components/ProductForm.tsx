@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Info, ChevronDown, Save, Loader2 } from "lucide-react";
+import { ChevronDown, Save, Loader2 } from "lucide-react";
 import type { ProductInput } from "../lib/services/products";
 import type { UnitType } from "../types";
 import { useRouter } from "next/navigation";
@@ -65,9 +65,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-6xl mx-auto">
-      {/* Accordion Card 1: Product Information */}
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
-        {/* Card Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-white">
           <h5 className="flex items-center gap-2 text-sm font-bold text-stone-800">
             <span className="flex h-5 w-5 items-center justify-center rounded-full border border-orange-500 text-orange-500 text-xs font-bold">
@@ -78,10 +76,8 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
           <ChevronDown size={18} className="text-stone-400" />
         </div>
 
-        {/* Card Body */}
         <div className="p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-            {/* Product Name */}
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
                 Product Name <span className="text-red-500">*</span>
@@ -96,7 +92,6 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
               />
             </div>
 
-            {/* Category */}
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
                 Category
@@ -110,33 +105,24 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
               />
             </div>
 
-            {/* Selling Type / Unit */}
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
                 Unit / Selling Type <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <select
-                  value={form.unitType}
-                  onChange={(e) => set("unitType", e.target.value as UnitType)}
-                  className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-stone-900 appearance-none focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 pr-8"
-                >
-                  <option value="weight">By Weight (KG)</option>
-                  <option value="count">By Count (Pieces / Bags)</option>
-                </select>
-                <ChevronDown
-                  size={16}
-                  className="absolute right-3 top-3 text-stone-400 pointer-events-none"
-                />
-              </div>
+              <select
+                value={form.unitType}
+                onChange={(e) => set("unitType", e.target.value as UnitType)}
+                className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-stone-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="weight">By Weight (KG)</option>
+                <option value="count">By Count (Pieces / Bags)</option>
+              </select>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Accordion Card 2: Pricing & Stocks */}
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
-        {/* Card Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-white">
           <h5 className="flex items-center gap-2 text-sm font-bold text-stone-800">
             <span className="flex h-5 w-5 items-center justify-center rounded-full border border-orange-500 text-orange-500 text-xs font-bold">
@@ -147,10 +133,8 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
           <ChevronDown size={18} className="text-stone-400" />
         </div>
 
-        {/* Card Body */}
         <div className="p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-            {/* Buying Price */}
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
                 Buying Price (Khareed Rate) <span className="text-red-500">*</span>
@@ -167,7 +151,6 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
               />
             </div>
 
-            {/* Selling Price */}
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
                 Selling Price (Sale Rate) <span className="text-red-500">*</span>
@@ -184,7 +167,6 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
               />
             </div>
 
-            {/* Gudam Stock */}
             <div>
               <label className="block text-xs font-bold text-purple-900 mb-1">
                 Gudam (Warehouse) Stock <span className="text-red-500">*</span>
@@ -201,7 +183,6 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
               />
             </div>
 
-            {/* Shop Stock */}
             <div>
               <label className="block text-xs font-bold text-blue-900 mb-1">
                 Dukan (Shop) Stock <span className="text-red-500">*</span>
@@ -221,7 +202,6 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
         </div>
       </div>
 
-      {/* Form Action Buttons */}
       <div className="flex justify-end gap-3 pt-2">
         <button
           type="button"
@@ -233,10 +213,16 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
         <button
           type="submit"
           disabled={submitting}
-          className="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-sm disabled:opacity-50 transition"
+          className="min-w-[125px] px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 transition min-h-[38px]"
         >
-          {submitting ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-          {isEdit ? "Update Product" : "Save Product"}
+          {submitting ? (
+            <Loader2 className="animate-spin text-white" size={16} />
+          ) : (
+            <>
+              <Save size={16} />
+              <span>{isEdit ? "Update Product" : "Save Product"}</span>
+            </>
+          )}
         </button>
       </div>
     </form>

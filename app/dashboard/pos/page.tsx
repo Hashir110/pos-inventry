@@ -6,23 +6,19 @@ import { subscribeProducts } from "../../lib/services/products";
 import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
-import { Search, ShoppingCart, Trash2, X, Printer, ChevronUp, ChevronDown, Banknote, Landmark, HandCoins, Plus, Minus, RotateCcw, StickyNote } from "lucide-react";
-// Is line ko code ke top par likhein:
+import { Search, ShoppingCart, Trash2, X, Printer, ChevronUp, ChevronDown, Banknote, Landmark, HandCoins, Plus, Minus, RotateCcw, StickyNote, Loader2 } from "lucide-react";
 import { toast } from 'react-toastify';
-import { addCustomer, listCustomers } from '../../lib/services/customers';
+import { listCustomers } from '../../lib/services/customers';
 import type { Customer, PaymentMethod, Product, SaleItem } from '../../types';
+import CustomerSelect from '../../components/CustomerSelect';
 
 export default function POSPage() {
-    const { currentUser, currentShop } = useStore(); // Shop Name k liye currentShop chahiye
+    const { currentUser, currentShop } = useStore();
     const { t } = useLanguage();
-    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash"); // Default "Cash" rakhte hain
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash");
     const [customerName, setCustomerName] = useState("");
-    // Udhar sale ke liye customer list
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [customerId, setCustomerId] = useState("");
-    const [showNewCustomer, setShowNewCustomer] = useState(false);
-    const [newCustomerName, setNewCustomerName] = useState("");
-    const [newCustomerPhone, setNewCustomerPhone] = useState("");
     const [description, setDescription] = useState("");
     const [products, setProducts] = useState<Product[]>([]);
     const [cart, setCart] = useState<SaleItem[]>([]);
@@ -32,17 +28,13 @@ export default function POSPage() {
     const [invoiceNumber, setInvoiceNumber] = useState("");
     const isOnline = useOnlineStatus();
 
-    // Modals State
-    const [showReceipt, setShowReceipt] = useState(false); // Receipt Modal State
-
+    const [showReceipt, setShowReceipt] = useState(false);
     const [showMobileCart, setShowMobileCart] = useState(false);
     const [activeCategory, setActiveCategory] = useState("all");
     const [showNote, setShowNote] = useState(false);
 
-    // 1. Products (Real-time Listener)
     useEffect(() => {
         if (!currentUser) return;
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- listener shuru hone par loading dikhao
         setLoading(true);
         return subscribeProducts(
             currentUser.uid,
@@ -56,12 +48,13 @@ export default function POSPage() {
             }
         );
     }, [currentUser]);
+
     const refreshCustomers = useCallback(async () => {
         if (!currentUser) return;
         try {
             setCustomers(await listCustomers(currentUser.uid));
         } catch (error) {
-            console.error("Customers load nahi hue:", error);
+            console.error("Customers load error:", error);
         }
     }, [currentUser]);
 
@@ -70,70 +63,62 @@ export default function POSPage() {
         let cancelled = false;
         listCustomers(currentUser.uid)
             .then(list => { if (!cancelled) setCustomers(list); })
-            .catch(error => console.error("Customers load nahi hue:", error));
+            .catch(error => console.error("Customers load error:", error));
         return () => { cancelled = true; };
     }, [currentUser]);
 
-    const handleSelectCustomer = (id: string) => {
-        setCustomerId(id);
-        setCustomerName(customers.find(c => c.id === id)?.name ?? "");
-    };
-
-    const handleAddCustomer = async () => {
-        if (!currentUser || !newCustomerName.trim()) {
-            toast.error("Customer ka naam likhein");
-            return;
-        }
-        try {
-            const created = await addCustomer(currentUser.uid, { name: newCustomerName, phone: newCustomerPhone });
-            setCustomers(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
-            setCustomerId(created.id);
-            setCustomerName(created.name);
-            setShowNewCustomer(false);
-            setNewCustomerName("");
-            setNewCustomerPhone("");
-            toast.success("Customer add ho gaya");
-        } catch (error) {
-            console.error(error);
-            toast.error("Customer add nahi hua (internet check karein)");
+    const handleSelectCustomer = (customer: Customer | null) => {
+        if (!customer) {
+            setCustomerId("");
+            setCustomerName("");
+        } else {
+            setCustomerId(customer.id);
+            setCustomerName(customer.name);
         }
     };
 
-    // 2. Product Click
+
     const handleProductClick = (product: Product) => {
-    // 1. Modal open karne wali logic ko bypass karo
-    // setSelectedProduct(product); <-- Isko ab zaroorat nahi
-    
-    // 2. Direct addToCart function call karo with 1 quantity
-    addToCart(product, 1);
+        addToCart(product, 1);
+    };
 
-    // 3. Optional: Agar user ko feedback dena hai toh console ya toast laga lo
-    console.log(`${product.name} added to cart`);
-};
-
-    // 4. Add to Cart
-    const addToCart = (product: Product, qty: number) => {
+    const addToCart = (product: Product, bagsQty = 1) => {
         const finalPrice = product.sellingPrice;
+        const isWeight = product.unitType === "weight";
+        const bagWeight = 25;
+        const totalWeight = isWeight ? bagsQty * bagWeight : undefined;
+        const lineGross = isWeight ? (totalWeight! * finalPrice) : (bagsQty * finalPrice);
 
-        // Functional update: tez clicks par stale cart ka masla nahi, aur state mutate nahi hoti
         setCart(prev => {
             const idx = prev.findIndex(item => item.id === product.id);
             if (idx !== -1) {
                 return prev.map((item, i) => {
                     if (i !== idx) return item;
-                    const newQty = item.qty + qty;
-                    return { ...item, qty: newQty, total: Math.max(0, newQty * finalPrice - (item.discount || 0)) };
+                    const newQty = item.qty + bagsQty;
+                    const newTotalWeight = isWeight
+                        ? (item.isManualWeight ? (item.totalWeight ?? 0) + (bagsQty * bagWeight) : newQty * bagWeight)
+                        : undefined;
+                    const lineTotal = isWeight ? ((newTotalWeight ?? 0) * finalPrice) : (newQty * finalPrice);
+
+                    return {
+                        ...item,
+                        qty: newQty,
+                        totalWeight: newTotalWeight,
+                        total: lineTotal,
+                    };
                 });
             }
             return [...prev, {
                 id: product.id,
                 name: product.name,
-                qty: qty,
+                qty: bagsQty,
+                weightPerBag: bagWeight,
+                totalWeight: totalWeight,
+                isManualWeight: false,
                 price: finalPrice,
                 buyingPrice: product.buyingPrice,
-                discount: 0, // Line par flat discount (Rs.)
-                total: qty * finalPrice,
-                type: product.unitType
+                total: lineGross,
+                type: product.unitType,
             }];
         });
     };
@@ -146,20 +131,16 @@ export default function POSPage() {
 
     const grandTotal = cart.reduce((sum, item) => sum + item.total, 0);
 
-    // // 5. STEP 1: Sirf Receipt Dikhao (DB Update mat karo abhi)
-    // const handlePreviewReceipt = () => {
-    //     if (cart.length === 0) return;
-    //     setShowReceipt(true);
-    // };
-
-    // 6. STEP 2: Finalize Sale (Direct Action)
     const handleFinalizeSale = async () => {
         if (!currentUser) return;
+        if (cart.length === 0) {
+            return toast.error("Cart khali hai");
+        }
         if (cart.some(item => !(item.qty > 0))) {
             return toast.error("Quantity 0 hai — theek karein ya item hata dein");
         }
         if (paymentMethod === "Udhar" && !customerId) {
-            toast.error("Udhar ke liye customer select karein");
+            toast.error("Udhar ke liye party select karein!");
             return;
         }
         setCheckoutLoading(true);
@@ -171,13 +152,14 @@ export default function POSPage() {
                 : queueOfflineSale(currentUser.uid, cart, grandTotal, meta, products);
 
             if (!isOnline) {
-                // Offline mein local stock bhi minus dikhao
                 setProducts(prev => prev.map(p => {
                     const cartItem = cart.find(c => c.id === p.id);
-                    return cartItem ? { ...p, stock: p.stock - cartItem.qty } : p;
+                    if (!cartItem) return p;
+                    const deduct = p.unitType === "weight" && cartItem.totalWeight ? cartItem.totalWeight : cartItem.qty;
+                    return { ...p, stock: p.stock - deduct };
                 }));
             }
-            // --- SUCCESS LOGIC ---
+
             setInvoiceNumber(shortInvoiceNo);
             toast.success("Sale Successful!");
             if (paymentMethod === "Udhar") refreshCustomers();
@@ -190,19 +172,6 @@ export default function POSPage() {
         setCheckoutLoading(false);
     };
 
-    // POS Page ke andar jahan functions hain
-    // Discount line par FLAT hai (poori line ka Rs. minus, per-unit nahi)
-    const handleDiscountChange = (index: number, discountValue: string) => {
-        setCart(prev => prev.map((item, i) => {
-            if (i !== index) return item;
-            const lineGross = item.price * item.qty;
-            // Discount negative ya line total se zyada nahi ho sakta
-            const discount = Math.min(Math.max(parseFloat(discountValue) || 0, 0), lineGross);
-            return { ...item, discount, total: lineGross - discount };
-        }));
-    };
-
-    // Category tabs: products ki categories se (khali wale "Baqi" mein)
     const categories = useMemo(() => {
         const set = new Set<string>();
         products.forEach(p => set.add(p.category?.trim() || "Baqi"));
@@ -217,7 +186,6 @@ export default function POSPage() {
         });
     }, [products, search, activeCategory]);
 
-    // Naya order shuru: cart, customer aur note saaf
     const resetOrder = () => {
         setCart([]);
         setCustomerName("");
@@ -226,7 +194,6 @@ export default function POSPage() {
         setShowNote(false);
     };
 
-    // Product card ke rang (naam se tay, taake har item ka apna rang rahe)
     const tints = [
         "bg-brand-100 text-brand-700",
         "bg-emerald-100 text-emerald-700",
@@ -237,82 +204,86 @@ export default function POSPage() {
     ];
     const tintFor = (name: string) => tints[[...name].reduce((s, c) => s + c.charCodeAt(0), 0) % tints.length];
 
-    const updateQty = (index: number, newQty: string | number) => {
+    const updateBagsQty = (index: number, newBagsQty: string | number) => {
         setCart(prev => prev.map((item, i) => {
             if (i !== index) return item;
-            // Weight items mein decimal (0.5 kg) allowed hai; qty 0 tak ja sakti hai, checkout par validate hoga
-            let qty = parseFloat(String(newQty));
+            let qty = parseFloat(String(newBagsQty));
             if (isNaN(qty) || qty < 0) qty = 0;
-            const lineGross = item.price * qty;
-            const discount = Math.min(item.discount || 0, lineGross);
-            return { ...item, qty, discount, total: lineGross - discount };
+
+            const isWeight = item.type === "weight";
+            const bagWeight = item.weightPerBag || 25;
+            const totalWeight = isWeight ? qty * bagWeight : undefined;
+            const lineGross = isWeight ? ((totalWeight ?? 0) * item.price) : (qty * item.price);
+
+            return {
+                ...item,
+                qty,
+                totalWeight,
+                isManualWeight: false,
+                total: lineGross,
+            };
+        }));
+    };
+
+    const updateTotalWeight = (index: number, weightValue: string | number) => {
+        setCart(prev => prev.map((item, i) => {
+            if (i !== index) return item;
+            let weight = parseFloat(String(weightValue));
+            if (isNaN(weight) || weight < 0) weight = 0;
+
+            const lineGross = weight * item.price;
+
+            return {
+                ...item,
+                totalWeight: weight,
+                isManualWeight: true,
+                total: lineGross,
+            };
         }));
     };
 
     const handlePrint = () => {
-    console.log("Print command initiated...");
-
-    // Browser ke print event ko sunne ke liye
-    const beforePrint = () => console.log("Preparing document for printing...");
-    const afterPrint = () => {
-        console.log("Print dialog closed or command sent.");
-        // Note: Ye ye nahi batata ke print nikla ya nahi, sirf ye ke dialogue band ho gaya.
+        try {
+            window.print();
+        } catch (error) {
+            console.error("Printer Error:", error);
+        }
     };
 
-    window.onbeforeprint = beforePrint;
-    window.onafterprint = afterPrint;
-
-    try {
-        window.print();
-    } catch (error) {
-        console.error("Printer Error or Browser Blocked:", error);
-    }
-};
     return (
         <div className="flex flex-col lg:flex-row h-[calc(100vh-96px)] lg:h-[calc(100vh-112px)] gap-4 relative">
-            {/* Print Styles */}
-            {/* Print Styles for Thermal Printer */}
             <style jsx global>{`
         @media print {
-          /* Page setup for Thermal Printer */
           @page {
-            size: 58mm auto; /* Width 58mm, Height automatic */
-            margin: 0;
+            size: auto;
+            margin: 2mm;
           }
           body {
             margin: 0;
             padding: 0;
-            width: 58mm; /* Force body width */
           }
-          
-          /* Hide everything else */
           body * { visibility: hidden; }
-          
-          /* Show only receipt */
           #printable-receipt, #printable-receipt * { 
             visibility: visible; 
           }
-          
           #printable-receipt {
-            position: fixed;
+            position: absolute;
             left: 0;
             top: 0;
             width: 100%;
-            padding: 5px 0; /* Thora padding */
+            max-width: 100% !important;
+            padding: 4px;
             margin: 0;
             background: white;
             color: black;
+            box-shadow: none !important;
+            border-radius: 0 !important;
           }
-
-          /* Hide Buttons in Print */
           .no-print { display: none !important; }
         }
       `}</style>
 
-            {/* --- CENTER: PRODUCTS --- */}
             <div className="flex h-full min-w-0 flex-1 flex-col gap-4">
-
-                {/* Top: title + search + reset */}
                 <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                     <div className="min-w-0 sm:mr-auto">
                         <h1 className="text-lg font-bold text-stone-900">{t("products")}</h1>
@@ -338,7 +309,6 @@ export default function POSPage() {
                     </button>
                 </div>
 
-                {/* Category tabs */}
                 <div className="-mt-1 flex gap-2 overflow-x-auto pb-1">
                     {[{ key: "all", label: t("all") }, ...categories.map(c => ({ key: c, label: c }))].map(tab => (
                         <button
@@ -354,7 +324,6 @@ export default function POSPage() {
                     ))}
                 </div>
 
-                {/* Products Grid */}
                 <div className="flex-1 overflow-y-auto pb-24 lg:pb-2">
                     {loading ? (
                         <div className="flex h-full items-center justify-center font-medium text-stone-400">{t("loading")}</div>
@@ -390,7 +359,6 @@ export default function POSPage() {
                                             </span>
                                         )}
 
-                                        {/* Picture ki jagah naam ka pehla harf */}
                                         <div className={`flex h-20 items-center justify-center rounded-lg font-display text-3xl font-bold ${isOutOfStock ? 'bg-stone-100 text-stone-400' : tintFor(product.name)}`}>
                                             {product.name.trim().charAt(0).toUpperCase()}
                                         </div>
@@ -426,7 +394,6 @@ export default function POSPage() {
                 </div>
             </div>
 
-            {/* --- MOBILE BOTTOM BAR (Visible only on Mobile) --- */}
             <div className="fixed bottom-0 left-0 z-30 flex w-full items-center justify-between border-t border-stone-200 bg-white p-4 shadow-pop lg:hidden">
                 <div onClick={() => setShowMobileCart(true)}>
                     <p className="text-xs text-stone-500">{cart.length} Items</p>
@@ -438,84 +405,52 @@ export default function POSPage() {
                 </button>
             </div>
 
-            {/* --- RIGHT: ORDER LIST --- */}
             <div className={`
                 fixed inset-0 z-40 flex h-full w-full flex-col bg-white transition-transform duration-300 ease-in-out
                 lg:static lg:w-[400px] lg:shrink-0 lg:translate-y-0 lg:rounded-xl lg:border lg:border-stone-200 lg:shadow-card
                 ${showMobileCart ? 'translate-y-0' : 'translate-y-full'}
             `}>
 
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-stone-200 p-4">
+                <div className="flex items-center justify-between border-b border-stone-200 px-3.5 py-2.5">
                     <div>
-                        <h2 className="text-lg font-bold text-stone-900">{t("orderList")}</h2>
-                        <p className="text-xs text-stone-500">{t("newBill")} • {cart.length} {t("items")}</p>
+                        <h2 className="text-base font-bold text-stone-900">{t("orderList")}</h2>
+                        <p className="text-[11px] text-stone-500">{t("newBill")} • {cart.length} {t("items")}</p>
                     </div>
                     <div className="flex items-center gap-1">
                         <button
                             onClick={resetOrder}
                             disabled={cart.length === 0}
-                            className="rounded-lg p-2 text-stone-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
+                            className="rounded-lg p-1.5 text-stone-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-30"
                             title={t("reset")}
                         >
-                            <Trash2 size={18} />
+                            <Trash2 size={16} />
                         </button>
-                        <button onClick={() => setShowMobileCart(false)} className="rounded-lg bg-stone-100 p-2 text-stone-600 lg:hidden">
-                            <ChevronDown size={20} />
+                        <button onClick={() => setShowMobileCart(false)} className="rounded-lg bg-stone-100 p-1.5 text-stone-600 lg:hidden">
+                            <ChevronDown size={18} />
                         </button>
                     </div>
                 </div>
 
-                {/* Customer */}
-                <div className="space-y-2 border-b border-stone-200 p-4">
-                    <label className="text-[11px] font-bold uppercase tracking-widest text-stone-400">{t("customer")}</label>
-                    <div className="flex gap-2">
-                        <select
-                            value={customerId}
-                            onChange={(e) => handleSelectCustomer(e.target.value)}
-                            className="field flex-1 cursor-pointer"
-                        >
-                            <option value="">{t("walkInCustomer")}</option>
-                            {customers.map(c => (
-                                <option key={c.id} value={c.id}>
-                                    {c.name} {c.balance > 0 ? `(${t("due")} Rs. ${Math.round(c.balance).toLocaleString()})` : ""}
-                                </option>
-                            ))}
-                        </select>
-                        <button
-                            onClick={() => setShowNewCustomer(v => !v)}
-                            className="btn-ghost !px-3"
-                            title={t("newCustomer")}
-                        >
-                            <Plus size={18} />
-                        </button>
+                <div className="space-y-1 border-b border-stone-200 px-3.5 py-2">
+                    <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                            {paymentMethod === "Udhar" ? "Party / Khata (Udhar)" : t("customer")}
+                        </label>
+                        {paymentMethod === "Udhar" && !customerId && (
+                            <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                                Selection Zaroori
+                            </span>
+                        )}
                     </div>
 
-                    {showNewCustomer && (
-                        <div className="space-y-2 rounded-lg border border-stone-200 bg-stone-50 p-3">
-                            <input
-                                type="text"
-                                placeholder={t("newCustomerName")}
-                                value={newCustomerName}
-                                onChange={(e) => setNewCustomerName(e.target.value)}
-                                className="field !py-2"
-                            />
-                            <input
-                                type="tel"
-                                placeholder={t("phone")}
-                                value={newCustomerPhone}
-                                onChange={(e) => setNewCustomerPhone(e.target.value)}
-                                className="field !py-2"
-                            />
-                            <div className="flex gap-2">
-                                <button onClick={handleAddCustomer} className="btn-primary flex-1 !py-2">{t("save")}</button>
-                                <button onClick={() => setShowNewCustomer(false)} className="btn-ghost flex-1 !py-2">{t("cancel")}</button>
-                            </div>
-                        </div>
-                    )}
+                    <CustomerSelect
+                        customers={customers}
+                        selectedCustomerId={customerId}
+                        onSelectCustomer={handleSelectCustomer}
+                        isUdhar={paymentMethod === "Udhar"}
+                    />
                 </div>
 
-                {/* Items */}
                 <div className="flex-1 overflow-y-auto bg-stone-50/60 p-3">
                     {cart.length === 0 ? (
                         <div className="flex h-full flex-col items-center justify-center gap-2 text-stone-300">
@@ -524,111 +459,140 @@ export default function POSPage() {
                             <p className="text-xs text-stone-400">{t("clickItemToAdd")}</p>
                         </div>
                     ) : (
-                        <div className="space-y-2">
-                            {cart.map((item, index) => (
-                                <div key={item.id} className="rounded-lg border border-stone-200 bg-white p-3 shadow-card">
-                                    <div className="flex items-start gap-3">
-                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg font-display text-base font-bold ${tintFor(item.name)}`}>
-                                            {item.name.trim().charAt(0).toUpperCase()}
-                                        </div>
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate text-sm font-bold text-stone-900">{item.name}</p>
-                                            <p className="text-xs text-stone-500">Rs. {item.price}/{item.type === 'weight' ? 'kg' : 'pc'}</p>
-                                        </div>
-                                        <button onClick={() => removeFromCart(index)} className="rounded-md p-1 text-stone-300 hover:bg-red-50 hover:text-red-500" title="Hatayein">
-                                            <X size={16} />
-                                        </button>
-                                    </div>
+                        <div className="space-y-2.5">
+                            {cart.map((item, index) => {
+                                const isWeight = item.type === "weight";
+                                const currentWeight = item.totalWeight ?? (item.qty * (item.weightPerBag || 25));
 
-                                    <div className="mt-3 flex items-center justify-between gap-2">
-                                        {/* Qty */}
-                                        <div className="flex items-center rounded-lg border border-stone-200">
-                                            <button
-                                                onClick={() => updateQty(index, Math.round((item.qty - (item.type === 'weight' ? 0.5 : 1)) * 1000) / 1000)}
-                                                className="p-2 text-stone-500 hover:text-brand-700"
-                                            >
-                                                <Minus size={14} />
-                                            </button>
-                                            <input
-                                                type="number"
-                                                className="tabular w-12 border-0 bg-transparent p-0 text-center text-sm font-bold outline-none"
-                                                value={item.qty}
-                                                onChange={(e) => updateQty(index, e.target.value)}
-                                            />
-                                            <button
-                                                onClick={() => updateQty(index, Math.round((item.qty + (item.type === 'weight' ? 0.5 : 1)) * 1000) / 1000)}
-                                                className="p-2 text-stone-500 hover:text-brand-700"
-                                            >
-                                                <Plus size={14} />
+                                return (
+                                    <div key={item.id} className="rounded-xl border border-stone-200 bg-white p-3 shadow-card space-y-2.5">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-display text-xs font-bold ${tintFor(item.name)}`}>
+                                                    {item.name.trim().charAt(0).toUpperCase()}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="truncate text-sm font-bold text-stone-900">{item.name}</p>
+                                                    <p className="text-[11px] font-semibold text-brand-700">
+                                                        Rate: Rs. {item.price} / {isWeight ? "kg" : "pc"}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <button onClick={() => removeFromCart(index)} className="rounded-md p-1 text-stone-300 hover:bg-red-50 hover:text-red-500" title="Hatayein">
+                                                <X size={16} />
                                             </button>
                                         </div>
 
-                                        {/* Discount */}
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-[10px] font-bold uppercase text-stone-400">Disc</span>
-                                            <input
-                                                type="number"
-                                                placeholder="0"
-                                                className="tabular w-16 rounded-md border border-stone-200 bg-stone-50 px-2 py-1.5 text-xs font-bold outline-none focus:border-brand-500"
-                                                value={item.discount || ""}
-                                                onChange={(e) => handleDiscountChange(index, e.target.value)}
-                                            />
+                                        <div className={`grid gap-2 pt-1 border-t border-stone-100 text-xs ${isWeight ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                            <div>
+                                                <label className="text-[10px] font-bold uppercase text-stone-400 block mb-0.5">
+                                                    {isWeight ? "Bags (Qty)" : "Quantity"}
+                                                </label>
+                                                <div className="flex items-center rounded-lg border border-stone-200 bg-stone-50">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateBagsQty(index, Math.max(1, item.qty - 1))}
+                                                        className="p-1.5 text-stone-500 hover:text-brand-700"
+                                                    >
+                                                        <Minus size={13} />
+                                                    </button>
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        className="tabular w-full border-0 bg-transparent p-0 text-center text-xs font-bold outline-none"
+                                                        value={item.qty}
+                                                        onChange={(e) => updateBagsQty(index, e.target.value)}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateBagsQty(index, item.qty + 1)}
+                                                        className="p-1.5 text-stone-500 hover:text-brand-700"
+                                                    >
+                                                        <Plus size={13} />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {isWeight && (
+                                                <div>
+                                                    <div className="flex justify-between items-center mb-0.5">
+                                                        <label className="text-[10px] font-bold uppercase text-stone-400">Total Wt</label>
+                                                        {item.isManualWeight && (
+                                                            <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1 rounded">Manual</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="number"
+                                                            step="any"
+                                                            min="0"
+                                                            className="tabular w-full rounded-lg border border-stone-200 bg-stone-50 px-2 py-1.5 text-xs font-bold outline-none focus:border-brand-500 pr-6"
+                                                            value={currentWeight}
+                                                            onChange={(e) => updateTotalWeight(index, e.target.value)}
+                                                            title="Wazan kam/zyada ho to yahan manual change karein"
+                                                        />
+                                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-stone-400 pointer-events-none">
+                                                            kg
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
-                                        <p className="tabular min-w-[4.5rem] text-right font-display text-sm font-bold text-stone-900">
-                                            Rs. {Math.round(item.total).toLocaleString()}
-                                        </p>
+                                        <div className="flex items-center justify-between pt-1 border-t border-dashed border-stone-200 text-xs">
+                                            <span className="text-stone-400 text-[11px]">
+                                                {isWeight
+                                                    ? `${currentWeight} kg × Rs. ${item.price}`
+                                                    : `${item.qty} × Rs. ${item.price}`}
+                                            </span>
+                                            <span className="tabular font-display text-sm font-extrabold text-stone-900">
+                                                Rs. {Math.round(item.total).toLocaleString()}
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
 
-                {/* Summary + payment */}
-                <div className="space-y-3 border-t border-stone-200 p-4">
-                    {(() => {
-                        const subTotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
-                        const totalDiscount = cart.reduce((s, i) => s + (i.discount || 0), 0);
-                        return (
-                            <div className="space-y-1.5 text-sm">
-                                <div className="flex justify-between text-stone-500">
-                                    <span>{t("subtotal")}</span>
-                                    <span className="tabular font-semibold text-stone-700">Rs. {Math.round(subTotal).toLocaleString()}</span>
-                                </div>
-                                <div className="flex justify-between text-stone-500">
-                                    <span>{t("discount")}</span>
-                                    <span className={`tabular font-semibold ${totalDiscount > 0 ? 'text-emerald-600' : 'text-stone-700'}`}>
-                                        {totalDiscount > 0 ? '− ' : ''}Rs. {Math.round(totalDiscount).toLocaleString()}
-                                    </span>
-                                </div>
-                                <div className="flex items-center justify-between border-t border-dashed border-stone-300 pt-2.5">
-                                    <span className="text-sm font-bold text-stone-900">{t("grandTotal")}</span>
-                                    <span className="tabular font-display text-2xl font-bold text-stone-900">
-                                        Rs. {Math.round(grandTotal).toLocaleString()}
-                                    </span>
-                                </div>
-                            </div>
-                        );
-                    })()}
+                <div className="border-t border-stone-200 p-2.5 space-y-1.5 bg-white">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold uppercase tracking-wider text-stone-500">{t("grandTotal")}</span>
+                            {!showNote && (
+                                <button
+                                    onClick={() => setShowNote(true)}
+                                    className="text-[10px] font-semibold text-stone-400 hover:text-brand-600 flex items-center gap-0.5"
+                                >
+                                    <StickyNote size={11} /> {t("addNote")}
+                                </button>
+                            )}
+                        </div>
+                        <span className="tabular font-display text-lg font-black text-brand-700">
+                            Rs. {Math.round(grandTotal).toLocaleString()}
+                        </span>
+                    </div>
 
-                    {/* Note */}
-                    {showNote ? (
-                        <textarea
-                            placeholder={t("notePlaceholder")}
-                            rows={2}
-                            className="field resize-none"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                        />
-                    ) : (
-                        <button onClick={() => setShowNote(true)} className="flex items-center gap-1.5 text-xs font-bold text-stone-500 hover:text-brand-700">
-                            <StickyNote size={14} /> {t("addNote")}
-                        </button>
+                    {showNote && (
+                        <div className="relative">
+                            <textarea
+                                placeholder={t("notePlaceholder")}
+                                rows={1}
+                                className="field !py-1 !px-2.5 !text-xs resize-none"
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                            />
+                            <button
+                                onClick={() => { setShowNote(false); setDescription(""); }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs"
+                            >
+                                ✕
+                            </button>
+                        </div>
                     )}
 
-                    {/* Payment method */}
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-1.5">
                         {([
                             { value: "Cash", label: t("cash"), icon: Banknote },
                             { value: "Bank Account", label: t("bankOnline"), icon: Landmark },
@@ -641,33 +605,33 @@ export default function POSPage() {
                                     key={opt.value}
                                     type="button"
                                     onClick={() => setPaymentMethod(opt.value)}
-                                    className={`flex flex-col items-center gap-1 rounded-lg border-2 py-2.5 text-xs font-bold transition ${active
+                                    className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 px-1 text-[11px] font-bold transition ${active
                                         ? opt.value === "Udhar"
-                                            ? "border-amber-500 bg-amber-50 text-amber-800"
-                                            : "border-brand-500 bg-brand-50 text-brand-800"
-                                        : "border-stone-200 text-stone-500 hover:border-stone-300"
+                                            ? "border-amber-500 bg-amber-50 text-amber-900 shadow-sm"
+                                            : "border-brand-500 bg-brand-50 text-brand-900 shadow-sm"
+                                        : "border-stone-200 text-stone-600 hover:bg-stone-50"
                                         }`}
                                 >
-                                    <Icon size={20} />
-                                    {opt.label}
+                                    <Icon size={14} className="shrink-0" />
+                                    <span className="truncate">{opt.label}</span>
                                 </button>
                             );
                         })}
                     </div>
 
                     {paymentMethod === "Udhar" && !customerId && (
-                        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                            {t("selectCustomerForCredit")}
+                        <p className="rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 text-center">
+                            ⚠️ Party select karein
                         </p>
                     )}
 
                     <button
                         onClick={handleFinalizeSale}
                         disabled={cart.length === 0 || checkoutLoading}
-                        className="btn-primary w-full !py-3.5 !text-base"
+                        className="btn-primary w-full !py-2 !text-xs font-bold shadow-sm min-h-[36px] flex items-center justify-center"
                     >
                         {checkoutLoading ? (
-                            <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+                            <Loader2 className="animate-spin text-white" size={16} />
                         ) : isOnline ? (
                             t("paymentTotal", { amount: Math.round(grandTotal).toLocaleString() })
                         ) : (
@@ -676,100 +640,96 @@ export default function POSPage() {
                     </button>
                 </div>
             </div>
-            {/* Receipt Modal */}
+
             {showReceipt && (
                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] animate-in fade-in backdrop-blur-sm p-4">
-
-                    {/* Printable Container */}
-                    <div id="printable-receipt" className="bg-white p-4 rounded-xl w-full max-w-[300px] shadow-2xl relative text-black">
-
-                        {/* Close Button */}
+                    <div id="printable-receipt" className="bg-white p-4 rounded-xl w-full max-w-[340px] shadow-2xl relative text-black">
                         <button
-                            onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); setCustomerId(""); setDescription("") }}
+                            onClick={() => { setShowReceipt(false); setCart([]); setCustomerName(""); setCustomerId(""); setDescription(""); setInvoiceNumber(""); }}
                             className="absolute top-2 right-2 p-1 text-stone-400 no-print hover:text-stone-700"
                         >
                             <X size={20} />
                         </button>
 
-                        {/* --- SLIP HEADER --- */}
                         <div className="text-center mb-3 border-b border-black pb-3">
                             <h2 className="text-xl font-bold uppercase text-black leading-tight">
                                 {currentShop?.shopName || "My Shop"}
                             </h2>
-                            {currentShop?.address && <p className="text-[10px] text-stone-800 mt-1">{currentShop.address}</p>}
+                            {currentShop?.address && <p className="text-[10px] text-stone-800 mt-0.5">{currentShop.address}</p>}
                             {currentShop?.contact && <p className="text-[10px] font-bold text-stone-900">Ph: {currentShop.contact}</p>}
 
-                            <div className="mt-2 text-[10px] text-stone-600 flex flex-col items-center">
+                            <div className="mt-2 text-[10px] text-stone-700 flex flex-col items-center">
                                 <p>{new Date().toLocaleString()}</p>
                                 <p className="font-bold text-black text-[12px] mt-1 tracking-wider">
                                     Inv #: {invoiceNumber}
                                 </p>
                                 {customerName && (
-                                    <p className="font-bold text-black mt-1 uppercase border-b border-dashed border-stone-400 pb-1">
+                                    <p className="font-bold text-black mt-1 uppercase border-b border-dashed border-stone-400 pb-0.5">
                                         Cust: {customerName}
                                     </p>
                                 )}
                             </div>
                         </div>
 
-                        {/* --- SLIP ITEMS --- */}
-                        <div className="space-y-2 mb-3 text-xs max-h-60 overflow-auto text-black">
-                            {cart.map((item, idx) => {
-                                return (
-                                    <div key={idx} className="flex justify-between items-start border-b border-dotted border-stone-400 pb-1.5">
-                                        <div className="flex flex-col w-[60%]">
-                                            <span className="font-semibold leading-tight">{item.name}</span>
-                                            {item.discount > 0 && (
-                                                <span className="text-[9px] text-stone-600 font-medium">
-                                                    Disc: -Rs. {item.discount}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-col items-end w-[40%]">
-                                            <span className="text-[10px]">{item.qty} x {item.price}</span>
-                                            <span className="font-bold text-[11px] mt-0.5">{Math.round(item.total)}</span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                        <div className="mb-3 overflow-x-auto text-black">
+                            <table className="w-full text-left text-[11px] border-collapse">
+                                <thead>
+                                    <tr className="border-b-2 border-black text-[10px] font-black uppercase">
+                                        <th className="py-1 pr-1">Qty</th>
+                                        <th className="py-1 px-1">Items</th>
+                                        <th className="py-1 px-1 text-center">Total Weight</th>
+                                        <th className="py-1 px-1 text-right">rate</th>
+                                        <th className="py-1 pl-1 text-right">amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-stone-200">
+                                    {cart.map((item, idx) => {
+                                        const qtyStr = String(item.qty).padStart(2, "0");
+                                        const isWeight = item.type === "weight";
+                                        const weightVal = item.totalWeight ?? (item.qty * (item.weightPerBag || 25));
+                                        const weightStr = isWeight ? `${weightVal}kg` : `${item.qty} pcs`;
+
+                                        return (
+                                            <tr key={idx} className="align-top">
+                                                <td className="py-1.5 pr-1 font-bold whitespace-nowrap">{qtyStr}</td>
+                                                <td className="py-1.5 px-1 font-semibold leading-tight">{item.name}</td>
+                                                <td className="py-1.5 px-1 text-center font-medium whitespace-nowrap">{weightStr}</td>
+                                                <td className="py-1.5 px-1 text-right tabular">{item.price}</td>
+                                                <td className="py-1.5 pl-1 text-right font-bold tabular">{Math.round(item.total)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
 
-                        {/* --- 💰 PROFESSIONAL TOTALS SECTION 💰 --- */}
-                        {(() => {
-                            let subTotal = 0;
-                            let totalDiscount = 0;
-
-                            cart.forEach(item => {
-                                subTotal += (item.price * item.qty);
-                                totalDiscount += (item.discount || 0);
-                            });
-
-                            const finalPayable = subTotal - totalDiscount;
-
-                            return (
-                                <div className="border-t border-black pt-2 mb-4 space-y-1">
-
-                                    <div className="flex justify-between text-[11px] text-stone-700 font-semibold">
-                                        <span>Subtotal:</span>
-                                        <span>Rs. {Math.round(subTotal)}</span>
-                                    </div>
-
-                                    {totalDiscount > 0 && (
-                                        <div className="flex justify-between text-[11px] font-bold text-stone-600 border-b border-dotted border-stone-400 pb-1">
-                                            <span>Discount:</span>
-                                            <span>- Rs. {Math.round(totalDiscount)}</span>
-                                        </div>
-                                    )}
-
-                                    <div className="flex justify-between text-lg font-bold text-black border-t-2 border-black pt-1 mt-1">
-                                        <span>Total:</span>
-                                        <span>Rs. {Math.round(finalPayable)}</span>
-                                    </div>
+                        <div className="border-t-2 border-black pt-2 mb-4 space-y-1">
+                            <div className="flex justify-between items-end">
+                                <div className="text-right w-full">
+                                    <p className="text-xs font-black uppercase tracking-wider text-black">Total Amount</p>
+                                    <p className="text-2xl font-black text-black tabular">{Math.round(grandTotal).toLocaleString()}</p>
                                 </div>
-                            );
-                        })()}
+                            </div>
 
-                        {/* --- FOOTER MESSAGE --- */}
+                            <div className="border-t border-dotted border-stone-400 pt-1.5 mt-2 text-[10px] space-y-0.5">
+                                <div className="flex justify-between font-semibold text-stone-800">
+                                    <span>Payment Mode:</span>
+                                    <span className="font-bold uppercase text-black">{paymentMethod}</span>
+                                </div>
+                                {paymentMethod === "Udhar" && customerName && (
+                                    <div className="bg-stone-100 border border-stone-300 p-1 rounded mt-1">
+                                        <div className="flex justify-between font-bold text-black">
+                                            <span>Khata (Party):</span>
+                                            <span>{customerName}</span>
+                                        </div>
+                                        <p className="text-[9px] text-stone-600 mt-0.5">
+                                            Bill amount party ke khate mein add ho chuka hai.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
                         <div className="text-center text-[10px] text-black mb-4">
                             <div className="whitespace-pre-wrap leading-tight font-medium mb-2">
                                 {currentShop?.receiptMessage || "Thank you for shopping!\nNo Return / Exchange"}
@@ -780,7 +740,6 @@ export default function POSPage() {
                             </div>
                         </div>
 
-                        {/* --- BUTTONS --- */}
                         <div id="receipt-modal" className="flex flex-col gap-2 no-print">
                             <button onClick={handlePrint} className="w-full py-3 bg-green-600 text-white rounded-lg font-bold flex justify-center items-center gap-2 hover:bg-green-700">
                                 <Printer size={18} /> {t("printSlip")}

@@ -13,7 +13,6 @@ import {
 import { db } from "../firebase";
 import type { Product, UnitType } from "../../types";
 
-/** Form/DB ke beech ka data (id, ownerId aur timestamps ke baghair) */
 export interface ProductInput {
   name: string;
   buyingPrice: number;
@@ -25,16 +24,20 @@ export interface ProductInput {
   category?: string;
 }
 
-/** Shop ke saare products, naye pehle */
 export const listProducts = async (ownerId: string): Promise<Product[]> => {
   const snap = await getDocs(query(collection(db, "products"), where("ownerId", "==", ownerId)));
   const items = snap.docs.map((d) => {
     const data = d.data();
+    const total = data.stock ?? 0;
+    const shop = data.shopStock ?? 0;
+    const rawGudam = data.gudamStock ?? 0;
+    const gudam = (rawGudam + shop > total) ? Math.max(0, total - shop) : rawGudam;
     return {
       id: d.id,
       ...data,
-      gudamStock: data.gudamStock ?? 0,
-      shopStock: data.shopStock ?? data.stock ?? 0,
+      stock: total,
+      gudamStock: gudam,
+      shopStock: shop,
     } as Product;
   });
   return items.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
@@ -44,11 +47,16 @@ export const getProduct = async (id: string): Promise<Product | null> => {
   const snap = await getDoc(doc(db, "products", id));
   if (!snap.exists()) return null;
   const data = snap.data();
+  const total = data.stock ?? 0;
+  const shop = data.shopStock ?? 0;
+  const rawGudam = data.gudamStock ?? 0;
+  const gudam = (rawGudam + shop > total) ? Math.max(0, total - shop) : rawGudam;
   return {
     id: snap.id,
     ...data,
-    gudamStock: data.gudamStock ?? 0,
-    shopStock: data.shopStock ?? data.stock ?? 0,
+    stock: total,
+    gudamStock: gudam,
+    shopStock: shop,
   } as Product;
 };
 
@@ -88,7 +96,6 @@ export const deleteProduct = async (id: string): Promise<void> => {
   await deleteDoc(doc(db, "products", id));
 };
 
-/** Stock Transfer between Gudam and Shop */
 export const transferStock = async (
   productId: string,
   qty: number,
@@ -121,7 +128,6 @@ export const transferStock = async (
     updatedAt: new Date().toISOString(),
   });
 
-  // Log transfer
   await addDoc(collection(db, "stock_transfers"), {
     ownerId: product.ownerId,
     productId,
@@ -133,7 +139,6 @@ export const transferStock = async (
   });
 };
 
-/** Kitne products ka stock threshold se kam hai (dashboard low-stock card) */
 export const countLowStock = async (ownerId: string, threshold = 5): Promise<number> => {
   const snap = await getDocs(
     query(collection(db, "products"), where("ownerId", "==", ownerId), where("stock", "<", threshold))
@@ -141,7 +146,6 @@ export const countLowStock = async (ownerId: string, threshold = 5): Promise<num
   return snap.size;
 };
 
-/** Live products (stock change turant dikhe). Return: unsubscribe function. */
 export const subscribeProducts = (
   ownerId: string,
   onData: (products: Product[]) => void,
@@ -152,11 +156,21 @@ export const subscribeProducts = (
     (snap) => {
       const items = snap.docs.map((d) => {
         const data = d.data();
+        const total = data.stock ?? 0;
+        const shop = data.shopStock ?? 0;
+        const rawGudam = data.gudamStock ?? 0;
+        const gudam = (rawGudam + shop > total) ? Math.max(0, total - shop) : rawGudam;
+
+        if (rawGudam + shop > total) {
+          updateDoc(d.ref, { gudamStock: gudam, updatedAt: new Date().toISOString() }).catch(() => {});
+        }
+
         return {
           id: d.id,
           ...data,
-          gudamStock: data.gudamStock ?? 0,
-          shopStock: data.shopStock ?? data.stock ?? 0,
+          stock: total,
+          gudamStock: gudam,
+          shopStock: shop,
         } as Product;
       });
       onData(items);

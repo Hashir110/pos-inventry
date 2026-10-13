@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
+import DataTable from "../../components/DataTable";
 import { useStore } from "../../store/useStore";
 import { subscribeProducts } from "../../lib/services/products";
 import { subscribeCustomers } from "../../lib/services/customers";
@@ -13,40 +14,56 @@ import {
   Search,
   CheckCircle2,
   Trash2,
-  Truck,
   User,
   Package,
   X,
+  History,
+  Warehouse,
+  ChevronDown,
+  Check,
+  Wallet,
+  Loader2,
 } from "lucide-react";
 import { toast } from "react-toastify";
+import PageHeader from "../../components/PageHeader";
+
+interface PassItem {
+  productId: string;
+  productName: string;
+  qty: number;
+  weight: number;
+  unit: string;
+  maxGudamQty: number;
+}
 
 export default function GatePassPage() {
   const { currentShop } = useStore();
   const ownerId = currentShop?.uid || "";
 
-  const [activeTab, setActiveTab] = useState<"issue" | "history">("issue");
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [gatePasses, setGatePasses] = useState<GatePass[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [stockSearch, setStockSearch] = useState("");
 
-  // Form State
   const [customerName, setCustomerName] = useState("");
   const [customerId, setCustomerId] = useState("");
-  const [vehicleNo, setVehicleNo] = useState("");
-  const [driverName, setDriverName] = useState("");
-  const [notes, setNotes] = useState("");
-  const [items, setItems] = useState<
-    Array<{ productId: string; productName: string; qty: number; unit: string; maxGudamQty: number }>
-  >([]);
+  const [items, setItems] = useState<PassItem[]>([]);
 
-  // Selected item inputs
   const [selectedProductId, setSelectedProductId] = useState("");
-  const [itemQty, setItemQty] = useState(1);
+  const [itemQty, setItemQty] = useState<number | "">(1);
+  const [itemWeight, setItemWeight] = useState<number | "">(25);
 
-  // Print Modal State
+  const [isPartyOpen, setIsPartyOpen] = useState(false);
+  const [partySearch, setPartySearch] = useState("");
+  const partyDropdownRef = useRef<HTMLDivElement>(null);
+
+  const [isProductOpen, setIsProductOpen] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const productDropdownRef = useRef<HTMLDivElement>(null);
+
   const [printPass, setPrintPass] = useState<GatePass | null>(null);
-  const [printFormat, setPrintFormat] = useState<"A4" | "thermal">("A4");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (!ownerId) return;
@@ -62,43 +79,122 @@ export default function GatePassPage() {
     };
   }, [ownerId]);
 
-  const handleAddProductToPass = () => {
-    if (!selectedProductId) {
-      toast.warn("Product select karein");
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        partyDropdownRef.current &&
+        !partyDropdownRef.current.contains(e.target as Node)
+      ) {
+        setIsPartyOpen(false);
+      }
+      if (
+        productDropdownRef.current &&
+        !productDropdownRef.current.contains(e.target as Node)
+      ) {
+        setIsProductOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedCustomer = useMemo(
+    () => customers.find((c) => c.id === customerId) || null,
+    [customers, customerId]
+  );
+
+  const filteredCustomers = useMemo(() => {
+    const term = partySearch.trim().toLowerCase();
+    if (!term) return customers;
+    return customers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(term) ||
+        (c.phone && c.phone.includes(term))
+    );
+  }, [customers, partySearch]);
+
+  const selectedProduct = useMemo(
+    () => products.find((p) => p.id === selectedProductId),
+    [products, selectedProductId]
+  );
+
+  const filteredDropdownProducts = useMemo(() => {
+    const term = productSearch.trim().toLowerCase();
+    if (!term) return products;
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(term) ||
+        (p.category && p.category.toLowerCase().includes(term))
+    );
+  }, [products, productSearch]);
+
+  const handleProductSelect = (prodId: string) => {
+    setSelectedProductId(prodId);
+    setIsProductOpen(false);
+    setProductSearch("");
+    const prod = products.find((p) => p.id === prodId);
+    if (!prod) {
+      setItemQty(1);
+      setItemWeight(25);
       return;
     }
-    const prod = products.find((p) => p.id === selectedProductId);
-    if (!prod) return;
+    const isWeight = prod.unitType === "weight";
+    setItemQty(1);
+    setItemWeight(isWeight ? 25 : 0);
+  };
 
-    const gudamStock = prod.gudamStock ?? 0;
+  const handleQtyChange = (qtyVal: number) => {
+    const q = isNaN(qtyVal) || qtyVal < 1 ? 1 : qtyVal;
+    setItemQty(q);
+    if (selectedProduct?.unitType === "weight") {
+      setItemWeight(q * 25);
+    }
+  };
+
+  const handleAddItem = () => {
+    if (!selectedProductId || !selectedProduct) {
+      toast.warn("Item / Product select karein");
+      return;
+    }
+
+    const gudamStock = selectedProduct.gudamStock ?? 0;
     if (gudamStock <= 0) {
-      toast.error(`"${prod.name}" ka Gudam mein stock 0 hai!`);
+      toast.error(`"${selectedProduct.name}" ka Gudam mein stock 0 hai!`);
       return;
     }
 
-    if (itemQty <= 0) {
+    const qty = Number(itemQty) || 1;
+    if (qty <= 0) {
       toast.warn("Sahi quantity likhein");
       return;
     }
 
-    if (itemQty > gudamStock) {
-      toast.warn(`Gudam mein sirf ${gudamStock} available hain!`);
+    const isWeight = selectedProduct.unitType === "weight";
+    const weight = isWeight ? Number(itemWeight) || qty * 25 : 0;
+
+    const deductAmount = isWeight ? weight : qty;
+    if (deductAmount > gudamStock) {
+      toast.warn(
+        `Gudam mein sirf ${gudamStock} ${isWeight ? "KG" : "Bags"} available hain!`
+      );
       return;
     }
 
     setItems((prev) => [
       ...prev,
       {
-        productId: prod.id,
-        productName: prod.name,
-        qty: Number(itemQty),
-        unit: prod.unitType === "count" ? "Pieces/Bags" : "KG",
+        productId: selectedProduct.id,
+        productName: selectedProduct.name,
+        qty,
+        weight,
+        unit: isWeight ? "KG" : "Bags/Pcs",
         maxGudamQty: gudamStock,
       },
     ]);
 
     setSelectedProductId("");
     setItemQty(1);
+    setItemWeight(25);
   };
 
   const handleRemoveItem = (index: number) => {
@@ -107,502 +203,711 @@ export default function GatePassPage() {
 
   const handleCreateGatePass = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerName.trim()) {
-      toast.warn("Customer / Party Name enter karein");
+    const finalPartyName = customerName.trim();
+    if (!finalPartyName) {
+      toast.warn("Party / Customer select karein");
       return;
     }
     if (items.length === 0) {
-      toast.warn("At least 1 item add karein");
+      toast.warn("Maal / Item add karein");
       return;
     }
 
+    setSubmitting(true);
     try {
       const created = await issueGatePass(ownerId, {
-        customerName: customerName.trim(),
-        customerId: customerId || undefined,
-        vehicleNo: vehicleNo.trim(),
-        driverName: driverName.trim(),
-        notes: notes.trim(),
+        customerName: finalPartyName,
+        ...(customerId ? { customerId } : {}),
         items: items.map((i) => ({
           productId: i.productId,
           productName: i.productName,
           qty: i.qty,
-          unit: i.unit,
+          weight: i.weight || 0,
+          unit: i.unit || "",
         })),
       });
 
-      toast.success(`Gate Pass #${created.gatePassNo} successfully issued!`);
-      setPrintPass(created);
+      toast.success(`Gate Pass #${created.gatePassNo} save ho gaya!`);
 
-      // Reset Form
       setCustomerName("");
       setCustomerId("");
-      setVehicleNo("");
-      setDriverName("");
-      setNotes("");
       setItems([]);
+      setSelectedProductId("");
+      setItemQty(1);
+      setItemWeight(25);
     } catch (err: any) {
       toast.error(err.message || "Failed to issue gate pass");
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const filteredPasses = gatePasses.filter(
-    (gp) =>
-      gp.gatePassNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      gp.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (gp.vehicleNo && gp.vehicleNo.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredStockProducts = useMemo(() => {
+    const term = stockSearch.trim().toLowerCase();
+    if (!term) return products;
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(term) ||
+        (p.category && p.category.toLowerCase().includes(term))
+    );
+  }, [products, stockSearch]);
+
+  const filteredPasses = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return gatePasses;
+    return gatePasses.filter(
+      (gp) =>
+        gp.gatePassNo.toLowerCase().includes(term) ||
+        gp.customerName.toLowerCase().includes(term)
+    );
+  }, [gatePasses, searchTerm]);
 
   return (
-    <div className="space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-sm">
-        <div>
-          <h1 className="text-xl font-extrabold text-stone-900 flex items-center gap-2">
-            <FileText className="text-brand-600" size={24} /> Gate Pass (Gudam Dispatch)
-          </h1>
-          <p className="text-xs text-stone-500 mt-1">
-            Gudam se party ko maal dene ke liye parchi print karein aur stock minus karein
-          </p>
-        </div>
+    <div className="space-y-6 max-w-7xl mx-auto">
+      <PageHeader
+        title="Gate Pass"
+        subtitle="Gudam se party ko maal dispatch karne ke liye entry karein aur stock maintain karein"
+      />
 
-        {/* Tab Buttons */}
-        <div className="flex gap-2 bg-stone-100 p-1.5 rounded-xl self-start sm:self-auto">
-          <button
-            onClick={() => setActiveTab("issue")}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-extrabold rounded-lg transition ${
-              activeTab === "issue"
-                ? "bg-brand-600 text-white shadow"
-                : "text-stone-600 hover:text-stone-900"
-            }`}
-          >
-            <Plus size={16} /> Naya Gate Pass
-          </button>
-          <button
-            onClick={() => setActiveTab("history")}
-            className={`flex items-center gap-2 px-4 py-2 text-xs font-extrabold rounded-lg transition ${
-              activeTab === "history"
-                ? "bg-brand-600 text-white shadow"
-                : "text-stone-600 hover:text-stone-900"
-            }`}
-          >
-            <FileText size={16} /> Record & History ({gatePasses.length})
-          </button>
-        </div>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <form onSubmit={handleCreateGatePass} className="space-y-6">
+              <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-white">
+                  <h5 className="flex items-center gap-2 text-sm font-bold text-stone-800">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full border border-brand-500 text-brand-600 text-xs font-bold">
+                      <User size={12} />
+                    </span>
+                    <span>Party & Maal Details</span>
+                  </h5>
+                </div>
 
-      {activeTab === "issue" ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Form */}
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-stone-200 p-6 shadow-sm space-y-6">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-stone-700 border-b pb-3">
-              Party & Vehicle Details
-            </h2>
+                <div className="p-6 space-y-5">
+                  <div>
+                    <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                      Party / Customer Name <span className="text-red-500">*</span>
+                    </label>
 
-            <form onSubmit={handleCreateGatePass} className="space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Select Customer or Enter Name */}
-                <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">
-                    Party / Customer Name *
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Party ka naam likhein ya select karein"
-                      value={customerName}
-                      onChange={(e) => {
-                        setCustomerName(e.target.value);
-                        setCustomerId("");
-                      }}
-                      className="input-field pl-9"
-                      required
-                    />
-                    <User className="absolute left-3 top-2.5 text-stone-400" size={16} />
+                    <div className="relative w-full" ref={partyDropdownRef}>
+                        <button
+                          type="button"
+                          onClick={() => setIsPartyOpen((prev) => !prev)}
+                          className="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 bg-white rounded-xl border border-stone-300 text-left transition shadow-sm hover:border-brand-400 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <User
+                              size={16}
+                              className={
+                                selectedCustomer ? "text-brand-600 shrink-0" : "text-stone-400 shrink-0"
+                              }
+                            />
+                            <div className="truncate">
+                              {selectedCustomer ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-xs text-stone-900 truncate">
+                                    {selectedCustomer.name}
+                                  </span>
+                                  {selectedCustomer.phone && (
+                                    <span className="text-[11px] text-stone-400 tabular shrink-0">
+                                      ({selectedCustomer.phone})
+                                    </span>
+                                  )}
+                                  {selectedCustomer.balance > 0 ? (
+                                    <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">
+                                      Due: Rs. {Math.round(selectedCustomer.balance).toLocaleString()}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded shrink-0">
+                                      Rs. 0
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-xs font-medium text-stone-400">
+                                  -- Party / Customer Select Karein --
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            {selectedCustomer && (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setCustomerId("");
+                                  setCustomerName("");
+                                }}
+                                className="p-1 text-stone-400 hover:text-stone-700 rounded hover:bg-stone-100"
+                                title="Clear Selection"
+                              >
+                                <X size={14} />
+                              </span>
+                            )}
+                            <ChevronDown
+                              size={16}
+                              className={`text-stone-400 transition-transform ${isPartyOpen ? "rotate-180" : ""
+                                }`}
+                            />
+                          </div>
+                        </button>
+
+                        {isPartyOpen && (
+                          <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl border border-stone-200 shadow-xl overflow-hidden">
+                            <div className="p-2.5 border-b border-stone-100 bg-stone-50/80">
+                              <div className="relative">
+                                <Search
+                                  size={14}
+                                  className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400"
+                                />
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={partySearch}
+                                  onChange={(e) => setPartySearch(e.target.value)}
+                                  placeholder="Party ka naam ya phone search karein..."
+                                  className="w-full pl-8 pr-7 py-2 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                />
+                                {partySearch && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPartySearch("")}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                                  >
+                                    <X size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="max-h-56 overflow-y-auto divide-y divide-stone-50">
+                              {filteredCustomers.length === 0 ? (
+                                <div className="p-5 text-center text-stone-400 text-xs">
+                                  <p>Koi party nahi mili {partySearch ? `"${partySearch}"` : ""}</p>
+                                </div>
+                              ) : (
+                                filteredCustomers.map((c) => {
+                                  const isSelected = c.id === customerId;
+                                  return (
+                                    <button
+                                      key={c.id}
+                                      type="button"
+                                      onClick={() => {
+                                        setCustomerId(c.id);
+                                        setCustomerName(c.name);
+                                        setIsPartyOpen(false);
+                                        setPartySearch("");
+                                      }}
+                                      className={`w-full px-3.5 py-2.5 text-left flex items-center justify-between text-xs transition ${isSelected
+                                          ? "bg-brand-50 text-brand-900 font-bold"
+                                          : "hover:bg-stone-50 text-stone-800"
+                                        }`}
+                                    >
+                                      <div className="min-w-0 pr-2">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-bold truncate">{c.name}</span>
+                                          {c.phone && (
+                                            <span className="text-[11px] text-stone-400 tabular shrink-0">
+                                              ({c.phone})
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        {c.balance > 0 ? (
+                                          <span className="text-[10px] font-bold tabular text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                            <Wallet size={10} />
+                                            Rs. {Math.round(c.balance).toLocaleString()}
+                                          </span>
+                                        ) : (
+                                          <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                            Rs. 0
+                                          </span>
+                                        )}
+                                        {isSelected && <Check size={14} className="text-brand-600" />}
+                                      </div>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                   </div>
-                  {customers.length > 0 && (
-                    <select
-                      onChange={(e) => {
-                        if (e.target.value) {
-                          const c = customers.find((cust) => cust.id === e.target.value);
-                          if (c) {
-                            setCustomerName(c.name);
-                            setCustomerId(c.id);
-                          }
-                        }
-                      }}
-                      className="mt-1.5 text-xs text-stone-500 bg-stone-50 border border-stone-200 rounded-lg p-1.5 w-full"
-                    >
-                      <option value="">-- Ya Registered Party Select Karein --</option>
-                      {customers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} {c.phone ? `(${c.phone})` : ""}
-                        </option>
-                      ))}
-                    </select>
+
+                  <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-4 space-y-4">
+                    <div className="flex items-center gap-2 text-xs font-bold text-stone-700 uppercase tracking-wider">
+                      <Package size={15} className="text-brand-600" />
+                      <span>Dispatch Item Entry</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                      <div className="sm:col-span-6">
+                        <label className="block text-[11px] font-bold text-stone-600 mb-1">
+                          Item / Product <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative w-full" ref={productDropdownRef}>
+                          <button
+                            type="button"
+                            onClick={() => setIsProductOpen((prev) => !prev)}
+                            className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-white rounded-xl border border-stone-300 text-left transition shadow-sm hover:border-brand-400 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Package
+                                size={15}
+                                className={
+                                  selectedProduct ? "text-brand-600 shrink-0" : "text-stone-400 shrink-0"
+                                }
+                              />
+                              <div className="truncate">
+                                {selectedProduct ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-xs text-stone-900 truncate">
+                                      {selectedProduct.name}
+                                    </span>
+                                    <span
+                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 tabular ${(selectedProduct.gudamStock ?? 0) > 0
+                                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                          : "bg-red-50 text-red-700 border border-red-200"
+                                        }`}
+                                    >
+                                      Gudam: {selectedProduct.gudamStock ?? 0}{" "}
+                                      {selectedProduct.unitType === "weight" ? "KG" : "Bags"}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs font-medium text-stone-400">
+                                    -- Select Product / Maal --
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              {selectedProduct && (
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedProductId("");
+                                    setItemQty(1);
+                                    setItemWeight(25);
+                                  }}
+                                  className="p-1 text-stone-400 hover:text-stone-700 rounded hover:bg-stone-100"
+                                  title="Clear Selection"
+                                >
+                                  <X size={13} />
+                                </span>
+                              )}
+                              <ChevronDown
+                                size={15}
+                                className={`text-stone-400 transition-transform ${isProductOpen ? "rotate-180" : ""
+                                  }`}
+                              />
+                            </div>
+                          </button>
+
+                          {isProductOpen && (
+                            <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl border border-stone-200 shadow-xl overflow-hidden">
+                              <div className="p-2 border-b border-stone-100 bg-stone-50/80">
+                                <div className="relative">
+                                  <Search
+                                    size={13}
+                                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
+                                  />
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    value={productSearch}
+                                    onChange={(e) => setProductSearch(e.target.value)}
+                                    placeholder="Product search karein..."
+                                    className="w-full pl-7 pr-7 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                  />
+                                  {productSearch && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setProductSearch("")}
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="max-h-56 overflow-y-auto divide-y divide-stone-50">
+                                {filteredDropdownProducts.length === 0 ? (
+                                  <div className="p-4 text-center text-stone-400 text-xs">
+                                    <p>Koi product nahi mila {productSearch ? `"${productSearch}"` : ""}</p>
+                                  </div>
+                                ) : (
+                                  filteredDropdownProducts.map((p) => {
+                                    const isSelected = p.id === selectedProductId;
+                                    const stock = p.gudamStock ?? 0;
+                                    const isWt = p.unitType === "weight";
+                                    const isAvailable = stock > 0;
+                                    return (
+                                      <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={() => handleProductSelect(p.id)}
+                                        className={`w-full px-3 py-2 text-left flex items-center justify-between text-xs transition ${isSelected
+                                            ? "bg-brand-50 text-brand-900 font-bold"
+                                            : "hover:bg-stone-50 text-stone-800"
+                                          }`}
+                                      >
+                                        <div className="min-w-0 pr-2">
+                                          <p className="font-bold truncate">{p.name}</p>
+                                          <p className="text-[10px] text-stone-400">
+                                            {p.category || "General"}
+                                          </p>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <span
+                                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold tabular ${isAvailable
+                                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                                : "bg-red-50 text-red-700 border border-red-200"
+                                              }`}
+                                          >
+                                            Gudam: {stock} {isWt ? "KG" : "Bags"}
+                                          </span>
+                                          {isSelected && (
+                                            <Check size={14} className="text-brand-600" />
+                                          )}
+                                        </div>
+                                      </button>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-3">
+                        <label className="block text-[11px] font-bold text-stone-600 mb-1">
+                          Qty (Bags) <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="Qty"
+                          value={itemQty}
+                          onChange={(e) => handleQtyChange(Number(e.target.value))}
+                          className="field w-full text-xs font-bold tabular !py-2"
+                        />
+                      </div>
+
+                      <div className="sm:col-span-3">
+                        <label className="block text-[11px] font-bold text-stone-600 mb-1">
+                          Total Wt (KG)
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="Weight"
+                          value={itemWeight}
+                          onChange={(e) => setItemWeight(Number(e.target.value))}
+                          disabled={selectedProduct?.unitType === "count"}
+                          className="field w-full text-xs font-bold tabular !py-2 disabled:bg-stone-100 disabled:text-stone-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleAddItem}
+                        className="btn-primary !py-2 !px-4 text-xs font-bold flex items-center gap-1.5"
+                      >
+                        <Plus size={15} /> Item Add Karein
+                      </button>
+                    </div>
+                  </div>
+
+                  {items.length > 0 && (
+                    <div className="overflow-hidden border border-stone-200 rounded-xl">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-stone-100 text-stone-700 uppercase font-bold border-b border-stone-200">
+                          <tr>
+                            <th className="p-3 text-center">#</th>
+                            <th className="p-3">Item Name</th>
+                            <th className="p-3 text-center">Qty (Bags)</th>
+                            <th className="p-3 text-center">Total Weight</th>
+                            <th className="p-3 text-right">Gudam Stock</th>
+                            <th className="p-3 text-center">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stone-100">
+                          {items.map((it, idx) => (
+                            <tr key={idx} className="hover:bg-stone-50">
+                              <td className="p-3 text-center font-bold text-stone-400">{idx + 1}</td>
+                              <td className="p-3 font-bold text-stone-900">{it.productName}</td>
+                              <td className="p-3 text-center font-bold text-stone-800 tabular">
+                                {String(it.qty).padStart(2, "0")} Bags
+                              </td>
+                              <td className="p-3 text-center font-extrabold text-brand-700 tabular">
+                                {it.weight > 0 ? `${it.weight} kg` : "—"}
+                              </td>
+                              <td className="p-3 text-right text-stone-500 tabular">
+                                {it.maxGudamQty} left
+                              </td>
+                              <td className="p-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveItem(idx)}
+                                  className="p-1 text-red-500 hover:bg-red-50 rounded"
+                                  title="Item Delete"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
-                </div>
 
-                {/* Vehicle No */}
-                <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">
-                    Gari No. / Vehicle No. (Optional)
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="e.g. LES-1234 / Suzuki"
-                      value={vehicleNo}
-                      onChange={(e) => setVehicleNo(e.target.value)}
-                      className="input-field pl-9"
-                    />
-                    <Truck className="absolute left-3 top-2.5 text-stone-400" size={16} />
-                  </div>
-                </div>
-
-                {/* Driver Name */}
-                <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">
-                    Driver Name (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Driver ka naam"
-                    value={driverName}
-                    onChange={(e) => setDriverName(e.target.value)}
-                    className="input-field"
-                  />
-                </div>
-
-                {/* Notes */}
-                <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">
-                    Notes / Instruction (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Special Bags / Order Ref"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="input-field"
-                  />
-                </div>
-              </div>
-
-              {/* Add Items Box */}
-              <div className="bg-stone-50 rounded-xl p-4 border border-stone-200 space-y-3">
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-stone-700 flex items-center gap-2">
-                  <Package size={16} className="text-brand-600" /> Gudam Stock Items Add Karein
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2">
-                    <select
-                      value={selectedProductId}
-                      onChange={(e) => setSelectedProductId(e.target.value)}
-                      className="input-field"
-                    >
-                      <option value="">-- Product Select Karein --</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} (Gudam Stock: {p.gudamStock ?? 0} {p.unitType === "count" ? "Bags" : "KG"})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      min="1"
-                      placeholder="Qty"
-                      value={itemQty}
-                      onChange={(e) => setItemQty(Math.max(1, Number(e.target.value)))}
-                      className="input-field w-24"
-                    />
+                  <div className="pt-2">
                     <button
-                      type="button"
-                      onClick={handleAddProductToPass}
-                      className="btn-primary flex-1 !py-2 text-xs font-bold"
+                      type="submit"
+                      disabled={submitting || items.length === 0}
+                      className="btn-primary w-full !py-3 text-sm font-bold flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 min-h-[46px]"
                     >
-                      Add Item
+                      {submitting ? (
+                        <Loader2 size={20} className="animate-spin text-white" />
+                      ) : (
+                        <>
+                          <CheckCircle2 size={18} />
+                          <span>Gate Pass Save Karein</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>
               </div>
-
-              {/* Added Items Table */}
-              {items.length > 0 && (
-                <div className="overflow-x-auto border border-stone-200 rounded-xl">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-stone-100 text-stone-700 uppercase font-bold border-b border-stone-200">
-                      <tr>
-                        <th className="p-3">#</th>
-                        <th className="p-3">Item Name</th>
-                        <th className="p-3">Quantity</th>
-                        <th className="p-3 text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-100">
-                      {items.map((it, idx) => (
-                        <tr key={idx} className="hover:bg-stone-50">
-                          <td className="p-3 font-bold text-stone-500">{idx + 1}</td>
-                          <td className="p-3 font-bold text-stone-900">{it.productName}</td>
-                          <td className="p-3 font-extrabold text-brand-700">
-                            {it.qty} {it.unit}
-                          </td>
-                          <td className="p-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItem(idx)}
-                              className="p-1 text-red-500 hover:bg-red-50 rounded"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={items.length === 0}
-                className="btn-primary w-full !py-3.5 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <CheckCircle2 size={18} /> Issue Gate Pass & Print Parchi
-              </button>
             </form>
           </div>
 
-          {/* Quick Summary / Gudam Stock Status */}
-          <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm space-y-4 h-fit">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-stone-600 border-b pb-2">
-              📦 Current Gudam Stock Summary
-            </h3>
-            <div className="space-y-2 max-h-[400px] overflow-y-auto">
-              {products.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center justify-between p-2.5 rounded-xl bg-stone-50 border border-stone-100"
-                >
-                  <div>
-                    <p className="text-xs font-bold text-stone-900">{p.name}</p>
-                    <p className="text-[11px] text-stone-500">
-                      Category: {p.category || "General"}
-                    </p>
-                  </div>
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-xs font-extrabold ${
-                      (p.gudamStock ?? 0) > 0
-                        ? "bg-emerald-100 text-emerald-800"
-                        : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    {p.gudamStock ?? 0} {p.unitType === "count" ? "Bags" : "KG"}
-                  </span>
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-stone-200 bg-white flex items-center justify-between">
+                <h5 className="flex items-center gap-2 text-xs font-bold text-stone-800 uppercase tracking-wider">
+                  <Warehouse size={15} className="text-brand-600" />
+                  <span>Gudam Stock Summary</span>
+                </h5>
+                <span className="text-[11px] font-bold text-stone-400">
+                  {products.length} Products
+                </span>
+              </div>
+
+              <div className="p-3 border-b border-stone-100 bg-stone-50/60">
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Stock search karein..."
+                    value={stockSearch}
+                    onChange={(e) => setStockSearch(e.target.value)}
+                    className="field w-full pl-8 !py-1.5 text-xs"
+                  />
+                  <Search className="absolute left-2.5 top-2 text-stone-400" size={13} />
                 </div>
-              ))}
+              </div>
+
+              <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto divide-y divide-stone-50">
+                {filteredStockProducts.length === 0 ? (
+                  <p className="p-6 text-center text-xs text-stone-400">Koi item nahi mila</p>
+                ) : (
+                  filteredStockProducts.map((p) => {
+                    const stock = p.gudamStock ?? 0;
+                    const isWt = p.unitType === "weight";
+                    const isAvailable = stock > 0;
+                    return (
+                      <div
+                        key={p.id}
+                        className="pt-2 first:pt-0 flex items-center justify-between gap-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-stone-900 truncate">{p.name}</p>
+                          <p className="text-[10px] text-stone-400">
+                            {p.category || "General"}
+                          </p>
+                        </div>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-bold shrink-0 tabular ${isAvailable
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-red-50 text-red-700 border border-red-200"
+                            }`}
+                        >
+                          {stock} {isWt ? "KG" : "Bags"}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
         </div>
-      ) : (
-        /* History Tab */
-        <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
-            <h2 className="text-sm font-bold text-stone-800 uppercase tracking-wider">
-              Issued Gate Passes History
-            </h2>
-            <div className="relative w-full sm:w-64">
+
+        <DataTable
+          data={filteredPasses}
+          rowKey={(gp) => gp.id}
+          emptyText="Koi Gate Pass record nahi mila"
+          toolbarLeft={
+            <h5 className="text-sm font-bold text-stone-800 uppercase tracking-wider flex items-center gap-2">
+              <History size={16} className="text-brand-600" />
+              <span>Issued Gate Passes History</span>
+            </h5>
+          }
+          toolbarRight={
+            <div className="relative w-full sm:w-72">
               <input
                 type="text"
-                placeholder="Search Gate Pass # / Party..."
+                placeholder="Gate Pass # / Party search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="input-field pl-9 text-xs"
+                className="field w-full pl-8 !py-1.5 text-xs"
               />
-              <Search className="absolute left-3 top-2.5 text-stone-400" size={14} />
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" size={14} />
             </div>
-          </div>
+          }
+          columns={[
+            { key: "no", header: "Gate Pass #", cell: (gp) => <span className="font-extrabold text-brand-700 font-mono">{gp.gatePassNo}</span> },
+            {
+              key: "date",
+              header: "Date",
+              className: "whitespace-nowrap",
+              cell: (gp) => (
+                <span className="text-stone-600">
+                  {new Date(gp.date).toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              ),
+            },
+            { key: "party", header: "Party Name", cell: (gp) => <span className="font-bold text-stone-900">{gp.customerName}</span> },
+            {
+              key: "items",
+              header: "Items & Weight",
+              cell: (gp) => (
+                <span className="font-medium text-stone-700">
+                  {gp.items
+                    .map((i) =>
+                      i.weight && i.weight > 0
+                        ? `${i.productName} (${i.qty} Bags • ${i.weight}kg)`
+                        : `${i.productName} (${i.qty} ${i.unit || "Bags"})`
+                    )
+                    .join(", ")}
+                </span>
+              ),
+            },
+            {
+              key: "status",
+              header: "Status",
+              align: "center",
+              cell: (gp) => <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">{gp.status}</span>,
+            },
+            {
+              key: "slip",
+              header: "Slip",
+              align: "right",
+              cell: (gp) => (
+                <button onClick={() => setPrintPass(gp)} className="btn-ghost !py-1 !px-2.5 text-xs inline-flex items-center gap-1.5">
+                  <Printer size={13} /> Parchi
+                </button>
+              ),
+            },
+          ]}
+        />
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-stone-100 text-stone-700 font-bold uppercase">
-                <tr>
-                  <th className="p-3">Gate Pass #</th>
-                  <th className="p-3">Date</th>
-                  <th className="p-3">Party Name</th>
-                  <th className="p-3">Items & Qty</th>
-                  <th className="p-3">Vehicle No</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Print</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                {filteredPasses.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-6 text-center text-stone-400">
-                      Koi Gate Pass record nahi mila
-                    </td>
-                  </tr>
-                ) : (
-                  filteredPasses.map((gp) => (
-                    <tr key={gp.id} className="hover:bg-stone-50">
-                      <td className="p-3 font-extrabold text-brand-700">{gp.gatePassNo}</td>
-                      <td className="p-3 text-stone-500">
-                        {new Date(gp.date).toLocaleDateString("en-PK", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </td>
-                      <td className="p-3 font-bold text-stone-900">{gp.customerName}</td>
-                      <td className="p-3 font-medium text-stone-700">
-                        {gp.items.map((i) => `${i.productName} (${i.qty} ${i.unit || ""})`).join(", ")}
-                      </td>
-                      <td className="p-3 text-stone-600">{gp.vehicleNo || "-"}</td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">
-                          {gp.status}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right">
-                        <button
-                          onClick={() => setPrintPass(gp)}
-                          className="btn-ghost !py-1 !px-2.5 text-xs flex items-center gap-1.5 ml-auto"
-                        >
-                          <Printer size={14} /> Print
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Printable Modal (A4 & Thermal options) */}
       {printPass && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-pop w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-2xl shadow-pop w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-stone-50">
               <div className="flex items-center gap-2">
-                <Printer size={18} className="text-brand-600" />
-                <h3 className="font-extrabold text-stone-900 text-sm">
-                  Gate Pass #{printPass.gatePassNo} Print Preview
+                <Printer size={16} className="text-brand-600" />
+                <h3 className="font-bold text-stone-900 text-sm">
+                  Gate Pass #{printPass.gatePassNo}
                 </h3>
               </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={printFormat}
-                  onChange={(e) => setPrintFormat(e.target.value as "A4" | "thermal")}
-                  className="text-xs bg-white border border-stone-300 rounded-lg px-2 py-1 font-bold"
-                >
-                  <option value="A4">A4 Slip Format</option>
-                  <option value="thermal">80mm Thermal Slip</option>
-                </select>
-                <button
-                  onClick={() => setPrintPass(null)}
-                  className="rounded-lg p-1 text-stone-400 hover:bg-stone-200"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-
-            {/* Print Area */}
-            <div className="p-6 overflow-y-auto flex-1 bg-stone-100" id="print-area">
-              <div
-                className={`bg-white p-6 rounded-xl shadow border border-stone-200 mx-auto ${
-                  printFormat === "thermal" ? "max-w-[300px] text-xs" : "max-w-md text-sm"
-                }`}
+              <button
+                onClick={() => setPrintPass(null)}
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-200"
               >
-                {/* Receipt Header */}
-                <div className="text-center border-b pb-4 mb-4">
-                  <h2 className="font-black text-lg text-stone-900 uppercase tracking-wide">
-                    {currentShop?.shopName || "TRADERS GUDAM"}
-                  </h2>
-                  <p className="text-xs text-stone-500 font-bold uppercase tracking-widest mt-0.5">
-                    *** GATE PASS / DISPATCH SLIP ***
-                  </p>
-                  <p className="text-[11px] text-stone-400 mt-1">
-                    Pass #: <span className="font-bold text-stone-800">{printPass.gatePassNo}</span> | Date:{" "}
-                    {new Date(printPass.date).toLocaleDateString()}
-                  </p>
-                </div>
+                <X size={18} />
+              </button>
+            </div>
 
-                {/* Details */}
-                <div className="space-y-1 mb-4 text-stone-800 text-xs">
-                  <p>
-                    <span className="font-bold">Party Name:</span> {printPass.customerName}
-                  </p>
-                  {printPass.vehicleNo && (
-                    <p>
-                      <span className="font-bold">Vehicle No:</span> {printPass.vehicleNo}
-                    </p>
-                  )}
-                  {printPass.driverName && (
-                    <p>
-                      <span className="font-bold">Driver Name:</span> {printPass.driverName}
-                    </p>
-                  )}
-                </div>
+            <div className="p-6 overflow-y-auto flex-1 bg-white">
+              <div className="text-center border-b border-stone-200 pb-3 mb-3">
+                <h2 className="font-extrabold text-base text-stone-900 uppercase">
+                  {currentShop?.shopName || "GUDAM DISPATCH SLIP"}
+                </h2>
+                <p className="text-[11px] text-stone-500 font-bold uppercase tracking-widest mt-0.5">
+                  Gate Pass
+                </p>
+                <p className="text-[11px] text-stone-400 mt-1 font-mono">
+                  #{printPass.gatePassNo} • {new Date(printPass.date).toLocaleDateString()}
+                </p>
+              </div>
 
-                {/* Items Table */}
-                <table className="w-full text-left text-xs border-t border-b border-stone-300 my-3">
-                  <thead>
-                    <tr className="border-b border-stone-200 font-bold text-stone-700">
-                      <th className="py-2">Item</th>
-                      <th className="py-2 text-right">Dispatch Qty</th>
+              <div className="space-y-1 mb-4 text-xs text-stone-700">
+                <p>
+                  <span className="font-bold text-stone-900">Party:</span> {printPass.customerName}
+                </p>
+              </div>
+
+              <table className="w-full text-left text-xs border-t border-b border-stone-200 my-3">
+                <thead>
+                  <tr className="border-b border-stone-200 font-bold text-stone-700">
+                    <th className="py-2">Item</th>
+                    <th className="py-2 text-center">Bags</th>
+                    <th className="py-2 text-right">Total Wt</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {printPass.items.map((it, idx) => (
+                    <tr key={idx}>
+                      <td className="py-2 font-bold text-stone-900">{it.productName}</td>
+                      <td className="py-2 text-center text-stone-800 font-semibold">
+                        {it.qty} Bags
+                      </td>
+                      <td className="py-2 text-right font-extrabold text-stone-900">
+                        {it.weight ? `${it.weight} kg` : "—"}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-100">
-                    {printPass.items.map((it, idx) => (
-                      <tr key={idx}>
-                        <td className="py-2 font-bold text-stone-900">{it.productName}</td>
-                        <td className="py-2 text-right font-black text-stone-900">
-                          {it.qty} {it.unit || ""}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  ))}
+                </tbody>
+              </table>
 
-                {printPass.notes && (
-                  <p className="text-[11px] text-stone-500 italic mb-4">
-                    Note: {printPass.notes}
-                  </p>
-                )}
-
-                {/* Signatures */}
-                <div className="grid grid-cols-2 gap-4 mt-8 text-center text-[10px] text-stone-500 pt-4 border-t border-dashed border-stone-300">
-                  <div>
-                    <div className="border-b border-stone-400 h-6 mb-1"></div>
-                    <span>Gudam Incharge Sign</span>
-                  </div>
-                  <div>
-                    <div className="border-b border-stone-400 h-6 mb-1"></div>
-                    <span>Receiver / Driver Sign</span>
-                  </div>
+              <div className="grid grid-cols-2 gap-4 mt-8 text-center text-[10px] text-stone-400 pt-3 border-t border-dashed border-stone-200">
+                <div>
+                  <div className="border-b border-stone-300 h-6 mb-1"></div>
+                  <span>Gudam Incharge</span>
+                </div>
+                <div>
+                  <div className="border-b border-stone-300 h-6 mb-1"></div>
+                  <span>Receiver / Party</span>
                 </div>
               </div>
             </div>
 
-            {/* Action Bar */}
-            <div className="p-4 border-t border-stone-200 bg-stone-50 flex justify-end gap-3">
-              <button onClick={() => setPrintPass(null)} className="btn-ghost text-xs">
-                Close
+            <div className="p-3 border-t border-stone-200 bg-stone-50 flex justify-end gap-2">
+              <button onClick={() => setPrintPass(null)} className="btn-ghost !py-2 text-xs">
+                Band Karein
               </button>
               <button
                 onClick={() => window.print()}
-                className="btn-primary text-xs font-bold flex items-center gap-2 !py-2"
+                className="btn-primary !py-2 text-xs font-bold flex items-center gap-1.5"
               >
-                <Printer size={16} /> Print Receipt
+                <Printer size={14} /> Print
               </button>
             </div>
           </div>

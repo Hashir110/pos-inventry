@@ -4,7 +4,6 @@ import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 import { Nunito, Poppins } from "next/font/google";
 import "./globals.css";
 
-// Dreams POS jaisa: Nunito (body) + Poppins (headings, numbers)
 const nunito = Nunito({
   variable: "--font-sans",
   subsets: ["latin"],

@@ -1,11 +1,12 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
 import { listExpenses, addExpense, deleteExpense } from "../../lib/services/expenses";
-import { Plus, Trash2, Calendar, Wallet } from "lucide-react";
+import { Plus, Trash2, Calendar, Wallet, Loader2 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
+import DataTable from "../../components/DataTable";
 import { toast } from 'react-toastify';
 import type { Expense } from "../../types";
 
@@ -18,7 +19,6 @@ export default function ExpensesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [totalExpense, setTotalExpense] = useState(0);
 
-  // Form State
   const [formData, setFormData] = useState({
     title: "",
     amount: "",
@@ -106,7 +106,6 @@ export default function ExpensesPage() {
       />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        {/* Add form */}
         <form onSubmit={handleSubmit} className="card h-fit space-y-4 p-5 lg:col-span-1">
           <h3 className="flex items-center gap-2 text-base font-bold text-stone-900">
             <Plus size={18} className="text-brand-600" /> {t("newExpense")}
@@ -155,64 +154,68 @@ export default function ExpensesPage() {
             </select>
           </div>
 
-          <button type="submit" disabled={submitting} className="btn-primary w-full !py-3">
-            {submitting ? t("addingExpense") : t("addExpenseBtn")}
+          <button
+            type="submit"
+            disabled={submitting}
+            className="btn-primary w-full !py-3 flex items-center justify-center min-h-[46px]"
+          >
+            {submitting ? (
+              <Loader2 className="animate-spin text-white" size={18} />
+            ) : (
+              t("addExpenseBtn")
+            )}
           </button>
         </form>
 
-        {/* List */}
-        <div className="card overflow-hidden lg:col-span-2">
-          <div className="border-b border-stone-200 p-4">
-            <h3 className="text-base font-bold text-stone-900">{t("history")}</h3>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-stone-200">
-                <tr>
-                  <th className="p-4">{t("date")}</th>
-                  <th className="p-4">{t("description")}</th>
-                  <th className="p-4">{t("category")}</th>
-                  <th className="p-4 text-right">{t("amount")}</th>
-                  <th className="p-4 text-right"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                {loading ? (
-                  <tr><td colSpan={5} className="p-10 text-center text-stone-400">{t("loading")}</td></tr>
-                ) : expenses.length === 0 ? (
-                  <tr><td colSpan={5} className="p-12 text-center text-stone-400">{t("noExpenses")}</td></tr>
-                ) : (
-                  expenses.map((item) => (
-                    <tr key={item.id} className="hover:bg-stone-50">
-                      <td className="whitespace-nowrap p-4 text-stone-500">
-                        <span className="flex items-center gap-2">
-                          <Calendar size={14} />
-                          {formatDate(item.date)}
-                        </span>
-                      </td>
-                      <td className="p-4 font-semibold text-stone-900">{item.title}</td>
-                      <td className="p-4">
-                        <span className="rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-bold text-stone-600">
-                          {item.category}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right font-extrabold text-red-600">− Rs. {item.amount}</td>
-                      <td className="p-4 text-right">
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="rounded-lg p-2 text-stone-400 transition hover:bg-red-50 hover:text-red-600"
-                          title={t("delete")}
-                        >
-                          <Trash2 size={17} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+        <div className="lg:col-span-2">
+          <DataTable
+            data={expenses}
+            rowKey={(item) => item.id}
+            loading={loading}
+            emptyText={t("noExpenses")}
+            toolbarLeft={<h3 className="text-base font-bold text-stone-900">{t("history")}</h3>}
+            columns={[
+              {
+                key: "date",
+                header: t("date"),
+                className: "whitespace-nowrap",
+                cell: (item) => (
+                  <span className="flex items-center gap-2 text-stone-500">
+                    <Calendar size={14} />
+                    {formatDate(item.date)}
+                  </span>
+                ),
+              },
+              { key: "title", header: t("description"), cell: (item) => <span className="font-semibold text-stone-900">{item.title}</span> },
+              {
+                key: "category",
+                header: t("category"),
+                cell: (item) => (
+                  <span className="rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-bold text-stone-600">{item.category}</span>
+                ),
+              },
+              {
+                key: "amount",
+                header: t("amount"),
+                align: "right",
+                cell: (item) => <span className="font-extrabold text-red-600">− Rs. {item.amount}</span>,
+              },
+              {
+                key: "actions",
+                header: "",
+                align: "right",
+                cell: (item) => (
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className="rounded-lg p-2 text-stone-400 transition hover:bg-red-50 hover:text-red-600"
+                    title={t("delete")}
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                ),
+              },
+            ]}
+          />
         </div>
       </div>
     </div>

@@ -25,8 +25,10 @@ import {
   X,
   Building2,
   CheckCircle2,
+  Loader2,
 } from "lucide-react";
 import { toast } from "react-toastify";
+import DataTable from "../../components/DataTable";
 
 export default function SuppliersPage() {
   const { currentShop } = useStore();
@@ -38,18 +40,15 @@ export default function SuppliersPage() {
   const [payments, setPayments] = useState<SupplierPayment[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Modals state
   const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState<Supplier | null>(null);
 
-  // New Supplier Form
   const [newSupName, setNewSupName] = useState("");
   const [newSupPhone, setNewSupPhone] = useState("");
   const [newSupAddress, setNewSupAddress] = useState("");
 
-  // Purchase Form
   const [purchaseSupId, setPurchaseSupId] = useState("");
   const [purchaseProdId, setPurchaseProdId] = useState("");
   const [purchaseQty, setPurchaseQty] = useState(1);
@@ -57,11 +56,14 @@ export default function SuppliersPage() {
   const [purchaseDestination, setPurchaseDestination] = useState<"gudam" | "shop">("gudam");
   const [purchasePaidAmount, setPurchasePaidAmount] = useState(0);
 
-  // Payment Form
   const [paymentSupId, setPaymentSupId] = useState("");
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<"Cash" | "Bank Account">("Cash");
   const [paymentNote, setPaymentNote] = useState("");
+
+  const [addingSupplier, setAddingSupplier] = useState(false);
+  const [savingPurchase, setSavingPurchase] = useState(false);
+  const [savingPayment, setSavingPayment] = useState(false);
 
   useEffect(() => {
     if (!ownerId) return;
@@ -97,6 +99,7 @@ export default function SuppliersPage() {
       return;
     }
     try {
+      setAddingSupplier(true);
       await addSupplier(ownerId, {
         name: newSupName,
         phone: newSupPhone,
@@ -109,6 +112,8 @@ export default function SuppliersPage() {
       setNewSupAddress("");
     } catch (err: any) {
       toast.error(err.message || "Failed to add supplier");
+    } finally {
+      setAddingSupplier(false);
     }
   };
 
@@ -130,6 +135,7 @@ export default function SuppliersPage() {
     const totalBill = purchaseQty * purchaseBuyingPrice;
 
     try {
+      setSavingPurchase(true);
       await addSupplierPurchase(ownerId, {
         supplierId: sup.id,
         supplierName: sup.name,
@@ -150,11 +156,9 @@ export default function SuppliersPage() {
       toast.success(`Purchase bill recorded! Stock updated in ${purchaseDestination.toUpperCase()}`);
       setShowPurchaseModal(false);
 
-      // Refresh records
       const pur = await listSupplierPurchases(ownerId);
       setPurchases(pur);
 
-      // Reset
       setPurchaseSupId("");
       setPurchaseProdId("");
       setPurchaseQty(1);
@@ -162,6 +166,8 @@ export default function SuppliersPage() {
       setPurchasePaidAmount(0);
     } catch (err: any) {
       toast.error(err.message || "Purchase entry failed");
+    } finally {
+      setSavingPurchase(false);
     }
   };
 
@@ -179,6 +185,7 @@ export default function SuppliersPage() {
     if (!sup) return;
 
     try {
+      setSavingPayment(true);
       await addSupplierPayment(ownerId, {
         supplierId: sup.id,
         supplierName: sup.name,
@@ -190,16 +197,16 @@ export default function SuppliersPage() {
       toast.success(`Payment of Rs. ${paymentAmount} paid to ${sup.name}`);
       setShowPaymentModal(false);
 
-      // Refresh records
       const pay = await listSupplierPayments(ownerId);
       setPayments(pay);
 
-      // Reset
       setPaymentSupId("");
       setPaymentAmount(0);
       setPaymentNote("");
     } catch (err: any) {
       toast.error(err.message || "Payment entry failed");
+    } finally {
+      setSavingPayment(false);
     }
   };
 
@@ -211,7 +218,6 @@ export default function SuppliersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-sm">
         <div>
           <h1 className="text-xl font-extrabold text-stone-900 flex items-center gap-2">
@@ -244,7 +250,6 @@ export default function SuppliersPage() {
         </div>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center gap-4">
           <div className="p-3 rounded-xl bg-amber-100 text-amber-700">
@@ -282,12 +287,14 @@ export default function SuppliersPage() {
         </div>
       </div>
 
-      {/* Suppliers Table */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
-          <h2 className="text-sm font-bold text-stone-800 uppercase tracking-wider">
-            Suppliers List & Balance
-          </h2>
+      <DataTable
+        data={filteredSuppliers}
+        rowKey={(s) => s.id}
+        emptyText={<>Koi Supplier record nahi mila. &quot;Naya Supplier&quot; par click karke add karein.</>}
+        toolbarLeft={
+          <h2 className="text-sm font-bold text-stone-800 uppercase tracking-wider">Suppliers List & Balance</h2>
+        }
+        toolbarRight={
           <div className="relative w-full sm:w-64">
             <input
               type="text"
@@ -296,73 +303,56 @@ export default function SuppliersPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="input-field pl-9 text-xs"
             />
-            <Search className="absolute left-3 top-2.5 text-stone-400" size={14} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={14} />
           </div>
-        </div>
+        }
+        columns={[
+          { key: "name", header: "Supplier Name", cell: (s) => <span className="font-extrabold text-stone-900">{s.name}</span> },
+          { key: "phone", header: "Phone", cell: (s) => <span className="text-stone-600">{s.phone || "-"}</span> },
+          { key: "address", header: "Address", cell: (s) => <span className="text-stone-500">{s.address || "-"}</span> },
+          {
+            key: "balance",
+            header: "Humne Dene Hain (Balance)",
+            align: "right",
+            cell: (s) => <span className="font-black text-amber-700">Rs. {(s.balance || 0).toLocaleString()}</span>,
+          },
+          {
+            key: "actions",
+            header: "Actions",
+            align: "center",
+            cell: (s) => (
+              <div className="flex justify-center gap-2 text-xs">
+                <button
+                  onClick={() => {
+                    setPurchaseSupId(s.id);
+                    setShowPurchaseModal(true);
+                  }}
+                  className="px-2.5 py-1 rounded bg-amber-50 text-amber-700 font-bold border border-amber-200 hover:bg-amber-100"
+                >
+                  + Purchase Bill
+                </button>
+                <button
+                  onClick={() => {
+                    setPaymentSupId(s.id);
+                    setShowPaymentModal(true);
+                  }}
+                  className="px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 hover:bg-emerald-100"
+                >
+                  + Payment Di
+                </button>
+                <button
+                  onClick={() => setShowHistoryModal(s)}
+                  className="p-1 text-stone-500 hover:bg-stone-100 rounded"
+                  title="View Ledger"
+                >
+                  <History size={16} />
+                </button>
+              </div>
+            ),
+          },
+        ]}
+      />
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-stone-100 text-stone-700 font-bold uppercase">
-              <tr>
-                <th className="p-3">Supplier Name</th>
-                <th className="p-3">Phone</th>
-                <th className="p-3">Address</th>
-                <th className="p-3 text-right">Humne Dene Hain (Balance)</th>
-                <th className="p-3 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {filteredSuppliers.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-6 text-center text-stone-400">
-                    Koi Supplier record nahi mila. &quot;Naya Supplier&quot; par click karke add karein.
-                  </td>
-                </tr>
-              ) : (
-                filteredSuppliers.map((s) => (
-                  <tr key={s.id} className="hover:bg-stone-50">
-                    <td className="p-3 font-extrabold text-stone-900">{s.name}</td>
-                    <td className="p-3 text-stone-600">{s.phone || "-"}</td>
-                    <td className="p-3 text-stone-500">{s.address || "-"}</td>
-                    <td className="p-3 text-right font-black text-amber-700 text-sm">
-                      Rs. {(s.balance || 0).toLocaleString()}
-                    </td>
-                    <td className="p-3 text-center flex justify-center gap-2">
-                      <button
-                        onClick={() => {
-                          setPurchaseSupId(s.id);
-                          setShowPurchaseModal(true);
-                        }}
-                        className="px-2.5 py-1 rounded bg-amber-50 text-amber-700 font-bold border border-amber-200 hover:bg-amber-100"
-                      >
-                        + Purchase Bill
-                      </button>
-                      <button
-                        onClick={() => {
-                          setPaymentSupId(s.id);
-                          setShowPaymentModal(true);
-                        }}
-                        className="px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 hover:bg-emerald-100"
-                      >
-                        + Payment Di
-                      </button>
-                      <button
-                        onClick={() => setShowHistoryModal(s)}
-                        className="p-1 text-stone-500 hover:bg-stone-100 rounded"
-                        title="View Ledger"
-                      >
-                        <History size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* MODAL 1: Add New Supplier */}
       {showAddSupplierModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-pop w-full max-w-md overflow-hidden">
@@ -421,8 +411,16 @@ export default function SuppliersPage() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary flex-1 text-xs font-bold">
-                  Save Supplier
+                <button
+                  type="submit"
+                  disabled={addingSupplier}
+                  className="btn-primary flex-1 text-xs font-bold min-h-[38px] flex items-center justify-center"
+                >
+                  {addingSupplier ? (
+                    <Loader2 className="animate-spin text-white" size={16} />
+                  ) : (
+                    "Save Supplier"
+                  )}
                 </button>
               </div>
             </form>
@@ -430,7 +428,6 @@ export default function SuppliersPage() {
         </div>
       )}
 
-      {/* MODAL 2: Record Supplier Purchase */}
       {showPurchaseModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-pop w-full max-w-lg overflow-hidden">
@@ -564,9 +561,14 @@ export default function SuppliersPage() {
                 </button>
                 <button
                   type="submit"
-                  className="btn-primary flex-1 text-xs font-bold !bg-amber-600 hover:!bg-amber-700"
+                  disabled={savingPurchase}
+                  className="btn-primary flex-1 text-xs font-bold !bg-amber-600 hover:!bg-amber-700 min-h-[38px] flex items-center justify-center"
                 >
-                  Save Purchase Entry
+                  {savingPurchase ? (
+                    <Loader2 className="animate-spin text-white" size={16} />
+                  ) : (
+                    "Save Purchase Entry"
+                  )}
                 </button>
               </div>
             </form>
@@ -574,7 +576,6 @@ export default function SuppliersPage() {
         </div>
       )}
 
-      {/* MODAL 3: Record Supplier Payment (Payout) */}
       {showPaymentModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-pop w-full max-w-md overflow-hidden">
@@ -660,8 +661,16 @@ export default function SuppliersPage() {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-primary flex-1 text-xs font-bold">
-                  Save Payment Entry
+                <button
+                  type="submit"
+                  disabled={savingPayment}
+                  className="btn-primary flex-1 text-xs font-bold min-h-[38px] flex items-center justify-center"
+                >
+                  {savingPayment ? (
+                    <Loader2 className="animate-spin text-white" size={16} />
+                  ) : (
+                    "Save Payment Entry"
+                  )}
                 </button>
               </div>
             </form>
@@ -669,7 +678,6 @@ export default function SuppliersPage() {
         </div>
       )}
 
-      {/* MODAL 4: Supplier History & Ledger */}
       {showHistoryModal && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-pop w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
@@ -691,7 +699,6 @@ export default function SuppliersPage() {
             </div>
 
             <div className="p-5 overflow-y-auto space-y-6">
-              {/* Purchase History */}
               <div>
                 <h4 className="text-xs font-bold text-stone-700 uppercase border-b pb-2 mb-3">
                   📦 Purchase Bills (Maal Uthaya History)
@@ -720,7 +727,6 @@ export default function SuppliersPage() {
                 </div>
               </div>
 
-              {/* Payment History */}
               <div>
                 <h4 className="text-xs font-bold text-stone-700 uppercase border-b pb-2 mb-3">
                   💵 Payments Made (Payout History)

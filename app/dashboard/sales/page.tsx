@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import DataTable from "../../components/DataTable";
 import Link from "next/link";
 import { DollarSign, Eye, Plus, Search, ShoppingBag, TrendingUp, X } from "lucide-react";
 import { toast } from "react-toastify";
@@ -55,12 +56,10 @@ export default function SalesHistoryPage() {
   const [showRevenue, setShowRevenue] = useState(false);
   const [showProfit, setShowProfit] = useState(false);
 
-  // Password modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [passInput, setPassInput] = useState("");
   const [targetField, setTargetField] = useState<"revenue" | "profit" | null>(null);
 
-  // Filters
   const [search, setSearch] = useState("");
   const [payFilter, setPayFilter] = useState<PayFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("new");
@@ -183,9 +182,12 @@ export default function SalesHistoryPage() {
       </div>
 
       {/* Table card */}
-      <div className="card overflow-hidden">
-        {/* Filters */}
-        <div className="flex flex-col gap-3 border-b border-stone-200 p-4 lg:flex-row lg:items-center lg:justify-between">
+      <DataTable
+        data={visibleSales}
+        rowKey={(sale) => sale.id}
+        loading={loading}
+        emptyText="Koi bill nahi mila."
+        toolbarLeft={
           <div className="relative w-full lg:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
             <input
@@ -196,8 +198,9 @@ export default function SalesHistoryPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-
-          <div className="flex flex-wrap gap-2">
+        }
+        toolbarRight={
+          <>
             <select
               value={payFilter}
               onChange={(e) => setPayFilter(e.target.value as PayFilter)}
@@ -217,99 +220,86 @@ export default function SalesHistoryPage() {
               <option value="old">Sort: Oldest</option>
               <option value="high">Sort: Highest Amount</option>
             </select>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-stone-200">
-              <tr>
-                <th className="p-4">{t("customer")}</th>
-                <th className="p-4">{t("invoices")}</th>
-                <th className="p-4">{t("date")}</th>
-                <th className="p-4">{t("status")}</th>
-                <th className="p-4 text-right">{t("grandTotal")}</th>
-                <th className="p-4 text-right">{t("paid")}</th>
-                <th className="p-4 text-right">{t("due")}</th>
-                <th className="p-4">{t("paymentBreakdown")}</th>
-                <th className="p-4 text-right"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100">
-              {loading ? (
-                <tr><td colSpan={9} className="p-10 text-center text-stone-400">Loading Data...</td></tr>
-              ) : visibleSales.length === 0 ? (
-                <tr><td colSpan={9} className="p-12 text-center text-stone-400">Koi bill nahi mila.</td></tr>
-              ) : (
-                visibleSales.map((sale) => {
-                  const status = saleStatus(sale);
-                  const pay = paymentInfo(sale);
-                  const name = sale.customerName || "Walk-in";
-                  return (
-                    <tr key={sale.id} className="hover:bg-stone-50">
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 font-display text-sm font-bold text-brand-700">
-                            {name.trim().charAt(0).toUpperCase()}
-                          </span>
-                          <span className="font-semibold text-stone-900">{name}</span>
-                        </div>
-                      </td>
-                      <td className="p-4 font-mono text-xs font-bold uppercase text-brand-700">#{sale.invoiceNo || "-"}</td>
-                      <td className="whitespace-nowrap p-4 text-stone-600">{formatDate(sale.date)}</td>
-                      <td className="p-4">
-                        <span className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${status.tone}`}>{status.label}</span>
-                      </td>
-                      <td className="p-4 text-right font-extrabold text-stone-900">
-                        {mask(money(saleNetAmount(sale)), showRevenue)}
-                      </td>
-                      <td className="p-4 text-right text-stone-700">{mask(money(pay.paid), showRevenue)}</td>
-                      <td className={`p-4 text-right font-semibold ${pay.due > 0 ? "text-red-600" : "text-stone-500"}`}>
-                        {mask(money(pay.due), showRevenue)}
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-col items-start gap-1">
-                          <span className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${pay.badge}`}>● {pay.label}</span>
-                          <span className="text-[11px] font-semibold text-stone-400">{methodLabel(sale.paymentMethod)}</span>
-                        </div>
-                      </td>
-                      <td className="p-4 text-right">
-                        <button
-                          onClick={() => setSelectedSale(sale)}
-                          className="rounded-lg p-2 text-stone-500 transition hover:bg-brand-50 hover:text-brand-700"
-                          title="Bill dekhein"
-                        >
-                          <Eye size={18} />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {!loading && visibleSales.length > 0 && (
-          <div className="border-t border-stone-200 bg-stone-50/60 px-4 py-3 text-xs font-semibold text-stone-500">
-            {visibleSales.length} bill{visibleSales.length === 1 ? "" : "s"} dikh rahe hain
-          </div>
-        )}
-      </div>
+          </>
+        }
+        columns={[
+          {
+            key: "customer",
+            header: t("customer"),
+            cell: (sale) => {
+              const name = sale.customerName || "Walk-in";
+              return (
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 font-display text-sm font-bold text-brand-700">
+                    {name.trim().charAt(0).toUpperCase()}
+                  </span>
+                  <span className="font-semibold text-stone-900">{name}</span>
+                </div>
+              );
+            },
+          },
+          { key: "inv", header: t("invoices"), cell: (sale) => <span className="font-mono text-xs font-bold uppercase text-brand-700">#{sale.invoiceNo || "-"}</span> },
+          { key: "date", header: t("date"), className: "whitespace-nowrap", cell: (sale) => <span className="text-stone-600">{formatDate(sale.date)}</span> },
+          {
+            key: "status",
+            header: t("status"),
+            cell: (sale) => {
+              const status = saleStatus(sale);
+              return <span className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${status.tone}`}>{status.label}</span>;
+            },
+          },
+          { key: "total", header: t("grandTotal"), align: "right", cell: (sale) => <span className="font-extrabold text-stone-900">{mask(money(saleNetAmount(sale)), showRevenue)}</span> },
+          { key: "paid", header: t("paid"), align: "right", cell: (sale) => <span className="text-stone-700">{mask(money(paymentInfo(sale).paid), showRevenue)}</span> },
+          {
+            key: "due",
+            header: t("due"),
+            align: "right",
+            cell: (sale) => {
+              const pay = paymentInfo(sale);
+              return <span className={`font-semibold ${pay.due > 0 ? "text-red-600" : "text-stone-500"}`}>{mask(money(pay.due), showRevenue)}</span>;
+            },
+          },
+          {
+            key: "breakdown",
+            header: t("paymentBreakdown"),
+            cell: (sale) => {
+              const pay = paymentInfo(sale);
+              return (
+                <div className="flex flex-col items-start gap-1">
+                  <span className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${pay.badge}`}>● {pay.label}</span>
+                  <span className="text-[11px] font-semibold text-stone-400">{methodLabel(sale.paymentMethod)}</span>
+                </div>
+              );
+            },
+          },
+          {
+            key: "actions",
+            header: "",
+            align: "right",
+            cell: (sale) => (
+              <button
+                onClick={() => setSelectedSale(sale)}
+                className="rounded-lg p-2 text-stone-500 transition hover:bg-brand-50 hover:text-brand-700"
+                title="Bill dekhein"
+              >
+                <Eye size={18} />
+              </button>
+            ),
+          },
+        ]}
+      />
 
       {/* --- Sales Detail --- */}
       {selectedSale && (() => {
         const sale = selectedSale;
         const status = saleStatus(sale);
         const pay = paymentInfo(sale);
-        const subTotal = sale.items.reduce((s, i) => s + i.price * i.qty, 0);
-        const discount = sale.items.reduce((s, i) => s + (i.discount || 0), 0);
+        const subTotal = sale.items.reduce((s, i) => s + (i.total || (i.price * i.qty)), 0);
         const refunded = sale.refundedAmount || 0;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
             <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-pop">
-              {/* Header */}
               <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
                 <h3 className="text-lg font-bold text-stone-900">Sales Detail</h3>
                 <button
@@ -321,7 +311,6 @@ export default function SalesHistoryPage() {
               </div>
 
               <div className="flex-1 overflow-y-auto px-6 py-5">
-                {/* Info columns */}
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                   <div>
                     <h4 className="mb-2 text-sm font-bold text-stone-900">Customer Info</h4>
@@ -369,52 +358,62 @@ export default function SalesHistoryPage() {
                   </div>
                 </div>
 
-                {/* Order summary */}
                 <h4 className="mb-3 mt-7 text-sm font-bold text-stone-900">Order Summary</h4>
                 <div className="overflow-x-auto rounded-lg border border-stone-200">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-stone-100">
                       <tr>
                         <th className="px-4 py-3">Product</th>
-                        <th className="px-4 py-3 text-right">Price</th>
-                        <th className="px-4 py-3 text-right">Qty</th>
-                        <th className="px-4 py-3 text-right">Discount</th>
-                        <th className="px-4 py-3 text-right">Wapas</th>
+                        <th className="px-4 py-3 text-center">Qty (Bags)</th>
+                        <th className="px-4 py-3 text-center">Total Weight</th>
+                        <th className="px-4 py-3 text-right">Rate</th>
+                        <th className="px-4 py-3 text-center">Wapas</th>
                         <th className="px-4 py-3 text-right">Total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
-                      {sale.items.map((item, idx) => (
-                        <tr key={idx}>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-100 font-display text-sm font-bold text-brand-700">
-                                {item.name.trim().charAt(0).toUpperCase()}
-                              </span>
-                              <span className="font-semibold text-stone-900">{item.name}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-right text-stone-600">{item.price}</td>
-                          <td className="px-4 py-3 text-right text-stone-800">
-                            {item.qty} {item.type === "weight" ? "kg" : "pcs"}
-                          </td>
-                          <td className="px-4 py-3 text-right text-emerald-700">{item.discount > 0 ? item.discount : "0"}</td>
-                          <td className="px-4 py-3 text-right font-semibold text-red-600">
-                            {(item.returnedQty || 0) > 0 ? item.returnedQty : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-right font-bold text-stone-900">{Math.round(item.total)}</td>
-                        </tr>
-                      ))}
+                      {sale.items.map((item, idx) => {
+                        const isWeight = item.type === "weight";
+                        const weightVal = item.totalWeight ?? (isWeight ? item.qty * (item.weightPerBag || 25) : undefined);
+                        const weightStr = weightVal !== undefined ? `${weightVal} kg` : "—";
+                        const qtyStr = isWeight ? `${String(item.qty).padStart(2, "0")} Bags` : `${item.qty} pcs`;
+
+                        return (
+                          <tr key={idx}>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-100 font-display text-sm font-bold text-brand-700">
+                                  {item.name.trim().charAt(0).toUpperCase()}
+                                </span>
+                                <span className="font-semibold text-stone-900">{item.name}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-center font-semibold text-stone-800 tabular">
+                              {qtyStr}
+                            </td>
+                            <td className="px-4 py-3 text-center font-bold text-stone-900 tabular">
+                              {weightStr}
+                            </td>
+                            <td className="px-4 py-3 text-right text-stone-600 tabular">
+                              Rs. {item.price}
+                            </td>
+                            <td className="px-4 py-3 text-center font-semibold text-red-600 tabular">
+                              {(item.returnedQty || 0) > 0 ? (isWeight ? `${item.returnedQty} kg` : item.returnedQty) : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-right font-bold text-stone-900 tabular">
+                              Rs. {Math.round(item.total).toLocaleString()}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
 
-                {/* Totals */}
                 <div className="mt-5 flex justify-end">
                   <dl className="w-full max-w-sm overflow-hidden rounded-lg border border-stone-200 text-sm">
                     {[
                       { label: "Sub Total", value: money(subTotal), tone: "" },
-                      { label: "Discount", value: `− ${money(discount)}`, tone: discount > 0 ? "text-emerald-700" : "" },
                       ...(refunded > 0 ? [{ label: "Refund (return)", value: `− ${money(refunded)}`, tone: "text-red-600" }] : []),
                       { label: "Grand Total", value: money(saleNetAmount(sale)), tone: "font-extrabold text-stone-900" },
                       { label: "Paid", value: money(pay.paid), tone: "" },

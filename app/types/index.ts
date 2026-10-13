@@ -1,23 +1,20 @@
-/** DB mein pieces wale items "count" save hote hain */
 export type UnitType = "weight" | "count";
 export type PaymentMethod = "Cash" | "Bank Account" | "Udhar";
 
-/** users/{uid} */
 export interface Shop {
   uid: string;
   email: string | null;
   shopName: string;
   businessType: string;
   currency: string;
-  createdAt: string; // ISO
-  licenseExpiry: string; // ISO — sirf admin badalta hai
+  createdAt: string;
+  licenseExpiry: string;
   contact?: string;
   address?: string;
   receiptMessage?: string;
   invoiceCounter?: number;
 }
 
-/** Setup form se aane wala data (createShopProfile ke liye) */
 export interface NewShopDetails {
   shopName: string;
   businessType: string;
@@ -25,41 +22,38 @@ export interface NewShopDetails {
   licenseExpiry: string;
 }
 
-/** products/{id} */
 export interface Product {
   id: string;
   ownerId: string;
   name: string;
   buyingPrice: number;
   sellingPrice: number;
-  stock: number; // Purane records compatibility
-  gudamStock?: number; // Warehouse stock
-  shopStock?: number; // Dukan stock
+  stock: number;
+  gudamStock?: number;
+  shopStock?: number;
   unitType: UnitType;
-  /** Optional: POS par category tabs ke liye (e.g. "Atta", "Drinks") */
   category?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
-/** sales/{id}.items[] — cart ka snapshot */
 export interface SaleItem {
-  id: string; // product id
+  id: string;
   name: string;
   qty: number;
-  price: number; // selling price at time of sale
+  price: number;
   buyingPrice: number;
-  discount: number; // flat Rs. poori line par
-  total: number; // qty * price - discount
+  total: number;
   type?: UnitType;
   returnedQty?: number;
-  /** Purani sales mein price ya product id in naamon se bhi mil sakti hai */
   sellingPrice?: number;
+  totalWeight?: number;
+  weightPerBag?: number;
+  isManualWeight?: boolean;
   productId?: string;
   dispatchFrom?: "gudam" | "shop";
 }
 
-/** sales/{id} */
 export interface Sale {
   id: string;
   saleId?: string;
@@ -67,9 +61,8 @@ export interface Sale {
   items: SaleItem[];
   totalAmount: number;
   refundedAmount?: number;
-  date: string; // ISO
+  date: string;
   customerName: string;
-  /** Udhar sale mein customer ka id (customers/{id}) */
   customerId?: string;
   description: string;
   invoiceNo: string;
@@ -79,10 +72,8 @@ export interface Sale {
   gatePassGenerated?: boolean;
 }
 
-/** Offline queue mein pada sale (abhi Firestore mein nahi gaya) */
 export type PendingSale = Omit<Sale, "id">;
 
-/** returns/{id} */
 export interface ReturnRecord {
   id: string;
   ownerId: string;
@@ -95,7 +86,6 @@ export interface ReturnRecord {
   date: string;
 }
 
-/** expenses/{id} */
 export interface Expense {
   id: string;
   ownerId: string;
@@ -105,18 +95,15 @@ export interface Expense {
   date: string;
 }
 
-/** customers/{id} — Udhar wale customers */
 export interface Customer {
   id: string;
   ownerId: string;
   name: string;
   phone?: string;
-  /** Customer ne abhi kitne paise dene hain (Udhar sales - wasool hui raqam - returns) */
   balance: number;
   createdAt: string;
 }
 
-/** payments/{id} — customer se wasool hui raqam */
 export interface CustomerPayment {
   id: string;
   ownerId: string;
@@ -128,7 +115,6 @@ export interface CustomerPayment {
   date: string;
 }
 
-/** gate_passes/{id} — Gudam dispatch parchi record */
 export interface GatePass {
   id: string;
   ownerId: string;
@@ -140,6 +126,7 @@ export interface GatePass {
     productId: string;
     productName: string;
     qty: number;
+    weight?: number;
     unit?: string;
   }>;
   date: string;
@@ -149,19 +136,16 @@ export interface GatePass {
   notes?: string;
 }
 
-/** suppliers/{id} — Jin parties se maal lety hain */
 export interface Supplier {
   id: string;
   ownerId: string;
   name: string;
   phone?: string;
   address?: string;
-  /** Humne is supplier ke kitne paise dene hain */
   balance: number;
   createdAt: string;
 }
 
-/** supplier_purchases/{id} — Supplier se maal khareedne ki entry */
 export interface SupplierPurchase {
   id: string;
   ownerId: string;
@@ -178,12 +162,11 @@ export interface SupplierPurchase {
   }>;
   totalAmount: number;
   paidAmount: number;
-  balanceAmount: number; // totalAmount - paidAmount
+  balanceAmount: number;
   date: string;
   notes?: string;
 }
 
-/** supplier_payments/{id} — Supplier ko paise dene ki entry (Payout) */
 export interface SupplierPayment {
   id: string;
   ownerId: string;
@@ -195,7 +178,6 @@ export interface SupplierPayment {
   date: string;
 }
 
-/** stock_transfers/{id} — Gudam <-> Dukan stock transfer log */
 export interface StockTransfer {
   id: string;
   ownerId: string;

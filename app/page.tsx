@@ -5,7 +5,7 @@ import { signInWithPopup, onAuthStateChanged, type User } from "firebase/auth";
 import { getUserShopProfile } from "../app/lib/authService"; // Jo pichle step mn banaya tha
 import { useStore } from "../app/store/useStore"; // Global state
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Loader2, Store } from "lucide-react"; // Icons
+import { Boxes, CheckCircle2, Loader2, Receipt, Store, WifiOff } from "lucide-react"; // Icons
 import { auth, googleProvider } from "../app/lib/firebase";
 import { toast } from 'react-toastify';
 import { useLanguage } from "./store/useLanguage";
@@ -73,36 +73,36 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 flex items-center justify-center p-4 font-sans">
-      
-      {/* Main Card Container */}
-      <div className="bg-white rounded-3xl shadow-2xl overflow-hidden max-w-5xl w-full flex flex-col md:flex-row min-h-[600px]">
-        
+    <div className="h-screen w-screen overflow-hidden bg-white font-sans">
+
+      {/* Full-screen split layout */}
+      <div className="h-full w-full flex flex-col md:flex-row">
+
         {/* --- LEFT SIDE: LOGIN FORM --- */}
-        <div className="w-full md:w-1/2 p-8 md:p-12 flex flex-col justify-center bg-white relative">
+        <div className="w-full md:w-1/2 h-full px-8 md:px-16 lg:px-24 py-8 flex flex-col justify-center bg-white relative overflow-y-auto">
           
           {/* Logo / Brand Top Left & Language Switcher Top Right */}
-          <div className="absolute top-6 left-6 flex items-center gap-2">
+          <div className="absolute top-6 left-6 md:left-16 lg:left-24 flex items-center gap-2">
              <img src="/logoPos.png" alt="ASAAN POS" className="h-[50px] w-auto object-contain" />
           </div>
 
-          <div className="absolute top-6 right-6">
+          <div className="absolute top-6 right-6 md:right-16 lg:right-24">
              <LanguageSwitcher />
           </div>
 
-          <div className="mt-12 md:mt-6">
-            <h1 className="text-3xl md:text-4xl font-extrabold text-stone-900 mb-3 mt-8">
+          <div className="w-full max-w-md mx-auto md:mx-0 mt-12">
+            <h1 className="text-3xl md:text-4xl font-extrabold text-stone-900 mb-3">
               {t("loginTitle")}
             </h1>
             
-            <p className="text-stone-500 mb-6 leading-relaxed text-sm md:text-base">
+            <p className="text-stone-500 mb-8 leading-relaxed text-sm md:text-base">
               {t("loginSubtitle")}
             </p>
 
             {/* Login Button */}
             <button
               onClick={handleGoogleLogin}
-              className="group relative w-full flex items-center justify-center gap-3 bg-white border-2 border-stone-200 p-3.5 rounded-xl hover:border-brand-600 hover:bg-brand-50 transition-all duration-300 shadow-sm hover:shadow-md"
+              className="group relative w-full flex items-center justify-center gap-3 bg-white border-2 border-stone-200 p-3.5 rounded-xl hover:border-brand-600 hover:bg-brand-50 transition-all duration-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 py-4"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path
@@ -128,38 +128,47 @@ export default function LoginPage() {
             </button>
 
             {/* Features List */}
-            <div className="mt-8 space-y-2.5">
-                <div className="flex items-center gap-2 text-sm text-stone-500">
+            <div className="mt-8 pt-6 border-t border-stone-100 space-y-3">
+                {[
+                  { icon: Boxes, label: t("featureInventory") },
+                  { icon: Receipt, label: t("featureBilling") },
+                  { icon: WifiOff, label: t("featureOffline") },
+                ].map(({ icon: Icon, label }) => (
+                  <div key={label} className="flex items-center gap-3 rounded-xl bg-stone-50 px-4 py-3 text-sm font-medium text-stone-600 hover:bg-brand-50 transition-colors">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm text-brand-600">
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span className="flex-1">{label}</span>
                     <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    <span>{t("featureInventory")}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-stone-500">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    <span>{t("featureBilling")}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-stone-500">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                    <span>{t("featureOffline")}</span>
-                </div>
+                  </div>
+                ))}
             </div>
           </div>
           
-          <div className="mt-auto pt-6 text-center text-xs text-stone-400">
+          <div className="absolute bottom-6 left-0 right-0 text-center text-xs text-stone-400">
             &copy; {new Date().getFullYear()} ASAAN POS System. {t("rightsReserved")}
           </div>
         </div>
 
         {/* --- RIGHT SIDE: ILLUSTRATION --- */}
-        <div className="hidden md:flex w-1/2 bg-ink relative items-center justify-center p-10 overflow-hidden">
+        <div className="hidden md:flex w-1/2 h-full bg-ink relative items-center justify-center p-10 overflow-hidden">
             <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-brand-500 rounded-full opacity-50 blur-3xl"></div>
             <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-ink-700 rounded-full opacity-50 blur-3xl"></div>
             
             <div className="relative z-10 text-center text-white flex flex-col items-center">
-                <img 
-                    src="/login-image.png" 
-                    alt="POS Dashboard 3D Character"
-                    className="w-full max-w-[400px] object-contain mb-6 drop-shadow-2xl animate-in slide-in-from-right duration-700 hover:scale-105 transition-transform"
-                />
+                <video
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="auto"
+                    aria-label="Shopkeeper using POS"
+                    className="w-full max-w-[640px] max-h-[48vh] object-contain mb-8"
+                >
+                    {/* webm = transparent bg (Chrome/Edge/Firefox), mp4 = fallback */}
+                    <source src="/login-hero.webm" type="video/webm" />
+                    <source src="/login-hero.mp4" type="video/mp4" />
+                </video>
                 
                 <h2 className="text-3xl font-bold mb-3">{t("heroTitle")}</h2>
                 <p className="text-brand-100 text-lg max-w-sm">

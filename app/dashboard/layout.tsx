@@ -132,7 +132,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             // Agar screen choti (mobile/tablet) hai toh default menu BAND (false) rakho
             if (window.innerWidth < 768) {
                 setSidebarOpen(false);
-            } 
+            }
             // Agar screen bari (desktop/laptop) hai toh default menu KHULA (true) rakho
             else {
                 setSidebarOpen(true);
@@ -211,7 +211,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             items: [
                 { name: t("navPos"), href: "/dashboard/pos", icon: ShoppingCart },
                 { name: t("navSalesHistory"), href: "/dashboard/sales", icon: Receipt },
-                { name: "Gate Pass (Gudam)", href: "/dashboard/gate-pass", icon: FileText },
+                { name: "Gate Pass", href: "/dashboard/gate-pass", icon: FileText },
                 { name: t("navReturns"), href: "/dashboard/returns", icon: RotateCcw },
                 { name: t("navUdhar") + " / Wasooli", href: "/dashboard/udhar", icon: HandCoins },
             ],
@@ -226,7 +226,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {
             title: "Traders & Accounts",
             items: [
-                { name: "Suppliers (Maal Udhar)", href: "/dashboard/suppliers", icon: Truck },
+                { name: "Suppliers", href: "/dashboard/suppliers", icon: Truck },
                 { name: t("navExpenses"), href: "/dashboard/expenses", icon: Wallet },
                 { name: t("navDashboard"), href: "/dashboard", icon: LayoutDashboard },
                 { name: "Secret Profit Audit", href: "/dashboard/admin/profit", icon: TrendingUp },
@@ -300,13 +300,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                             onClick={() => {
                                                 if (window.innerWidth < 768) setSidebarOpen(false);
                                             }}
-                                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
-                                                isSidebarOpen ? "" : "justify-center"
-                                            } ${
-                                                isActive
+                                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${isSidebarOpen ? "" : "justify-center"
+                                                } ${isActive
                                                     ? "bg-brand-500 text-white shadow-sm"
                                                     : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                                            }`}
+                                                }`}
                                         >
                                             <Icon size={19} className="shrink-0" />
                                             {isSidebarOpen && <span>{item.name}</span>}
