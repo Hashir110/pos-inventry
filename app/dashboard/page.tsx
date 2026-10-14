@@ -9,6 +9,8 @@ import type { Sale } from "../types";
 import { listSalesInRange } from "../lib/services/sales";
 import { listExpensesInRange } from "../lib/services/expenses";
 import { countLowStock } from "../lib/services/products";
+import { listClosings } from "../lib/services/dailyClosing";
+import { listSupplierPayments } from "../lib/services/suppliers";
 import { saleNetAmount, saleProfit } from "../lib/calc";
 import { useLanguage } from "../store/useLanguage";
 import { DualSeriesCanvasChart } from "../components/CanvasDiagram";
@@ -25,8 +27,21 @@ import {
     X,
     Banknote,
     CreditCard,
-    History
+    History,
+    ClipboardCheck,
+    Truck,
+    PiggyBank
 } from "lucide-react";
+
+interface ClosingDay {
+    day: string;
+    sale: number;
+    jamad: number;
+    baqi: number;
+    total: number;
+}
+
+const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
 
 export default function DashboardHome() {
     const { currentUser, currentShop } = useStore();
@@ -55,6 +70,9 @@ export default function DashboardHome() {
         bankSales: 0,
         udharSales: 0
     });
+
+    const [closingDays, setClosingDays] = useState<ClosingDay[]>([]);
+    const [closingTotal, setClosingTotal] = useState(0);
 
     // Invoices List
     const [invoices, setInvoices] = useState<Sale[]>([]);
@@ -128,6 +146,37 @@ export default function DashboardHome() {
         });
         setInvoices(allSales);
 
+        try {
+            const [closings, supplierPays] = await Promise.all([
+                listClosings(currentUser.uid),
+                listSupplierPayments(currentUser.uid),
+            ]);
+            const days = new Map<string, { sale: number; jamad: number }>();
+            const bucket = (iso: string) => {
+                const k = dayKey(iso);
+                if (!days.has(k)) days.set(k, { sale: 0, jamad: 0 });
+                return days.get(k)!;
+            };
+            closings.forEach((c) => { bucket(c.date).sale += c.amount; });
+            supplierPays.forEach((p) => { bucket(p.date).jamad += p.amount; });
+
+            let running = 0;
+            const all = [...days.entries()]
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([day, v]) => {
+                    const baqi = v.sale - v.jamad;
+                    running += baqi;
+                    return { day, sale: v.sale, jamad: v.jamad, baqi, total: running };
+                });
+            const fromKey = dayKey(startIso);
+            const toKey = isFilter ? dayKey(endIso) : "9999-12-31";
+            setClosingTotal(running);
+            setClosingDays(all.filter((d) => d.day >= fromKey && d.day <= toKey).reverse());
+        } catch (e) {
+            console.error("Closing summary failed:", e);
+            toast.error("Closing hisaab load nahi hua (Firestore rules deploy karein)");
+        }
+
     } catch (error) {
         console.error("Dashboard Fetch Error:", error);
     } finally {
@@ -187,7 +236,10 @@ export default function DashboardHome() {
     };
 
     const money = (n: number) => `Rs ${Math.round(n || 0).toLocaleString()}`;
-    const paymentTotal = (stats.cashSales || 0) + (stats.bankSales || 0) + (stats.udharSales || 0);
+    const signedMoney = (n: number) => `${n < 0 ? "− " : ""}${money(Math.abs(n))}`;
+    const closingSale = closingDays.reduce((s, d) => s + d.sale, 0);
+    const closingJamad = closingDays.reduce((s, d) => s + d.jamad, 0);
+    const paymentTotal =(stats.cashSales || 0) + (stats.bankSales || 0) + (stats.udharSales || 0);
     const pct = (n: number) => (paymentTotal > 0 ? Math.max(0, Math.min(100, ((n || 0) / paymentTotal) * 100)) : 0);
 
     const paymentRows = [
@@ -249,8 +301,8 @@ export default function DashboardHome() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard
                     title={t("totalSales")}
-                    value={money(stats.totalSales)}
-                    subtitle={t("afterRefunds")}
+                    value={money(closingSale)}
+                    subtitle="Daily Closing (Cash + Udhar)"
                     icon={DollarSign}
                     theme="blue"
                     loading={loading}
@@ -286,6 +338,62 @@ export default function DashboardHome() {
                     loading={loading}
                 />
             </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <StatCard
+                    title="Supplier ko diye"
+                    value={money(closingJamad)}
+                    subtitle="Jamad (supplier payments)"
+                    icon={Truck}
+                    theme="red"
+                    loading={loading}
+                    isPrivate
+                    isVisible={showSales}
+                    onToggle={() => handleToggle('sales')}
+                />
+                <StatCard
+                    title="Baqi"
+                    value={signedMoney(closingSale - closingJamad)}
+                    subtitle="Closing Sale − Supplier payment"
+                    icon={Wallet}
+                    theme="green"
+                    loading={loading}
+                    isPrivate
+                    isVisible={showSales}
+                    onToggle={() => handleToggle('sales')}
+                />
+                <StatCard
+                    title="Total Jama"
+                    value={signedMoney(closingTotal)}
+                    subtitle="Sab dinon ka Baqi (ab tak)"
+                    icon={PiggyBank}
+                    theme="purple"
+                    loading={loading}
+                    isPrivate
+                    isVisible={showSales}
+                    onToggle={() => handleToggle('sales')}
+                />
+            </div>
+
+            <DataTable
+                data={closingDays}
+                rowKey={(d) => d.day}
+                loading={loading}
+                emptyText="Is period mein koi closing nahi."
+                toolbarLeft={
+                    <h3 className="flex items-center gap-2 text-base font-bold text-stone-900">
+                        <ClipboardCheck className="h-4 w-4 text-stone-400" />
+                        Din-ba-Din Closing Hisaab
+                    </h3>
+                }
+                columns={[
+                    { key: "day", header: t("date"), className: "whitespace-nowrap", cell: (d) => <span className="font-semibold text-stone-800">{formatDate(d.day)}</span> },
+                    { key: "sale", header: "Sale", align: "right", cell: (d) => <span className="tabular font-bold">{showSales ? money(d.sale) : "••••"}</span> },
+                    { key: "jamad", header: "Jamad", align: "right", cell: (d) => <span className="tabular font-bold text-red-600">{showSales ? `− ${money(d.jamad)}` : "••••"}</span> },
+                    { key: "baqi", header: "Baqi", align: "right", cell: (d) => <span className={`tabular font-extrabold ${d.baqi < 0 ? "text-red-600" : "text-emerald-600"}`}>{showSales ? signedMoney(d.baqi) : "••••"}</span> },
+                    { key: "total", header: "Total (ab tak)", align: "right", cell: (d) => <span className="tabular font-extrabold text-stone-900">{showSales ? signedMoney(d.total) : "••••"}</span> },
+                ]}
+            />
 
             {/* Interactive Canvas Diagram Chart matching Reference Image Design */}
             <DualSeriesCanvasChart

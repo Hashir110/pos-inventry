@@ -137,22 +137,6 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
-                Buying Price (Khareed Rate) <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                required
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={form.buyingPrice}
-                onChange={(e) => set("buyingPrice", e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-stone-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">
                 Selling Price (Sale Rate) <span className="text-red-500">*</span>
               </label>
               <input

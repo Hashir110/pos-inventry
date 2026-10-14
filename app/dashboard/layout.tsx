@@ -29,7 +29,8 @@ import {
     FileText,
     Truck,
     TrendingUp,
-    HandCoins
+    HandCoins,
+    ClipboardCheck
 } from "lucide-react";
 import Link from "next/link";
 import type { Shop } from "../types";
@@ -212,6 +213,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 { name: t("navPos"), href: "/dashboard/pos", icon: ShoppingCart },
                 { name: t("navSalesHistory"), href: "/dashboard/sales", icon: Receipt },
                 { name: "Gate Pass", href: "/dashboard/gate-pass", icon: FileText },
+                { name: "Daily Closing", href: "/dashboard/daily-closing", icon: ClipboardCheck },
                 { name: t("navReturns"), href: "/dashboard/returns", icon: RotateCcw },
                 { name: t("navUdhar") + " / Wasooli", href: "/dashboard/udhar", icon: HandCoins },
             ],

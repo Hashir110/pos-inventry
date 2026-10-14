@@ -7,6 +7,7 @@ import { subscribeProducts } from "../../../lib/services/products";
 import { listSales } from "../../../lib/services/sales";
 import { subscribeExpenses } from "../../../lib/services/expenses";
 import type { Product, Sale, Expense } from "../../../types";
+import { itemSoldUnits } from "../../../lib/calc";
 import { DualSeriesCanvasChart } from "../../../components/CanvasDiagram";
 import {
   TrendingUp,
@@ -82,8 +83,7 @@ export default function AdminProfitPage() {
     totalRevenue += sale.totalAmount || 0;
     (sale.items || []).forEach((item) => {
       const buyingPrice = item.buyingPrice || 0;
-      const qty = item.qty || 0;
-      totalBuyingCost += buyingPrice * qty;
+      totalBuyingCost += buyingPrice * itemSoldUnits(item);
     });
   });
 

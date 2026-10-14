@@ -106,6 +106,13 @@ export const listCustomerCreditSales = async (ownerId: string, customerId: strin
     .sort((a, b) => b.date.localeCompare(a.date));
 };
 
+export const listAllPayments = async (ownerId: string): Promise<CustomerPayment[]> => {
+  const snap = await getDocs(query(collection(db, "payments"), where("ownerId", "==", ownerId)));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }) as CustomerPayment)
+    .sort((a, b) => b.date.localeCompare(a.date));
+};
+
 /** Ek customer ki payments, naye pehle */
 export const listPayments = async (ownerId: string, customerId: string): Promise<CustomerPayment[]> => {
   const snap = await getDocs(

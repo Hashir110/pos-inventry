@@ -1,8 +1,13 @@
 import type { Sale, SaleItem } from "../types";
 
+export const itemSoldUnits = (item: SaleItem): number => {
+  const sold =
+    item.type === "weight" && Number(item.totalWeight) > 0 ? Number(item.totalWeight) : Number(item.qty) || 0;
+  return Math.max(0, sold - (Number(item.returnedQty) || 0));
+};
+
 export const itemProfit = (item: SaleItem): number => {
-  const sold = Number(item.qty) || 0;
-  const remaining = sold - (Number(item.returnedQty) || 0);
+  const remaining = itemSoldUnits(item);
   if (remaining <= 0) return 0;
 
   const buying = Number(item.buyingPrice) || 0;

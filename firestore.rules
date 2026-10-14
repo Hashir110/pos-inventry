@@ -125,6 +125,12 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /daily_closings/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update, delete: if false;
+    }
+
     // --- Stock Transfers ---
     match /stock_transfers/{id} {
       allow read: if canRead();

@@ -178,6 +178,20 @@ export interface SupplierPayment {
   date: string;
 }
 
+export interface DailyClosingEntry {
+  id: string;
+  ownerId: string;
+  entryNo: string;
+  type: "Cash" | "Udhar";
+  itemName: string;
+  qty: number;
+  amount: number;
+  customerId?: string;
+  customerName?: string;
+  note?: string;
+  date: string;
+}
+
 export interface StockTransfer {
   id: string;
   ownerId: string;
