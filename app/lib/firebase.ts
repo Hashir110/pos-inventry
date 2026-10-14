@@ -19,6 +19,10 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
+if (typeof window !== "undefined" && (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY || firebaseConfig.apiKey === "AIzaSyDummyKeyForVercelBuildOnly12345")) {
+  console.error("⚠️ Firebase API Key missing or using dummy fallback! Please add NEXT_PUBLIC_FIREBASE_API_KEY in your deployment environment variables and redeploy.");
+}
+
 // Hot reload par dobara initialize na ho
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
