@@ -132,7 +132,10 @@ export default function SuppliersPage() {
 
     if (!prod || !sup) return;
 
-    const totalBill = purchaseQty * purchaseBuyingPrice;
+    const isWeight = prod.unitType === "weight";
+    const totalBill = isWeight
+      ? Number(purchaseQty) * 25 * Number(purchaseBuyingPrice)
+      : Number(purchaseQty) * Number(purchaseBuyingPrice);
 
     try {
       setSavingPurchase(true);
@@ -488,7 +491,7 @@ export default function SuppliersPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-stone-700 block mb-1">
-                    Quantity (Bags / KG) *
+                    {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" ? "Quantity (Bags / Katte) *" : "Quantity (Pcs) *"}
                   </label>
                   <input
                     type="number"
@@ -498,19 +501,30 @@ export default function SuppliersPage() {
                     className="input-field"
                     required
                   />
+                  {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
+                    <p className="text-[10px] text-stone-500 mt-1 font-medium">
+                      Wazan: <b className="text-stone-800">{purchaseQty * 25} kg</b> (25kg/Bag)
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-bold text-stone-700 block mb-1">
-                    Buying Price per Unit *
+                    Buying Rate ({products.find((p) => p.id === purchaseProdId)?.unitType === "weight" ? "per KG" : "per Pc"}) *
                   </label>
                   <input
                     type="number"
                     min="0"
+                    step="any"
                     value={purchaseBuyingPrice}
                     onChange={(e) => setPurchaseBuyingPrice(Number(e.target.value))}
                     className="input-field"
                     required
                   />
+                  {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
+                    <p className="text-[10px] text-stone-500 mt-1 font-medium">
+                      Per Bag: <b className="text-stone-800">Rs. {(purchaseBuyingPrice * 25).toLocaleString()}</b>
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -544,10 +558,21 @@ export default function SuppliersPage() {
                 </div>
               </div>
 
-              <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs flex justify-between font-bold">
-                <span>Total Bill Amount:</span>
+              <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs flex justify-between font-bold items-center">
+                <span>
+                  Total Bill Amount:
+                  {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
+                    <span className="text-[11px] text-stone-500 font-normal ml-1">
+                      ({purchaseQty * 25} kg × Rs. {purchaseBuyingPrice})
+                    </span>
+                  )}
+                </span>
                 <span className="text-amber-900 font-extrabold text-sm">
-                  Rs. {(purchaseQty * purchaseBuyingPrice).toLocaleString()}
+                  Rs. {(
+                    products.find((p) => p.id === purchaseProdId)?.unitType === "weight"
+                      ? purchaseQty * 25 * purchaseBuyingPrice
+                      : purchaseQty * purchaseBuyingPrice
+                  ).toLocaleString()}
                 </span>
               </div>
 
@@ -713,7 +738,7 @@ export default function SuppliersPage() {
                       >
                         <div>
                           <p className="font-bold text-stone-900">
-                            {pur.items.map((i) => `${i.productName} (${i.qty} units @ Rs. ${i.buyingPrice})`).join(", ")}
+                            {pur.items.map((i) => `${i.productName} (${i.qty} Bags @ Rs. ${i.buyingPrice})`).join(", ")}
                           </p>
                           <p className="text-[11px] text-stone-500">
                             {new Date(pur.date).toLocaleDateString()}

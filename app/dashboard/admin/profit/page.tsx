@@ -230,17 +230,22 @@ export default function AdminProfitPage() {
           { key: "buy", header: "Buying Rate (Rs.)", align: "right", cell: (p) => <span className="font-bold text-amber-700">Rs. {p.buyingPrice.toLocaleString()}</span> },
           { key: "sell", header: "Selling Rate (Rs.)", align: "right", cell: (p) => <span className="font-bold text-stone-900">Rs. {p.sellingPrice.toLocaleString()}</span> },
           { key: "margin", header: "Profit Per Unit", align: "right", cell: (p) => <span className="font-extrabold text-emerald-700">+ Rs. {(p.sellingPrice - p.buyingPrice).toLocaleString()}</span> },
-          { key: "gudam", header: "Gudam Stock", align: "center", cell: (p) => <span className="font-bold text-stone-700">{p.gudamStock ?? 0}</span> },
-          { key: "shop", header: "Shop Stock", align: "center", cell: (p) => <span className="font-bold text-stone-700">{p.shopStock ?? p.stock ?? 0}</span> },
+          { key: "gudam", header: "Gudam Stock", align: "center", cell: (p) => <span className="font-bold text-stone-700">{p.gudamStock ?? 0} {p.unitType === "weight" ? "Bags" : "pcs"}</span> },
+          { key: "shop", header: "Shop Stock", align: "center", cell: (p) => <span className="font-bold text-stone-700">{p.shopStock ?? p.stock ?? 0} {p.unitType === "weight" ? "Bags" : "pcs"}</span> },
           {
             key: "asset",
             header: "Stock Asset Value (Buying)",
             align: "right",
-            cell: (p) => (
-              <span className="font-extrabold text-stone-900">
-                Rs. {(((p.gudamStock ?? 0) + (p.shopStock ?? p.stock ?? 0)) * p.buyingPrice).toLocaleString()}
-              </span>
-            ),
+            cell: (p) => {
+              const isWeight = p.unitType === "weight";
+              const totalBags = (p.gudamStock ?? 0) + (p.shopStock ?? p.stock ?? 0);
+              const totalWeightKg = isWeight ? totalBags * 25 : totalBags;
+              return (
+                <span className="font-extrabold text-stone-900">
+                  Rs. {(totalWeightKg * p.buyingPrice).toLocaleString()}
+                </span>
+              );
+            },
           },
         ]}
       />

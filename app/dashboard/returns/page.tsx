@@ -165,7 +165,7 @@ export default function ReturnsPage() {
                                 const alreadyReturned = item.returnedQty || 0;
                                 return (
                                     <span className="font-bold text-red-600">
-                                        {alreadyReturned > 0 ? (item.type === "weight" ? `${alreadyReturned} kg` : alreadyReturned) : "—"}
+                                        {alreadyReturned > 0 ? (item.type === "weight" ? `${alreadyReturned} Bags` : alreadyReturned) : "—"}
                                     </span>
                                 );
                             },

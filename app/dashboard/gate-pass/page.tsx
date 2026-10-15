@@ -172,7 +172,7 @@ export default function GatePassPage() {
     const isWeight = selectedProduct.unitType === "weight";
     const weight = isWeight ? Number(itemWeight) || qty * 25 : 0;
 
-    const deductAmount = isWeight ? weight : qty;
+    const deductAmount = qty;
     if (deductAmount > gudamStock) {
       toast.warn(
         `Gudam mein sirf ${gudamStock} ${isWeight ? "KG" : "Bags"} available hain!`

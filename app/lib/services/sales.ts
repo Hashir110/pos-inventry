@@ -77,7 +77,7 @@ export const createOnlineSale = async (
     for (const { snapshot, item } of reads) {
       if (!snapshot.exists()) throw new Error(`${item.name} not found!`);
       const stock = (snapshot.data() as Product).stock;
-      const deductQty = (item.type === "weight" && item.totalWeight) ? item.totalWeight : item.qty;
+      const deductQty = item.qty;
       if (stock < deductQty) throw new Error(`Stock Low! ${item.name} only ${stock} left.`);
     }
 
@@ -88,7 +88,7 @@ export const createOnlineSale = async (
     }
     for (const { snapshot, item } of reads) {
       const prod = snapshot.data() as Product;
-      const deductQty = (item.type === "weight" && item.totalWeight) ? item.totalWeight : item.qty;
+      const deductQty = item.qty;
       const currentShop = prod.shopStock ?? 0;
       const currentGudam = prod.gudamStock ?? 0;
       let newShop = currentShop;
@@ -134,7 +134,7 @@ export const queueOfflineSale = (
 ): string => {
   for (const item of cart) {
     const p = localProducts.find((pr) => pr.id === item.id);
-    const deductQty = (item.type === "weight" && item.totalWeight) ? item.totalWeight : item.qty;
+    const deductQty = item.qty;
     if (!p || p.stock < deductQty) {
       throw new Error(`Stock Low! ${item.name} only ${p ? p.stock : 0} left.`);
     }
@@ -181,7 +181,7 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
       for (const { snapshot, item } of reads) {
         if (!snapshot.exists()) continue;
         const prod = snapshot.data() as Product;
-        const deductQty = (item.type === "weight" && item.totalWeight) ? item.totalWeight : item.qty;
+        const deductQty = item.qty;
         const currentShop = prod.shopStock ?? 0;
         const currentGudam = prod.gudamStock ?? 0;
         let newShop = currentShop;

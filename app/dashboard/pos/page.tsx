@@ -155,7 +155,7 @@ export default function POSPage() {
                 setProducts(prev => prev.map(p => {
                     const cartItem = cart.find(c => c.id === p.id);
                     if (!cartItem) return p;
-                    const deduct = p.unitType === "weight" && cartItem.totalWeight ? cartItem.totalWeight : cartItem.qty;
+                    const deduct = cartItem.qty;
                     return { ...p, stock: p.stock - deduct };
                 }));
             }
@@ -237,6 +237,25 @@ export default function POSPage() {
                 ...item,
                 totalWeight: weight,
                 isManualWeight: true,
+                total: lineGross,
+            };
+        }));
+    };
+
+    const updatePrice = (index: number, priceValue: string | number) => {
+        setCart(prev => prev.map((item, i) => {
+            if (i !== index) return item;
+            let price = parseFloat(String(priceValue));
+            if (isNaN(price) || price < 0) price = 0;
+
+            const isWeight = item.type === "weight";
+            const currentWeight = item.totalWeight ?? (item.qty * (item.weightPerBag || 25));
+            const lineGross = isWeight ? (currentWeight * price) : (item.qty * price);
+
+            return {
+                ...item,
+                price,
+                sellingPrice: price,
                 total: lineGross,
             };
         }));
@@ -338,7 +357,8 @@ export default function POSPage() {
                                 const isOutOfStock = product.stock <= 0;
                                 const inCartQty = cart.find(c => c.id === product.id)?.qty ?? 0;
                                 const isLow = !isOutOfStock && product.stock < 5;
-                                const unit = product.unitType === 'weight' ? 'kg' : 'pcs';
+                                const rateUnit = product.unitType === 'weight' ? 'kg' : 'pc';
+                                const stockUnit = product.unitType === 'weight' ? 'Bags' : 'pcs';
 
                                 return (
                                     <button
@@ -375,7 +395,7 @@ export default function POSPage() {
                                         <div className="mt-auto flex items-end justify-between gap-2">
                                             <span className="tabular font-display text-base font-bold text-brand-700">
                                                 Rs {product.sellingPrice}
-                                                <span className="ml-0.5 text-[11px] font-semibold text-stone-400">/{unit}</span>
+                                                <span className="ml-0.5 text-[11px] font-semibold text-stone-400">/{rateUnit}</span>
                                             </span>
                                             <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-bold tabular ${isOutOfStock
                                                 ? 'bg-red-100 text-red-700'
@@ -383,7 +403,7 @@ export default function POSPage() {
                                                     ? 'bg-amber-100 text-amber-800'
                                                     : 'bg-stone-100 text-stone-600'
                                                 }`}>
-                                                {isOutOfStock ? 'Khatam' : `${product.stock} ${unit}`}
+                                                {isOutOfStock ? 'Khatam' : `${product.stock} ${stockUnit}`}
                                             </span>
                                         </div>
                                     </button>
@@ -475,6 +495,11 @@ export default function POSPage() {
                                                     <p className="truncate text-sm font-bold text-stone-900">{item.name}</p>
                                                     <p className="text-[11px] font-semibold text-brand-700">
                                                         Rate: Rs. {item.price} / {isWeight ? "kg" : "pc"}
+                                                        {isWeight && (
+                                                            <span className="text-stone-400 font-normal ml-1">
+                                                                (Rs. {Math.round(item.price * (item.weightPerBag || 25)).toLocaleString()} / Bag)
+                                                            </span>
+                                                        )}
                                                     </p>
                                                 </div>
                                             </div>
@@ -483,7 +508,7 @@ export default function POSPage() {
                                             </button>
                                         </div>
 
-                                        <div className={`grid gap-2 pt-1 border-t border-stone-100 text-xs ${isWeight ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                        <div className={`grid gap-2 pt-1 border-t border-stone-100 text-xs ${isWeight ? 'grid-cols-3' : 'grid-cols-2'}`}>
                                             <div>
                                                 <label className="text-[10px] font-bold uppercase text-stone-400 block mb-0.5">
                                                     {isWeight ? "Bags (Qty)" : "Quantity"}
@@ -537,6 +562,30 @@ export default function POSPage() {
                                                     </div>
                                                 </div>
                                             )}
+
+                                            <div>
+                                                <div className="flex justify-between items-center mb-0.5">
+                                                    <label className="text-[10px] font-bold uppercase text-stone-500">
+                                                        Rate/{isWeight ? "kg" : "pc"}
+                                                    </label>
+                                                    <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1 rounded">Edit</span>
+                                                </div>
+                                                <div className="relative">
+                                                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-stone-400 pointer-events-none">
+                                                        Rs.
+                                                    </span>
+                                                    <input
+                                                        type="number"
+                                                        step="any"
+                                                        min="0"
+                                                        className="tabular w-full rounded-lg border border-amber-300 bg-amber-50/40 hover:bg-white focus:bg-white pl-6 pr-1.5 py-1.5 text-xs font-bold outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                                                        value={item.price}
+                                                        onChange={(e) => updatePrice(index, e.target.value)}
+                                                        placeholder="Rate"
+                                                        title="Customer ke mutabiq rate customize karein (e.g. 110 ya 115)"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
 
                                         <div className="flex items-center justify-between pt-1 border-t border-dashed border-stone-200 text-xs">
@@ -684,10 +733,10 @@ export default function POSPage() {
                                 </thead>
                                 <tbody className="divide-y divide-stone-200">
                                     {cart.map((item, idx) => {
-                                        const qtyStr = String(item.qty).padStart(2, "0");
+                                        const qtyStr = `${item.qty} ${item.type === "weight" ? "Bags" : "pcs"}`;
                                         const isWeight = item.type === "weight";
                                         const weightVal = item.totalWeight ?? (item.qty * (item.weightPerBag || 25));
-                                        const weightStr = isWeight ? `${weightVal}kg` : `${item.qty} pcs`;
+                                        const weightStr = isWeight ? `${weightVal}kg` : "—";
 
                                         return (
                                             <tr key={idx} className="align-top">
@@ -695,7 +744,7 @@ export default function POSPage() {
                                                 <td className="py-1.5 px-1 font-semibold leading-tight">{item.name}</td>
                                                 <td className="py-1.5 px-1 text-center font-medium whitespace-nowrap">{weightStr}</td>
                                                 <td className="py-1.5 px-1 text-right tabular">{item.price}</td>
-                                                <td className="py-1.5 pl-1 text-right font-bold tabular">{Math.round(item.total)}</td>
+                                                <td className="py-1.5 pl-1 text-right font-bold tabular">{Math.round(item.total).toLocaleString()}</td>
                                             </tr>
                                         );
                                     })}

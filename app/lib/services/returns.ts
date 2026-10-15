@@ -29,8 +29,11 @@ export const processReturn = async (
       sale.paymentMethod === "Udhar" && sale.customerId ? doc(db, "customers", sale.customerId) : null;
     const customerSnap = customerRef ? await transaction.get(customerRef) : null;
 
+    const isWeight = item.type === "weight";
+    const bagWeight = item.weightPerBag || 25;
     const unitPrice = Number(item.price ?? item.sellingPrice ?? 0);
-    refundAmount = Math.round(returnQty * unitPrice * 100) / 100;
+    const returnUnits = isWeight ? returnQty * bagWeight : returnQty;
+    refundAmount = Math.round(returnUnits * unitPrice * 100) / 100;
     if (isNaN(refundAmount)) throw new Error("Price calculation error");
 
     if (productSnap.exists()) {

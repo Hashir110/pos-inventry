@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -169,11 +169,10 @@ export default function InventoryList() {
                   item.unitType === "weight" ? "bg-orange-100 text-orange-800" : "bg-sky-100 text-sky-800"
                 }`}
               >
-                {item.unitType === "weight" ? "Weight (kg)" : "Count (pcs)"}
+                {item.unitType === "weight" ? "Weight (25kg Bag)" : "Count (pcs)"}
               </span>
             ),
           },
-          { key: "buy", header: t("buyingPrice"), align: "right", cell: (item) => <span className="text-stone-500">Rs. {item.buyingPrice}</span> },
           { key: "sell", header: t("sellingPrice"), align: "right", cell: (item) => <span className="font-bold text-stone-900">Rs. {item.sellingPrice}</span> },
           {
             key: "gudam",
@@ -181,7 +180,7 @@ export default function InventoryList() {
             align: "center",
             cell: (item) => (
               <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-purple-100 text-purple-800 border border-purple-200">
-                {item.gudamStock ?? 0} {item.unitType === "weight" ? "kg" : "pcs"}
+                {item.gudamStock ?? 0} {item.unitType === "weight" ? "Bags" : "pcs"}
               </span>
             ),
           },
@@ -191,7 +190,7 @@ export default function InventoryList() {
             align: "center",
             cell: (item) => (
               <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
-                {item.shopStock ?? item.stock ?? 0} {item.unitType === "weight" ? "kg" : "pcs"}
+                {item.shopStock ?? item.stock ?? 0} {item.unitType === "weight" ? "Bags" : "pcs"}
               </span>
             ),
           },
@@ -200,7 +199,7 @@ export default function InventoryList() {
             header: "Total Stock",
             align: "right",
             cell: (item) => {
-              const unit = item.unitType === "weight" ? "kg" : "pcs";
+              const unit = item.unitType === "weight" ? "Bags" : "pcs";
               const out = item.stock <= 0;
               const low = !out && item.stock < 5;
               return (
@@ -266,8 +265,8 @@ export default function InventoryList() {
               <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs space-y-1">
                 <p className="font-bold text-stone-800">Available Stock Breakdown:</p>
                 <div className="flex justify-between text-stone-600">
-                  <span>Gudam Stock: <b className="text-purple-700">{transferProd.gudamStock ?? 0}</b></span>
-                  <span>Dukan Stock: <b className="text-blue-700">{transferProd.shopStock ?? transferProd.stock ?? 0}</b></span>
+                  <span>Gudam Stock: <b className="text-purple-700">{transferProd.gudamStock ?? 0} {transferProd.unitType === "weight" ? "Bags" : "pcs"}</b></span>
+                  <span>Dukan Stock: <b className="text-blue-700">{transferProd.shopStock ?? transferProd.stock ?? 0} {transferProd.unitType === "weight" ? "Bags" : "pcs"}</b></span>
                 </div>
               </div>
 

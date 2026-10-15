@@ -93,7 +93,7 @@ export const issueGatePass = async (
         const currentGudam = data.gudamStock ?? 0;
         const currentShop = data.shopStock ?? data.stock ?? 0;
 
-        const deductQty = (data.unitType === "weight" && item.weight) ? item.weight : item.qty;
+        const deductQty = item.qty;
         const newGudam = Math.max(0, currentGudam - deductQty);
         const newTotal = newGudam + currentShop;
 

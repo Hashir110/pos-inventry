@@ -8,7 +8,6 @@ import { useRouter } from "next/navigation";
 
 interface FormValues {
   name: string;
-  buyingPrice: string;
   sellingPrice: string;
   gudamStock: string;
   shopStock: string;
@@ -29,7 +28,6 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
 
   const [form, setForm] = useState<FormValues>({
     name: initial?.name ?? "",
-    buyingPrice: initial ? String(initial.buyingPrice) : "",
     sellingPrice: initial ? String(initial.sellingPrice) : "",
     gudamStock: initial ? String(initial.gudamStock ?? 0) : "0",
     shopStock: initial ? String(initial.shopStock ?? initial.stock ?? 0) : "0",
@@ -50,7 +48,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
     try {
       await onSubmit({
         name: form.name.trim(),
-        buyingPrice: parseFloat(form.buyingPrice) || 0,
+        buyingPrice: initial?.buyingPrice ?? 0,
         sellingPrice: parseFloat(form.sellingPrice) || 0,
         stock: total,
         gudamStock: gudam,
@@ -114,8 +112,8 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
                 onChange={(e) => set("unitType", e.target.value as UnitType)}
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-stone-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
               >
-                <option value="weight">By Weight (KG)</option>
-                <option value="count">By Count (Pieces / Bags)</option>
+                <option value="weight">By Weight (25kg Bags / Katte)</option>
+                <option value="count">By Count (Pieces / Items)</option>
               </select>
             </div>
           </div>
@@ -134,10 +132,10 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
         </div>
 
         <div className="p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
-                Selling Price (Sale Rate) <span className="text-red-500">*</span>
+                Selling Price ({form.unitType === "weight" ? "Sale Rate / KG" : "Sale Rate / Pc"}) <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -153,13 +151,13 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
 
             <div>
               <label className="block text-xs font-bold text-purple-900 mb-1">
-                Gudam (Warehouse) Stock <span className="text-red-500">*</span>
+                Gudam (Warehouse) Stock ({form.unitType === "weight" ? "Bags / Katte" : "Pieces"}) <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
                 required
                 min="0"
-                step="0.01"
+                step="any"
                 placeholder="0"
                 value={form.gudamStock}
                 onChange={(e) => set("gudamStock", e.target.value)}
@@ -169,13 +167,13 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
 
             <div>
               <label className="block text-xs font-bold text-blue-900 mb-1">
-                Dukan (Shop) Stock <span className="text-red-500">*</span>
+                Dukan (Shop) Stock ({form.unitType === "weight" ? "Bags / Katte" : "Pieces"}) <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
                 required
                 min="0"
-                step="0.01"
+                step="any"
                 placeholder="0"
                 value={form.shopStock}
                 onChange={(e) => set("shopStock", e.target.value)}
@@ -183,6 +181,10 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
               />
             </div>
           </div>
+          <p className="text-[11px] text-stone-500 mt-4 bg-stone-50 p-2.5 rounded-lg border border-stone-200 flex items-center gap-1.5">
+            <span className="font-bold text-brand-700">Note:</span>
+            <span>Kharedari rate (Buying Price) yahan enter karne ki zaroorat nahi hai. Ye Supplier se maal uthate waqt purchase bill se automatically update ho jata hai.</span>
+          </p>
         </div>
       </div>
 
