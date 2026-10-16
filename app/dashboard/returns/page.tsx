@@ -68,7 +68,7 @@ export default function ReturnsPage() {
         }
     };
     return (
-        <div className="mx-auto max-w-4xl">
+        <div>
             <PageHeader title="Returns" subtitle="Invoice number se bill dhoondein aur item wapas lein" />
 
             <form onSubmit={handleSearch} className="card mb-6 flex flex-col gap-3 p-4 sm:flex-row">

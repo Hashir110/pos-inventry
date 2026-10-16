@@ -18,6 +18,8 @@ export interface SaleMeta {
   description: string;
   paymentMethod: PaymentMethod;
   customerId?: string;
+  transport?: string;
+  extraCharges?: number;
 }
 
 const PENDING_KEY = "pendingSales";
@@ -37,6 +39,8 @@ const savePendingSales = (queue: PendingSale[]) => {
 const buildMeta = (meta: SaleMeta) => ({
   customerName: meta.customerName || "Walk-in",
   description: meta.description || "",
+  ...(meta.transport?.trim() ? { transport: meta.transport.trim() } : {}),
+  ...(meta.extraCharges && meta.extraCharges > 0 ? { extraCharges: meta.extraCharges } : {}),
   paymentMethod: meta.paymentMethod,
   ...(meta.paymentMethod === "Udhar" && meta.customerId ? { customerId: meta.customerId } : {}),
 });
@@ -253,7 +257,107 @@ export const listSalesInRange = async (
   return toSales(snap.docs);
 };
 
-export const findSaleByInvoice = async (ownerId: string, invoiceNo: string): Promise<Sale | null> => {
+export interface SaleItemEdit {
+  qty: number;
+  totalWeight?: number;
+  price: number;
+}
+
+const deductedUnits = (item: Pick<SaleItem, "type" | "totalWeight" | "qty">): number =>
+  item.type === "weight" && item.totalWeight ? item.totalWeight : item.qty;
+
+/**
+ * Bill ke items badalna (bags / wazan / rate): stock aur (Udhar ho to) party ka balance
+ * farq ke hisaab se theek hota hai, sab ek transaction mein. Return ho chuka bill edit nahi hota.
+ */
+export const updateSaleItems = async (
+  saleId: string,
+  edits: SaleItemEdit[],
+  extraCharges?: number
+): Promise<{ items: SaleItem[]; totalAmount: number; extraCharges: number }> => {
+  const saleRef = doc(db, "sales", saleId);
+  let result: { items: SaleItem[]; totalAmount: number; extraCharges: number } = { items: [], totalAmount: 0, extraCharges: 0 };
+
+  await runTransaction(db, async (transaction) => {
+    const saleSnap = await transaction.get(saleRef);
+    if (!saleSnap.exists()) throw new Error("Bill nahi mila");
+    const sale = saleSnap.data() as Omit<Sale, "id">;
+
+    if ((sale.refundedAmount || 0) > 0 || sale.items.some((i) => (i.returnedQty || 0) > 0)) {
+      throw new Error("Return wala bill edit nahi ho sakta");
+    }
+    if (edits.length !== sale.items.length) throw new Error("Items badal gaye, bill dobara kholein");
+
+    const newItems: SaleItem[] = sale.items.map((item, i) => {
+      const e = edits[i];
+      if (!(e.qty > 0)) throw new Error(`${item.name}: bags 0 se zyada hon`);
+      if (!(e.price >= 0)) throw new Error(`${item.name}: rate galat hai`);
+
+      const isWeight = item.type === "weight";
+      const perBag = item.weightPerBag || 25;
+      const weight = isWeight ? e.totalWeight ?? e.qty * perBag : undefined;
+      if (isWeight && !((weight ?? 0) > 0)) throw new Error(`${item.name}: wazan 0 se zyada ho`);
+
+      return {
+        ...item,
+        qty: e.qty,
+        price: e.price,
+        sellingPrice: e.price,
+        ...(isWeight ? { totalWeight: weight, isManualWeight: weight !== e.qty * perBag } : {}),
+        total: roundMoney((isWeight ? (weight ?? 0) : e.qty) * e.price),
+      };
+    });
+    const extra = Math.max(0, roundMoney(extraCharges ?? sale.extraCharges ?? 0));
+    const newTotal = roundMoney(newItems.reduce((sum, it) => sum + it.total, 0) + extra);
+    const oldTotal = sale.totalAmount;
+
+    const productReads = [];
+    for (let i = 0; i < newItems.length; i++) {
+      const diff = deductedUnits(newItems[i]) - deductedUnits(sale.items[i]);
+      if (diff === 0) continue;
+      const ref = doc(db, "products", newItems[i].id);
+      productReads.push({ ref, snap: await transaction.get(ref), diff, name: newItems[i].name });
+    }
+
+    const customerRef =
+      sale.paymentMethod === "Udhar" && sale.customerId ? doc(db, "customers", sale.customerId) : null;
+    const customerSnap = customerRef ? await transaction.get(customerRef) : null;
+
+    for (const { ref, snap, diff, name } of productReads) {
+      if (!snap.exists()) continue;
+      const prod = snap.data() as Product;
+      const shop = prod.shopStock ?? 0;
+      const gudam = prod.gudamStock ?? 0;
+      let newShop = shop;
+      let newGudam = gudam;
+
+      if (diff > 0) {
+        if (prod.stock < diff) throw new Error(`Stock Low! ${name} only ${prod.stock} left.`);
+        if (shop >= diff) {
+          newShop = shop - diff;
+        } else {
+          newGudam = Math.max(0, gudam - (diff - shop));
+          newShop = 0;
+        }
+      } else {
+        newShop = shop - diff;
+      }
+      transaction.update(ref, { stock: newShop + newGudam, shopStock: newShop, gudamStock: newGudam });
+    }
+
+    if (customerRef && customerSnap?.exists() && newTotal !== oldTotal) {
+      const balance = (customerSnap.data() as Customer).balance || 0;
+      transaction.update(customerRef, { balance: Math.max(0, roundMoney(balance + newTotal - oldTotal)) });
+    }
+
+    transaction.update(saleRef, { items: newItems, totalAmount: newTotal, extraCharges: extra, editedAt: new Date().toISOString() });
+    result = { items: newItems, totalAmount: newTotal, extraCharges: extra };
+  });
+
+  return result;
+};
+
+export const findSaleByInvoice =async (ownerId: string, invoiceNo: string): Promise<Sale | null> => {
   const snap = await getDocs(
     query(collection(db, "sales"), where("ownerId", "==", ownerId), where("invoiceNo", "==", invoiceNo.trim()))
   );

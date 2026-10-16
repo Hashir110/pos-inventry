@@ -263,7 +263,7 @@ export default function GatePassPage() {
   }, [gatePasses, searchTerm]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6">
       <PageHeader
         title="Gate Pass"
         subtitle="Gudam se party ko maal dispatch karne ke liye entry karein aur stock maintain karein"

@@ -183,7 +183,7 @@ export default function DailyClosingPage() {
   }, [closings, payments, supplierPayments, date]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="Daily Closing"
         subtitle="Din ka hisaab: bikri, amad (wasooli) aur jamad (supplier ko payment)"

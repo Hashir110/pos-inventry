@@ -17,6 +17,10 @@
   background: #a8a29e;
 }
 
+html {
+  font-size: 14px;
+}
+
 body {
   background-color: #f7f7f7;
   color: #212b36;
@@ -70,6 +74,41 @@ textarea:focus-visible {
     }
 }
 
+@media print {
+  @page {
+    size: auto;
+    margin: 2mm;
+  }
+  body {
+    margin: 0;
+    padding: 0;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #printable-receipt,
+  #printable-receipt * {
+    visibility: visible;
+  }
+  #printable-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 100% !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 4px;
+    margin: 0;
+    background: white;
+    color: black;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
 @layer base {
   h1,
   h2,
@@ -138,6 +177,16 @@ textarea:focus-visible {
   }
   .field {
     @apply w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm font-medium text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10;
+  }
+  select.field,
+  select.input-field {
+    @apply cursor-pointer truncate pr-10 hover:border-stone-400;
+    background-position: right 0.85rem center;
+    background-size: 0.95rem 0.95rem;
+  }
+  select.field:focus,
+  select.input-field:focus {
+    @apply border-brand-500;
   }
   .input-field {
     @apply w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2.5 text-sm font-medium text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10;

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import { useStore } from "../../store/useStore";
@@ -88,7 +88,7 @@ export default function ExpensesPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div>
       <PageHeader
         title={t("expensesTitle")}
         subtitle={t("expensesSubtitle")}

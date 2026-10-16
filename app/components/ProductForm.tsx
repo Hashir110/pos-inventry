@@ -62,7 +62,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-6xl mx-auto">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-white">
           <h5 className="flex items-center gap-2 text-sm font-bold text-stone-800">
