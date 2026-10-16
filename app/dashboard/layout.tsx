@@ -412,11 +412,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             {isOnline ? t("online") : t("offline")}
                         </div>
 
-                        {pathname !== "/dashboard/pos" && (
-                            <Link href="/dashboard/pos" className="btn-primary !py-2">
-                                <ShoppingCart size={16} /> <span className="hidden sm:inline">{t("newSale")}</span>
-                            </Link>
-                        )}
                     </div>
                 </header>
 

@@ -60,7 +60,7 @@ service cloud.firestore {
       // Update: items, refundedAmount, aur gatePassGenerated
       allow update: if isOwner() && keepsOwner()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['items', 'refundedAmount', 'gatePassGenerated']);
+             .hasOnly(['items', 'refundedAmount', 'gatePassGenerated', 'totalAmount', 'editedAt', 'extraCharges']);
       allow delete: if isOwner();
     }
 
@@ -129,6 +129,13 @@ service cloud.firestore {
       allow read: if canRead();
       allow create: if createsOwn();
       allow update, delete: if false;
+    }
+
+    match /transports/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update: if isOwner() && keepsOwner();
+      allow delete: if isOwner();
     }
 
     // --- Stock Transfers ---

@@ -70,6 +70,9 @@ export interface Sale {
   isOffline?: boolean;
   syncedAt?: string;
   gatePassGenerated?: boolean;
+  editedAt?: string;
+  transport?: string;
+  extraCharges?: number;
 }
 
 export type PendingSale = Omit<Sale, "id">;
@@ -190,6 +193,14 @@ export interface DailyClosingEntry {
   customerName?: string;
   note?: string;
   date: string;
+}
+
+export interface Transport {
+  id: string;
+  ownerId: string;
+  name: string;
+  phone?: string;
+  createdAt: string;
 }
 
 export interface StockTransfer {
