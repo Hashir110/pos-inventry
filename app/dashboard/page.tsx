@@ -5,26 +5,25 @@ import { useStore } from "../store/useStore";
 import { toast } from 'react-toastify';
 import StatCard from "../components/StatCard";
 import PageHeader from "../components/PageHeader";
-import type { Sale } from "../types";
+import type { Expense, Sale } from "../types";
 import { listSalesInRange } from "../lib/services/sales";
 import { listExpensesInRange } from "../lib/services/expenses";
 import { countLowStock } from "../lib/services/products";
-import { listClosings } from "../lib/services/dailyClosing";
+import { listDayClosings } from "../lib/services/dailyClosing";
 import { listSupplierPayments } from "../lib/services/suppliers";
-import { saleNetAmount, saleProfit } from "../lib/calc";
+import { saleNetAmount } from "../lib/calc";
+import { customerLabel } from "../lib/format";
 import { useLanguage } from "../store/useLanguage";
 import { DualSeriesCanvasChart } from "../components/CanvasDiagram";
 import {
     DollarSign,
     Package,
-    TrendingUp,
     FileText,
     Search,
     Calendar,
     Filter,
     Loader2,
     Wallet,
-    X,
     Banknote,
     CreditCard,
     History,
@@ -52,17 +51,9 @@ export default function DashboardHome() {
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
 
-    const [showSales, setShowSales] = useState(false);
-    const [showProfit, setShowProfit] = useState(false);
-
-    const [isPassModalOpen, setIsPassModalOpen] = useState(false);
-    const [passInput, setPassInput] = useState("");
-    const [targetField, setTargetField] = useState<"sales" | "profit" | null>(null);
-
     // Stats Data
     const [stats, setStats] = useState({
         totalSales: 0,
-        netProfit: 0,
         totalInvoices: 0,
         lowStockCount: 0,
         totalExpenses: 0,
@@ -71,8 +62,10 @@ export default function DashboardHome() {
         udharSales: 0
     });
 
+    const [expenseItems, setExpenseItems] = useState<Expense[]>([]);
     const [closingDays, setClosingDays] = useState<ClosingDay[]>([]);
     const [closingTotal, setClosingTotal] = useState(0);
+    const [jamadRange, setJamadRange] = useState(0);
 
     // Invoices List
     const [invoices, setInvoices] = useState<Sale[]>([]);
@@ -108,7 +101,6 @@ export default function DashboardHome() {
 
             // --- CALCULATIONS ---
             let totalRevenue = 0;
-            let grossProfit = 0;
             let cashSum = 0;
             let bankSum = 0;
             let udharSum = 0;
@@ -116,7 +108,6 @@ export default function DashboardHome() {
             allSales.forEach(sale => {
                 const netSaleAmount = saleNetAmount(sale);
                 totalRevenue += netSaleAmount;
-                grossProfit += saleProfit(sale);
 
                 // trim: extra space ka masla na ho. Unknown method ko Cash mein ginte hain.
                 const method = sale.paymentMethod ? sale.paymentMethod.trim() : "Cash";
@@ -136,7 +127,6 @@ export default function DashboardHome() {
             }
         setStats({
             totalSales: totalRevenue,
-            netProfit: grossProfit - totalExpenseSum,
             totalInvoices: allSales.length,
             lowStockCount: lowStock,
             totalExpenses: totalExpenseSum,
@@ -145,33 +135,31 @@ export default function DashboardHome() {
             udharSales: udharSum
         });
         setInvoices(allSales);
+        setExpenseItems(allExpenses);
 
-        try {
+               try {
             const [closings, supplierPays] = await Promise.all([
-                listClosings(currentUser.uid),
+                listDayClosings(currentUser.uid),
                 listSupplierPayments(currentUser.uid),
             ]);
-            const days = new Map<string, { sale: number; jamad: number }>();
-            const bucket = (iso: string) => {
-                const k = dayKey(iso);
-                if (!days.has(k)) days.set(k, { sale: 0, jamad: 0 });
-                return days.get(k)!;
-            };
-            closings.forEach((c) => { bucket(c.date).sale += c.amount; });
-            supplierPays.forEach((p) => { bucket(p.date).jamad += p.amount; });
-
-            let running = 0;
-            const all = [...days.entries()]
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([day, v]) => {
-                    const baqi = v.sale - v.jamad;
-                    running += baqi;
-                    return { day, sale: v.sale, jamad: v.jamad, baqi, total: running };
-                });
             const fromKey = dayKey(startIso);
             const toKey = isFilter ? dayKey(endIso) : "9999-12-31";
+
+            let running = 0;
+            const all = [...closings]
+                .sort((a, b) => a.date.localeCompare(b.date))
+                .map((c) => {
+                    const baqi = c.salesTotal - c.jamad;
+                    running += baqi;
+                    return { day: c.date, sale: c.salesTotal, jamad: c.jamad, baqi, total: running };
+                });
             setClosingTotal(running);
             setClosingDays(all.filter((d) => d.day >= fromKey && d.day <= toKey).reverse());
+            setJamadRange(
+                supplierPays
+                    .filter((p) => dayKey(p.date) >= fromKey && dayKey(p.date) <= toKey)
+                    .reduce((sum, p) => sum + p.amount, 0)
+            );
         } catch (e) {
             console.error("Closing summary failed:", e);
             toast.error("Closing hisaab load nahi hua (Firestore rules deploy karein)");
@@ -205,40 +193,8 @@ export default function DashboardHome() {
     const filteredInvoicesList = invoices.filter(inv =>
         inv.invoiceNo?.toLowerCase().includes(searchInvoice.toLowerCase()));
 
-    const handleToggle = (field: "sales" | "profit") => {
-        // Agar pehle se khula hai toh band kardo (No password needed to hide)
-        if (field === 'sales' && showSales) return setShowSales(false);
-        if (field === 'profit' && showProfit) return setShowProfit(false);
-
-        // Agar hidden hai toh password modal kholo
-        setTargetField(field);
-        setPassInput(""); // Clear previous input
-        setIsPassModalOpen(true);
-    };
-
-    const verifyPassword = (e: React.FormEvent) => {
-        e.preventDefault();
-        const savedPass = localStorage.getItem("dashboardPass");
-
-        if (!savedPass) {
-            toast.error("Please set a password in Settings first!");
-            return;
-        }
-
-        if (passInput === savedPass) {
-            if (targetField === 'sales') setShowSales(true);
-            if (targetField === 'profit') setShowProfit(true);
-            setIsPassModalOpen(false); // Close Modal
-            toast.success("Access Granted");
-        } else {
-            toast.error("Wrong Password!");
-        }
-    };
-
     const money = (n: number) => `Rs ${Math.round(n || 0).toLocaleString()}`;
     const signedMoney = (n: number) => `${n < 0 ? "− " : ""}${money(Math.abs(n))}`;
-    const closingSale = closingDays.reduce((s, d) => s + d.sale, 0);
-    const closingJamad = closingDays.reduce((s, d) => s + d.jamad, 0);
     const paymentTotal =(stats.cashSales || 0) + (stats.bankSales || 0) + (stats.udharSales || 0);
     const pct = (n: number) => (paymentTotal > 0 ? Math.max(0, Math.min(100, ((n || 0) / paymentTotal) * 100)) : 0);
 
@@ -301,25 +257,11 @@ export default function DashboardHome() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard
                     title={t("totalSales")}
-                    value={money(closingSale)}
-                    subtitle="Daily Closing (Cash + Udhar)"
+                    value={money(stats.totalSales)}
+                    subtitle={t("afterRefunds")}
                     icon={DollarSign}
                     theme="blue"
                     loading={loading}
-                    isPrivate
-                    isVisible={showSales}
-                    onToggle={() => handleToggle('sales')}
-                />
-                <StatCard
-                    title={t("netProfit")}
-                    value={money(stats.netProfit)}
-                    subtitle={t("profitMinusExpenses")}
-                    icon={TrendingUp}
-                    theme="green"
-                    loading={loading}
-                    isPrivate
-                    isVisible={showProfit}
-                    onToggle={() => handleToggle('profit')}
                 />
                 <StatCard
                     title={t("expenses")}
@@ -342,25 +284,19 @@ export default function DashboardHome() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <StatCard
                     title="Supplier ko diye"
-                    value={money(closingJamad)}
+                    value={money(jamadRange)}
                     subtitle="Jamad (supplier payments)"
                     icon={Truck}
                     theme="red"
                     loading={loading}
-                    isPrivate
-                    isVisible={showSales}
-                    onToggle={() => handleToggle('sales')}
                 />
                 <StatCard
                     title="Baqi"
-                    value={signedMoney(closingSale - closingJamad)}
-                    subtitle="Closing Sale − Supplier payment"
+                    value={signedMoney(stats.totalSales - jamadRange)}
+                    subtitle="Sales − Supplier payment"
                     icon={Wallet}
                     theme="green"
                     loading={loading}
-                    isPrivate
-                    isVisible={showSales}
-                    onToggle={() => handleToggle('sales')}
                 />
                 <StatCard
                     title="Total Jama"
@@ -369,9 +305,6 @@ export default function DashboardHome() {
                     icon={PiggyBank}
                     theme="purple"
                     loading={loading}
-                    isPrivate
-                    isVisible={showSales}
-                    onToggle={() => handleToggle('sales')}
                 />
             </div>
 
@@ -388,32 +321,37 @@ export default function DashboardHome() {
                 }
                 columns={[
                     { key: "day", header: t("date"), className: "whitespace-nowrap", cell: (d) => <span className="font-semibold text-stone-800">{formatDate(d.day)}</span> },
-                    { key: "sale", header: "Sale", align: "right", cell: (d) => <span className="tabular font-bold">{showSales ? money(d.sale) : "••••"}</span> },
-                    { key: "jamad", header: "Jamad", align: "right", cell: (d) => <span className="tabular font-bold text-red-600">{showSales ? `− ${money(d.jamad)}` : "••••"}</span> },
-                    { key: "baqi", header: "Baqi", align: "right", cell: (d) => <span className={`tabular font-extrabold ${d.baqi < 0 ? "text-red-600" : "text-emerald-600"}`}>{showSales ? signedMoney(d.baqi) : "••••"}</span> },
-                    { key: "total", header: "Total (ab tak)", align: "right", cell: (d) => <span className="tabular font-extrabold text-stone-900">{showSales ? signedMoney(d.total) : "••••"}</span> },
+                    { key: "sale", header: "Sale", align: "right", cell: (d) => <span className="tabular font-bold">{money(d.sale)}</span> },
+                    { key: "jamad", header: "Jamad", align: "right", cell: (d) => <span className="tabular font-bold text-red-600">{`− ${money(d.jamad)}`}</span> },
+                    { key: "baqi", header: "Baqi", align: "right", cell: (d) => <span className={`tabular font-extrabold ${d.baqi < 0 ? "text-red-600" : "text-emerald-600"}`}>{signedMoney(d.baqi)}</span> },
+                    { key: "total", header: "Total (ab tak)", align: "right", cell: (d) => <span className="tabular font-extrabold text-stone-900">{signedMoney(d.total)}</span> },
                 ]}
             />
 
             {/* Interactive Canvas Diagram Chart matching Reference Image Design */}
             <DualSeriesCanvasChart
-                title="Sales & Profit Trends"
+                title="Sales & Expenses"
                 series1Label="Sales Volume"
-                series2Label="Pure Profit"
+                series2Label="Expenses"
                 series1Color="#fe9f43"
-                series2Color="#10b981"
+                series2Color="#ef4444"
                 data={
                     invoices.length > 0
                         ? (() => {
                             const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
                             const map1: Record<string, number> = {};
                             const map2: Record<string, number> = {};
+                            expenseItems.forEach((ex) => {
+                                if (!ex.date) return;
+                                const dn = new Date(ex.date).toLocaleDateString("en-US", { weekday: "short" });
+                                map2[dn] = (map2[dn] || 0) + (Number(ex.amount) || 0);
+                            });
                             invoices.forEach((inv) => {
                                 if (!inv.date) return;
                                 const d = new Date(inv.date);
                                 const dayName = d.toLocaleDateString("en-US", { weekday: "short" });
                                 map1[dayName] = (map1[dayName] || 0) + saleNetAmount(inv);
-                                map2[dayName] = (map2[dayName] || 0) + saleProfit(inv);
+                                
                             });
                             return days.map((day) => ({
                                 label: day,
@@ -534,7 +472,7 @@ export default function DashboardHome() {
                 columns={[
                     { key: "date", header: t("date"), cell: (inv) => <span className="text-stone-600">{formatDate(inv.date)}</span> },
                     { key: "inv", header: t("invoices"), cell: (inv) => <span className="font-mono text-xs font-semibold text-stone-500">#{inv.invoiceNo || "-"}</span> },
-                    { key: "customer", header: t("customer"), cell: (inv) => <span className="font-semibold text-stone-800">{inv.customerName || "Walk-in"}</span> },
+                    { key: "customer", header: t("customer"), cell: (inv) => <span className="font-semibold text-stone-800">{customerLabel(inv.customerName)}</span> },
                     {
                         key: "pay",
                         header: t("paymentBreakdown"),
@@ -549,35 +487,6 @@ export default function DashboardHome() {
                 ]}
             />
 
-            {isPassModalOpen && (
-                <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-                    <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-pop">
-                        <button
-                            onClick={() => setIsPassModalOpen(false)}
-                            className="absolute right-3 top-3 rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
-                        >
-                            <X size={20} />
-                        </button>
-
-                        <h3 className="mb-1 text-lg font-extrabold text-stone-900">{t("securityCheck")}</h3>
-                        <p className="mb-4 text-sm text-stone-500">{t("enterPasswordToView")}</p>
-
-                        <form onSubmit={verifyPassword}>
-                            <input
-                                type="password"
-                                autoFocus
-                                className="field mb-4 text-center text-lg tracking-widest"
-                                placeholder="Password"
-                                value={passInput}
-                                onChange={(e) => setPassInput(e.target.value)}
-                            />
-                            <button type="submit" className="btn-primary w-full !py-3">
-                                {t("unlock")}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

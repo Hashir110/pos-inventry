@@ -98,7 +98,7 @@ export default function CustomerSelect({
               </div>
             ) : (
               <span className="text-sm font-medium text-stone-600">
-                {isUdhar ? "⚠️ Party Select Karein (Zaroori)" : "Walk-in Customer (Naqad)"}
+                {isUdhar ? "Party chunein (zaroori)" : "Counter Sale"}
               </span>
             )}
           </div>
@@ -114,7 +114,7 @@ export default function CustomerSelect({
                 onSelectCustomer(null);
               }}
               className="p-1 text-stone-400 hover:text-stone-700 rounded hover:bg-stone-100"
-              title="Walk-in par wapis"
+              title="Counter Sale par wapis"
             >
               <X size={14} />
             </span>
@@ -136,7 +136,7 @@ export default function CustomerSelect({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Party ka naam ya phone search karein..."
+                placeholder="Party ya phone search karein"
                 className="w-full pl-9 pr-8 py-2 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
               />
               {search && (
@@ -169,7 +169,7 @@ export default function CustomerSelect({
                   <div className="w-6 h-6 rounded-full bg-stone-100 flex items-center justify-center text-stone-500 text-[10px] font-bold">
                     W
                   </div>
-                  <span>Walk-in Customer (General)</span>
+                  <span>Counter Sale</span>
                 </div>
                 {!selectedCustomerId && <Check size={14} className="text-brand-600" />}
               </button>

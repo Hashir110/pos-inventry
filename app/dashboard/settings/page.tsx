@@ -14,16 +14,16 @@ import {
     AlertTriangle,
     Phone,
     MapPin,
-    Receipt,
-    Lock
+    Receipt
 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import { toast } from 'react-toastify';
+import { useDialog } from "../../components/DialogProvider";
 
 export default function SettingsPage() {
+  const { confirm } = useDialog();
     const { currentUser, currentShop, setCurrentShop } = useStore();
     const { t } = useLanguage();
-    const [dashboardPass, setDashboardPass] = useState("");
     const [loading, setLoading] = useState(false);
     const [clearingData, setClearingData] = useState(false);
 
@@ -32,24 +32,9 @@ export default function SettingsPage() {
         shopName: "",
         contact: "",
         address: "",
-        receiptMessage: "Thank you for shopping!",
+        receiptMessage: "",
         printerSize: "58mm"
     });
-
-    useEffect(() => {
-        const savedPass = localStorage.getItem("dashboardPass");
-        if (savedPass) setDashboardPass(savedPass);
-    }, []);
-
-    const handleSavePassword = () => {
-        if (!dashboardPass.trim()) {
-            return toast.error("Password cannot be empty!");
-        }
-
-        setDashboardPass("");
-        localStorage.setItem("dashboardPass", dashboardPass);
-        toast.success("Privacy Password Updated! 🔒");
-    };
 
     useEffect(() => {
         if (currentShop) {
@@ -57,7 +42,7 @@ export default function SettingsPage() {
                 shopName: currentShop.shopName || "",
                 contact: currentShop.contact || "",
                 address: currentShop.address || "",
-                receiptMessage: currentShop.receiptMessage || "Thank you for shopping! No Return.",
+                receiptMessage: currentShop.receiptMessage || "",
                 printerSize: localStorage.getItem("printerSize") || "58mm"
             });
         }
@@ -95,21 +80,26 @@ export default function SettingsPage() {
     };
 
     const handleClearData = async (collectionName: "products" | "sales") => {
-        const confirmMsg = collectionName === "products"
-            ? "Are you sure? All INVENTORY will be deleted!"
-            : "Are you sure? All SALES HISTORY will be deleted!";
-
-        if (!confirm(confirmMsg) || !currentUser) return;
+        const label = collectionName === "products" ? "Inventory" : "Sales History";
+        if (!currentUser) return;
+        const ok = await confirm({
+            title: `Poori ${label} delete karein?`,
+            message: `${label} ka saara data hamesha ke liye hat jayega aur wapis nahi aayega.`,
+            confirmLabel: "Sab Delete Karo",
+            tone: "danger",
+            requireText: "DELETE",
+        });
+        if (!ok) return;
 
         setClearingData(true);
         try {
             await clearCollection(currentUser.uid, collectionName);
-            alert(`${collectionName === 'products' ? 'Inventory' : 'Sales History'} Cleared!`);
-            window.location.reload();
+            toast.success(`${label} saaf ho gayi`);
+            setTimeout(() => window.location.reload(), 900);
 
         } catch (error) {
             console.error(error);
-            alert("Failed to delete data");
+            toast.error("Data delete nahi hua");
         }
         setClearingData(false);
     };
@@ -172,7 +162,7 @@ export default function SettingsPage() {
                             </label>
                             <input
                                 type="text"
-                                placeholder="0300-1234567"
+                                placeholder="03xx-xxxxxxx"
                                 className="field"
                                 value={formData.contact}
                                 onChange={(e) => setFormData({ ...formData, contact: e.target.value })}
@@ -185,7 +175,7 @@ export default function SettingsPage() {
                             </label>
                             <input
                                 type="text"
-                                placeholder="Shop #1, Market Area..."
+                                placeholder="Dukan ka address"
                                 className="field"
                                 value={formData.address}
                                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
@@ -198,7 +188,7 @@ export default function SettingsPage() {
                             </label>
                             <input
                                 type="text"
-                                placeholder="e.g. Receipt required for returns"
+                                placeholder="Slip ke neeche ka message (optional)"
                                 className="field"
                                 value={formData.receiptMessage}
                                 onChange={(e) => setFormData({ ...formData, receiptMessage: e.target.value })}
@@ -214,28 +204,6 @@ export default function SettingsPage() {
                         </button>
                     </div>
                 </form>
-
-                {/* --- SECURITY --- */}
-                <div className="card overflow-hidden">
-                    {sectionHead(Lock, t("dashboardPassword"), t("dashboardPasswordHint"), "bg-violet-100 text-violet-700")}
-                    <div className="p-5">
-                        <div className="flex flex-col gap-3 sm:flex-row">
-                            <input
-                                type="password"
-                                placeholder={t("passwordPlaceholder")}
-                                className="field flex-1"
-                                value={dashboardPass}
-                                onChange={(e) => setDashboardPass(e.target.value)}
-                            />
-                            <button type="button" onClick={handleSavePassword} className="btn-dark sm:w-32">
-                                {t("save")}
-                            </button>
-                        </div>
-                        <p className="mt-2 text-xs text-stone-400">
-                            {t("passwordNotice")}
-                        </p>
-                    </div>
-                </div>
 
                 {/* --- PRINTER --- */}
                 <div className="card overflow-hidden">

@@ -8,9 +8,11 @@ import { Plus, Trash2, Calendar, Wallet, Loader2 } from "lucide-react";
 import PageHeader from "../../components/PageHeader";
 import DataTable from "../../components/DataTable";
 import { toast } from 'react-toastify';
+import { useDialog } from "../../components/DialogProvider";
 import type { Expense } from "../../types";
 
 export default function ExpensesPage() {
+  const { confirm } = useDialog();
   const { currentUser } = useStore();
   const { t } = useLanguage();
   
@@ -72,7 +74,13 @@ export default function ExpensesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if(!confirm("Delete this expense?")) return;
+    const ok = await confirm({
+      title: "Kharcha delete karein?",
+      message: "Ye kharcha hamesha ke liye hat jayega.",
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
         await deleteExpense(id);
         fetchExpenses();

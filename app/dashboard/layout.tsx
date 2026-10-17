@@ -28,7 +28,6 @@ import {
     PackagePlus,
     FileText,
     Truck,
-    TrendingUp,
     HandCoins,
     ClipboardCheck
 } from "lucide-react";
@@ -231,7 +230,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 { name: "Suppliers", href: "/dashboard/suppliers", icon: Truck },
                 { name: t("navExpenses"), href: "/dashboard/expenses", icon: Wallet },
                 { name: t("navDashboard"), href: "/dashboard", icon: LayoutDashboard },
-                { name: "Secret Profit Audit", href: "/dashboard/admin/profit", icon: TrendingUp },
                 { name: t("navSettings"), href: "/dashboard/settings", icon: Settings },
             ],
         },
@@ -327,7 +325,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         {isSidebarOpen && (
                             <>
                                 <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-bold text-stone-900">{currentShop?.shopName || "Shop"}</p>
+                                    <p onClick={() => router.push("/dashboard/admin")} className="truncate text-sm font-bold text-stone-900">{currentShop?.shopName || "Shop"}</p>
                                     <p className="truncate text-[11px] text-stone-500">{currentShop?.email || "Owner"}</p>
                                 </div>
                                 <button

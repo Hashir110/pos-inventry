@@ -60,7 +60,7 @@ service cloud.firestore {
       // Update: items, refundedAmount, aur gatePassGenerated
       allow update: if isOwner() && keepsOwner()
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['items', 'refundedAmount', 'gatePassGenerated', 'totalAmount', 'editedAt', 'extraCharges']);
+             .hasOnly(['items', 'refundedAmount', 'gatePassGenerated', 'totalAmount', 'editedAt', 'extraCharges', 'paymentMethod', 'customerId', 'customerName']);
       allow delete: if isOwner();
     }
 
@@ -125,10 +125,11 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    match /daily_closings/{id} {
+    match /day_closings/{id} {
       allow read: if canRead();
       allow create: if createsOwn();
-      allow update, delete: if false;
+      allow update: if isOwner() && keepsOwner();
+      allow delete: if isOwner();
     }
 
     match /transports/{id} {

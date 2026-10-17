@@ -114,7 +114,7 @@ export default function SetupPage() {
               className="field"
               value={formData.shopName}
               onChange={(e) => setFormData({ ...formData, shopName: e.target.value })}
-              placeholder="e.g. Bismillah General Store"
+              placeholder="Dukan ka naam"
             />
           </div>
 

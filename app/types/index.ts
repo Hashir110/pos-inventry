@@ -181,18 +181,20 @@ export interface SupplierPayment {
   date: string;
 }
 
-export interface DailyClosingEntry {
+export interface DayClosing {
   id: string;
   ownerId: string;
-  entryNo: string;
-  type: "Cash" | "Udhar";
-  itemName: string;
-  qty: number;
-  amount: number;
-  customerId?: string;
-  customerName?: string;
-  note?: string;
   date: string;
+  invoiceCount: number;
+  salesTotal: number;
+  cash: number;
+  bank: number;
+  udhar: number;
+  amad: number;
+  jamad: number;
+  expenses: number;
+  cashInHand: number;
+  closedAt: string;
 }
 
 export interface Transport {

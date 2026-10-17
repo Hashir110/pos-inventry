@@ -1,6 +1,8 @@
 "use client";
 import { useState } from 'react';
 import { toast } from 'react-toastify';
+import { useDialog } from "../../components/DialogProvider";
+import { customerLabel } from "../../lib/format";
 import type { Sale, SaleItem } from '../../types';
 import { RotateCcw, Eye, FileText, Search, X, Loader2 } from 'lucide-react';
 import PageHeader from '../../components/PageHeader';
@@ -10,6 +12,7 @@ import { findSaleByInvoice, getSaleById } from '../../lib/services/sales';
 import { processReturn } from '../../lib/services/returns';
 
 export default function ReturnsPage() {
+  const { promptNumber } = useDialog();
     const [invoiceId, setInvoiceId] = useState('');
     const [isDesModalOpen, setIsDesModalOpen] = useState(false);
     const [selectedDescription, setSelectedDescription] = useState("");
@@ -41,17 +44,14 @@ export default function ReturnsPage() {
     const handleReturnItem = async (item: SaleItem, index: number) => {
         if (!saleData) return;
         const availableToReturn = item.qty - (item.returnedQty || 0);
-        const qtyStr = prompt(`How many "${item.name}" to return? (Max: ${availableToReturn})`);
-        if (!qtyStr) return;
-
-        const returnQty = parseFloat(qtyStr);
-        if (isNaN(returnQty) || returnQty <= 0) {
-            toast.error("Invalid Quantity!");
-        }
-        if (returnQty > availableToReturn) {
-            toast.error(`Error: Max limit is ${availableToReturn}`);
-            return;
-        }
+        const returnQty = await promptNumber({
+            title: "Kitna wapas lena hai?",
+            message: item.name,
+            max: availableToReturn,
+            defaultValue: availableToReturn,
+            confirmLabel: "Wapas Lein",
+        });
+        if (returnQty === null) return;
 
         try {
             setLoading(true);
@@ -76,7 +76,7 @@ export default function ReturnsPage() {
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
                     <input
                         type="text"
-                        placeholder="Invoice number (e.g. 000012)"
+                        placeholder="Invoice number"
                         className="field pl-11"
                         value={invoiceId}
                         onChange={(e) => setInvoiceId(e.target.value)}
@@ -108,7 +108,7 @@ export default function ReturnsPage() {
                                 <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Invoice</p>
                                 <p className="font-mono text-xl font-extrabold text-brand-700">#{saleData.invoiceNo}</p>
                                 <p className="mt-1 text-sm text-stone-500">
-                                    {saleData.customerName || "Walk-in"} • {saleData.paymentMethod || "Cash"}
+                                    {customerLabel(saleData.customerName)} • {saleData.paymentMethod || "Cash"}
                                 </p>
                                 {saleData.description && (
                                     <button

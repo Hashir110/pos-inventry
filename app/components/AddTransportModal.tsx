@@ -63,7 +63,7 @@ export default function AddTransportModal({ open, onClose, onSaved }: AddTranspo
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Al-Madina Goods Transport"
+              placeholder="Company ka naam"
               className="field"
             />
           </FormField>

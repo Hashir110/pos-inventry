@@ -14,8 +14,7 @@ import ReceivePaymentModal from "../../../components/ReceivePaymentModal";
 import { formatDate, formatMoney } from "../../../lib/format";
 import { saleNetAmount } from "../../../lib/calc";
 import { getCustomer, listCustomerCreditSales, listPayments } from "../../../lib/services/customers";
-import { listCustomerClosings } from "../../../lib/services/dailyClosing";
-import type { Customer, CustomerPayment, DailyClosingEntry, Sale } from "../../../types";
+import type { Customer, CustomerPayment, Sale } from "../../../types";
 
 interface LedgerEntry {
   id: string;
@@ -39,23 +38,20 @@ export default function CustomerLedgerPage() {
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
   const [payments, setPayments] = useState<CustomerPayment[]>([]);
-  const [closings, setClosings] = useState<DailyClosingEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [payFor, setPayFor] = useState<Customer | null>(null);
 
   const loadLedger = useCallback(async () => {
     if (!currentUser || !id) return;
     try {
-      const [c, s, p, cl] = await Promise.all([
+      const [c, s, p] = await Promise.all([
         getCustomer(id),
         listCustomerCreditSales(currentUser.uid, id),
         listPayments(currentUser.uid, id),
-        listCustomerClosings(currentUser.uid, id),
       ]);
       setCustomer(c && c.ownerId === currentUser.uid ? c : null);
       setSales(s);
       setPayments(p);
-      setClosings(cl);
     } catch (error) {
       console.error(error);
       toast.error("History load nahi hui");
@@ -79,16 +75,6 @@ export default function CustomerLedgerPage() {
         details: describeItems(s) + (s.refundedAmount ? ` (Return: ${formatMoney(s.refundedAmount)})` : ""),
         amount: saleNetAmount(s),
       })),
-      ...closings
-        .filter((c) => c.type === "Udhar")
-        .map((c) => ({
-          id: c.id,
-          date: c.date,
-          kind: "sale" as const,
-          title: `${t("maalGiven")} • ${c.entryNo}`,
-          details: `${c.itemName} × ${c.qty}${c.note ? ` • ${c.note}` : ""}`,
-          amount: c.amount,
-        })),
       ...payments.map((p) => ({
         id: p.id,
         date: p.date,
@@ -106,7 +92,7 @@ export default function CustomerLedgerPage() {
         return { ...e, balance: Math.max(0, Math.round(running * 100) / 100) };
       })
       .reverse();
-  }, [sales, payments, closings, t]);
+  }, [sales, payments, t]);
 
   const totalReceived = useMemo(() => payments.reduce((sum, p) => sum + p.amount, 0), [payments]);
 

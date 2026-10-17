@@ -324,7 +324,7 @@ export default function GatePassPage() {
                                 </div>
                               ) : (
                                 <span className="text-xs font-medium text-stone-400">
-                                  -- Party / Customer Select Karein --
+                                  Party chunein
                                 </span>
                               )}
                             </div>
@@ -367,7 +367,7 @@ export default function GatePassPage() {
                                   autoFocus
                                   value={partySearch}
                                   onChange={(e) => setPartySearch(e.target.value)}
-                                  placeholder="Party ka naam ya phone search karein..."
+                                  placeholder="Party ya phone search karein"
                                   className="w-full pl-8 pr-7 py-2 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                                 />
                                 {partySearch && (
@@ -481,7 +481,7 @@ export default function GatePassPage() {
                                   </div>
                                 ) : (
                                   <span className="text-xs font-medium text-stone-400">
-                                    -- Select Product / Maal --
+                                    Item chunein
                                   </span>
                                 )}
                               </div>
@@ -525,7 +525,7 @@ export default function GatePassPage() {
                                     autoFocus
                                     value={productSearch}
                                     onChange={(e) => setProductSearch(e.target.value)}
-                                    placeholder="Product search karein..."
+                                    placeholder="Item search karein"
                                     className="w-full pl-7 pr-7 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                                   />
                                   {productSearch && (
@@ -713,7 +713,7 @@ export default function GatePassPage() {
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Stock search karein..."
+                    placeholder="Item search karein"
                     value={stockSearch}
                     onChange={(e) => setStockSearch(e.target.value)}
                     className="field w-full pl-8 !py-1.5 text-xs"
@@ -772,7 +772,7 @@ export default function GatePassPage() {
             <div className="relative w-full sm:w-72">
               <input
                 type="text"
-                placeholder="Gate Pass # / Party search..."
+                placeholder="Gate pass # ya party"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="field w-full pl-8 !py-1.5 text-xs"

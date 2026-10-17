@@ -83,7 +83,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
               <input
                 type="text"
                 required
-                placeholder="Enter product name"
+                placeholder="Item ka naam"
                 value={form.name}
                 onChange={(e) => set("name", e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-stone-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -96,7 +96,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
               </label>
               <input
                 type="text"
-                placeholder="e.g. Rice, Atta, Groceries"
+                placeholder="Category (optional)"
                 value={form.category}
                 onChange={(e) => set("category", e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-stone-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -142,7 +142,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
                 required
                 min="0"
                 step="0.01"
-                placeholder="0.00"
+                placeholder="0"
                 value={form.sellingPrice}
                 onChange={(e) => set("sellingPrice", e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-stone-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"

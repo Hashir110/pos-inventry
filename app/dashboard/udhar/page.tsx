@@ -99,7 +99,7 @@ export default function UdharPage() {
             required
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="e.g. Ali Bhai"
+            placeholder="Party ka naam"
             className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
           />
         </div>

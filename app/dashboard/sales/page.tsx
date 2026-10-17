@@ -3,18 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import DataTable from "../../components/DataTable";
 import Link from "next/link";
-import { DollarSign, Eye, Loader2, Pencil, Plus, Printer, Search, ShoppingBag, TrendingUp, X } from "lucide-react";
+import { Eye, Loader2, Pencil, Plus, Printer, Search, ShoppingBag, TrendingUp, X } from "lucide-react";
 import { toast } from "react-toastify";
 import { listRecentSales, updateSaleItems } from "../../lib/services/sales";
 import SaleReceipt from "../../components/SaleReceipt";
-import { saleNetAmount, saleProfit } from "../../lib/calc";
+import { saleNetAmount } from "../../lib/calc";
+import { customerLabel, isCounterSale } from "../../lib/format";
 import StatCard from "../../components/StatCard";
 import PageHeader from "../../components/PageHeader";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
 import type { Sale } from "../../types";
 
-type SaleRow = Sale & { profit: number };
+type SaleRow = Sale;
 interface ItemDraft {
   qty: string;
   weight: string;
@@ -24,7 +25,6 @@ interface ItemDraft {
 type PayFilter = "all" | "Cash" | "Bank Account" | "Udhar";
 type SortKey = "new" | "old" | "high";
 
-const HIDDEN = "••••";
 const money = (n: number) => `Rs. ${Math.round(n || 0).toLocaleString()}`;
 
 const formatDate = (iso: string) =>
@@ -59,13 +59,6 @@ export default function SalesHistoryPage() {
   const { t } = useLanguage();
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const [showRevenue, setShowRevenue] = useState(false);
-  const [showProfit, setShowProfit] = useState(false);
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [passInput, setPassInput] = useState("");
-  const [targetField, setTargetField] = useState<"revenue" | "profit" | null>(null);
 
   const [search, setSearch] = useState("");
   const [payFilter, setPayFilter] = useState<PayFilter>("all");
@@ -132,7 +125,6 @@ export default function SalesHistoryPage() {
         extraNow
       );
       const updated: SaleRow = { ...sale, items, totalAmount, extraCharges };
-      updated.profit = saleProfit(updated);
       setSales((prev) => prev.map((s) => (s.id === sale.id ? updated : s)));
       setSelectedSale(null);
       setDraft(null);
@@ -150,7 +142,7 @@ export default function SalesHistoryPage() {
       if (!currentUser) return;
       try {
         const recent = await listRecentSales(currentUser.uid, 50);
-        setSales(recent.map((sale) => ({ ...sale, profit: saleProfit(sale) })));
+        setSales(recent);
       } catch (error) {
         console.error("Error fetching sales:", error);
         toast.error("Sales load nahi hui");
@@ -164,7 +156,6 @@ export default function SalesHistoryPage() {
   const stats = useMemo(
     () => ({
       totalRevenue: sales.reduce((s, x) => s + saleNetAmount(x), 0),
-      totalProfit: sales.reduce((s, x) => s + x.profit, 0),
       totalOrders: sales.length,
     }),
     [sales]
@@ -177,7 +168,7 @@ export default function SalesHistoryPage() {
       if (!term) return true;
       return (
         (s.invoiceNo || "").toLowerCase().includes(term) ||
-        (s.customerName || "walk-in").toLowerCase().includes(term)
+        customerLabel(s.customerName).toLowerCase().includes(term)
       );
     });
     return [...list].sort((a, b) => {
@@ -186,33 +177,6 @@ export default function SalesHistoryPage() {
       return b.date.localeCompare(a.date);
     });
   }, [sales, search, payFilter, sortKey]);
-
-  const handleToggle = (field: "revenue" | "profit") => {
-    if (field === "revenue" && showRevenue) return setShowRevenue(false);
-    if (field === "profit" && showProfit) return setShowProfit(false);
-    setTargetField(field);
-    setPassInput("");
-    setIsModalOpen(true);
-  };
-
-  const verifyPassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    const savedPass = localStorage.getItem("dashboardPass");
-    if (!savedPass) {
-      toast.error("Pehle Settings mein password set karein!");
-      return;
-    }
-    if (passInput === savedPass) {
-      if (targetField === "revenue") setShowRevenue(true);
-      if (targetField === "profit") setShowProfit(true);
-      setIsModalOpen(false);
-      toast.success("Access Granted");
-    } else {
-      toast.error("Wrong Password!");
-    }
-  };
-
-  const mask = (value: string, visible: boolean) => (visible ? value : HIDDEN);
 
   return (
     <div>
@@ -227,7 +191,7 @@ export default function SalesHistoryPage() {
       />
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
         <StatCard
           title={t("totalSales")}
           value={money(stats.totalRevenue)}
@@ -235,20 +199,6 @@ export default function SalesHistoryPage() {
           icon={TrendingUp}
           theme="blue"
           loading={loading}
-          isPrivate
-          isVisible={showRevenue}
-          onToggle={() => handleToggle("revenue")}
-        />
-        <StatCard
-          title={t("totalProfitRecent")}
-          value={money(stats.totalProfit)}
-          subtitle={t("afterRefunds")}
-          icon={DollarSign}
-          theme="green"
-          loading={loading}
-          isPrivate
-          isVisible={showProfit}
-          onToggle={() => handleToggle("profit")}
         />
         <StatCard
           title={t("totalOrders")}
@@ -306,7 +256,7 @@ export default function SalesHistoryPage() {
             key: "customer",
             header: t("customer"),
             cell: (sale) => {
-              const name = sale.customerName || "Walk-in";
+              const name = customerLabel(sale.customerName);
               return (
                 <div className="flex items-center gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 font-display text-sm font-bold text-brand-700">
@@ -327,15 +277,15 @@ export default function SalesHistoryPage() {
               return <span className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${status.tone}`}>{status.label}</span>;
             },
           },
-          { key: "total", header: t("grandTotal"), align: "right", cell: (sale) => <span className="font-extrabold text-stone-900">{mask(money(saleNetAmount(sale)), showRevenue)}</span> },
-          { key: "paid", header: t("paid"), align: "right", cell: (sale) => <span className="text-stone-700">{mask(money(paymentInfo(sale).paid), showRevenue)}</span> },
+          { key: "total", header: t("grandTotal"), align: "right", cell: (sale) => <span className="font-extrabold text-stone-900">{money(saleNetAmount(sale))}</span> },
+          { key: "paid", header: t("paid"), align: "right", cell: (sale) => <span className="text-stone-700">{money(paymentInfo(sale).paid)}</span> },
           {
             key: "due",
             header: t("due"),
             align: "right",
             cell: (sale) => {
               const pay = paymentInfo(sale);
-              return <span className={`font-semibold ${pay.due > 0 ? "text-red-600" : "text-stone-500"}`}>{mask(money(pay.due), showRevenue)}</span>;
+              return <span className={`font-semibold ${pay.due > 0 ? "text-red-600" : "text-stone-500"}`}>{money(pay.due)}</span>;
             },
           },
           {
@@ -396,7 +346,7 @@ export default function SalesHistoryPage() {
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                   <div>
                     <h4 className="mb-2 text-sm font-bold text-stone-900">Customer Info</h4>
-                    <p className="text-lg font-bold text-stone-900">{sale.customerName || "Walk-in"}</p>
+                    <p className="text-lg font-bold text-stone-900">{customerLabel(sale.customerName)}</p>
                     {sale.description && (
                       <p className="mt-1 text-sm text-stone-500">Note: {sale.description}</p>
                     )}
@@ -552,7 +502,6 @@ export default function SalesHistoryPage() {
                       { label: "Grand Total", value: money(draft ? subTotal + Math.max(0, parseFloat(draftExtra) || 0) : saleNetAmount(sale)), tone: "font-extrabold text-stone-900" },
                       { label: "Paid", value: money(pay.paid), tone: "" },
                       { label: "Due", value: money(pay.due), tone: pay.due > 0 ? "font-bold text-red-600" : "" },
-                      ...(showProfit ? [{ label: "Profit", value: money(sale.profit), tone: "font-bold text-emerald-700" }] : []),
                     ].map((row, i) => (
                       <div key={row.label} className={`flex justify-between px-4 py-2.5 ${i % 2 === 0 ? "bg-stone-50" : "bg-white"}`}>
                         <dt className="text-stone-500">{row.label}</dt>
@@ -612,7 +561,7 @@ export default function SalesHistoryPage() {
           shop={currentShop}
           invoiceNo={receiptSale.invoiceNo}
           date={receiptSale.date}
-          customerName={receiptSale.customerName === "Walk-in" ? "" : receiptSale.customerName}
+          customerName={isCounterSale(receiptSale.customerName) ? "" : receiptSale.customerName}
           transport={receiptSale.transport}
           extraCharges={receiptSale.extraCharges}
           items={receiptSale.items}
@@ -625,35 +574,6 @@ export default function SalesHistoryPage() {
       )}
 
       {/* Password modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[99] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-sm rounded-xl bg-white p-6 shadow-pop">
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="absolute right-3 top-3 rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
-            >
-              <X size={20} />
-            </button>
-
-            <h3 className="mb-1 text-lg font-bold text-stone-900">Security Check</h3>
-            <p className="mb-4 text-sm text-stone-500">Chhupi hui raqam dekhne ke liye password likhein.</p>
-
-            <form onSubmit={verifyPassword}>
-              <input
-                type="password"
-                autoFocus
-                className="field mb-4 text-center text-lg tracking-widest"
-                placeholder="Password"
-                value={passInput}
-                onChange={(e) => setPassInput(e.target.value)}
-              />
-              <button type="submit" className="btn-primary w-full !py-3">
-                Unlock
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -37,7 +37,7 @@ const savePendingSales = (queue: PendingSale[]) => {
 };
 
 const buildMeta = (meta: SaleMeta) => ({
-  customerName: meta.customerName || "Walk-in",
+  customerName: meta.customerName || "Counter Sale",
   description: meta.description || "",
   ...(meta.transport?.trim() ? { transport: meta.transport.trim() } : {}),
   ...(meta.extraCharges && meta.extraCharges > 0 ? { extraCharges: meta.extraCharges } : {}),
@@ -357,7 +357,50 @@ export const updateSaleItems = async (
   return result;
 };
 
-export const findSaleByInvoice =async (ownerId: string, invoiceNo: string): Promise<Sale | null> => {
+export const updateSalePayment = async (
+  saleId: string,
+  method: PaymentMethod,
+  customer?: { id: string; name: string }
+): Promise<void> => {
+  const saleRef = doc(db, "sales", saleId);
+
+  await runTransaction(db, async (transaction) => {
+    const saleSnap = await transaction.get(saleRef);
+    if (!saleSnap.exists()) throw new Error("Bill nahi mila");
+    const sale = saleSnap.data() as Omit<Sale, "id">;
+
+    const current = sale.paymentMethod || "Cash";
+    if (current === method) return;
+    const net = roundMoney((sale.totalAmount || 0) - (sale.refundedAmount || 0));
+
+    const oldRef = current === "Udhar" && sale.customerId ? doc(db, "customers", sale.customerId) : null;
+    const oldSnap = oldRef ? await transaction.get(oldRef) : null;
+
+    const newCustomerId = method === "Udhar" ? customer?.id ?? sale.customerId : undefined;
+    if (method === "Udhar" && !newCustomerId) throw new Error("Udhar ke liye party select karein");
+    const newRef = newCustomerId ? doc(db, "customers", newCustomerId) : null;
+    const newSnap = newRef ? await transaction.get(newRef) : null;
+    if (newRef && !newSnap?.exists()) throw new Error("Party nahi mili");
+
+    if (oldRef && oldSnap?.exists()) {
+      const balance = (oldSnap.data() as Customer).balance || 0;
+      transaction.update(oldRef, { balance: Math.max(0, roundMoney(balance - net)) });
+    }
+    if (newRef && newSnap) {
+      const data = newSnap.data() as Customer;
+      transaction.update(newRef, { balance: roundMoney((data.balance || 0) + net) });
+      transaction.update(saleRef, {
+        paymentMethod: method,
+        customerId: newCustomerId,
+        customerName: customer?.name ?? data.name,
+        editedAt: new Date().toISOString(),
+      });
+    } else {
+      transaction.update(saleRef, { paymentMethod: method, editedAt: new Date().toISOString() });
+    }
+  });
+};
+export const findSaleByInvoice = async (ownerId: string, invoiceNo: string): Promise<Sale | null> => {
   const snap = await getDocs(
     query(collection(db, "sales"), where("ownerId", "==", ownerId), where("invoiceNo", "==", invoiceNo.trim()))
   );

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import ToastProvider from "./components/ToastProvider";
+import DialogProvider from "./components/DialogProvider";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 import { Nunito, Poppins } from "next/font/google";
 import "./globals.css";
@@ -39,7 +40,7 @@ export default function RootLayout({
       <body className={`${nunito.variable} ${poppins.variable} font-sans antialiased`}>
         <ToastProvider />
         <ServiceWorkerRegister />
-        {children}
+        <DialogProvider>{children}</DialogProvider>
       </body>
     </html>
   );

@@ -301,7 +301,7 @@ export default function SuppliersPage() {
           <div className="relative w-full sm:w-64">
             <input
               type="text"
-              placeholder="Search Supplier Name / Phone..."
+              placeholder="Supplier ya phone search karein"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="input-field pl-9 text-xs"
@@ -377,7 +377,7 @@ export default function SuppliersPage() {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Madina Rice Mill / Supplier B"
+                  placeholder="Supplier ka naam"
                   value={newSupName}
                   onChange={(e) => setNewSupName(e.target.value)}
                   className="input-field"
@@ -390,7 +390,7 @@ export default function SuppliersPage() {
                 </label>
                 <input
                   type="text"
-                  placeholder="0300-1234567"
+                  placeholder="03xx-xxxxxxx"
                   value={newSupPhone}
                   onChange={(e) => setNewSupPhone(e.target.value)}
                   className="input-field"
@@ -400,7 +400,7 @@ export default function SuppliersPage() {
                 <label className="text-xs font-bold text-stone-700 block mb-1">Address</label>
                 <input
                   type="text"
-                  placeholder="City / Market Address"
+                  placeholder="Address"
                   value={newSupAddress}
                   onChange={(e) => setNewSupAddress(e.target.value)}
                   className="input-field"
@@ -448,7 +448,7 @@ export default function SuppliersPage() {
             <form onSubmit={handlePurchaseSubmit} className="p-5 space-y-4">
               <div>
                 <label className="text-xs font-bold text-stone-700 block mb-1">
-                  Supplier Select Karein *
+                  Supplier *
                 </label>
                 <select
                   value={purchaseSupId}
@@ -456,7 +456,7 @@ export default function SuppliersPage() {
                   className="input-field"
                   required
                 >
-                  <option value="">-- Select Supplier --</option>
+                  <option value="">Supplier chunein</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name} (Current Balance: Rs. {s.balance || 0})
@@ -467,7 +467,7 @@ export default function SuppliersPage() {
 
               <div>
                 <label className="text-xs font-bold text-stone-700 block mb-1">
-                  Item Select Karein *
+                  Item *
                 </label>
                 <select
                   value={purchaseProdId}
@@ -479,7 +479,7 @@ export default function SuppliersPage() {
                   className="input-field"
                   required
                 >
-                  <option value="">-- Select Item --</option>
+                  <option value="">Item chunein</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name} (Buying Rate: Rs. {p.buyingPrice})
@@ -618,7 +618,7 @@ export default function SuppliersPage() {
             <form onSubmit={handlePaymentSubmit} className="p-5 space-y-4">
               <div>
                 <label className="text-xs font-bold text-stone-700 block mb-1">
-                  Supplier Select Karein *
+                  Supplier *
                 </label>
                 <select
                   value={paymentSupId}
@@ -626,7 +626,7 @@ export default function SuppliersPage() {
                   className="input-field"
                   required
                 >
-                  <option value="">-- Select Supplier --</option>
+                  <option value="">Supplier chunein</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name} (Current Payable: Rs. {s.balance || 0})
@@ -642,7 +642,7 @@ export default function SuppliersPage() {
                 <input
                   type="number"
                   min="1"
-                  placeholder="e.g. 50000"
+                  placeholder="0"
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(Number(e.target.value))}
                   className="input-field text-lg font-bold text-emerald-800"
@@ -670,7 +670,7 @@ export default function SuppliersPage() {
                   <label className="text-xs font-bold text-stone-700 block mb-1">Note</label>
                   <input
                     type="text"
-                    placeholder="Ref / Cheque No."
+                    placeholder="Reference (optional)"
                     value={paymentNote}
                     onChange={(e) => setPaymentNote(e.target.value)}
                     className="input-field"

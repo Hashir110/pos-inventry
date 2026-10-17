@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeftRight, Package, Pencil, Plus, Search, Trash2, X, Loader2 } from "lucide-react";
 import { toast } from "react-toastify";
+import { useDialog } from "../../components/DialogProvider";
 import PageHeader from "../../components/PageHeader";
 import DataTable from "../../components/DataTable";
 import { useStore } from "../../store/useStore";
@@ -14,6 +15,7 @@ import type { Product } from "../../types";
 type StockFilter = "all" | "low" | "out";
 
 export default function InventoryList() {
+  const { confirm } = useDialog();
   const { currentUser } = useStore();
   const { t } = useLanguage();
   const [products, setProducts] = useState<Product[]>([]);
@@ -44,7 +46,13 @@ export default function InventoryList() {
   }, [fetchProducts]);
 
   const handleDelete = async (product: Product) => {
-    if (!confirm(`"${product.name}" delete karna hai?`)) return;
+    const ok = await confirm({
+      title: "Item delete karein?",
+      message: `"${product.name}" hamesha ke liye delete ho jayega.`,
+      confirmLabel: "Delete",
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       await deleteProduct(product.id);
       setProducts((prev) => prev.filter((p) => p.id !== product.id));
