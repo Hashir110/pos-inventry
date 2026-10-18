@@ -117,26 +117,34 @@ export default function POSPage() {
                         : undefined;
                     const lineTotal = isWeight ? ((newTotalWeight ?? 0) * finalPrice) : (newQty * finalPrice);
 
-                    return {
+                    const updated: SaleItem = {
                         ...item,
                         qty: newQty,
-                        totalWeight: newTotalWeight,
                         total: lineTotal,
                     };
+                    if (newTotalWeight !== undefined) {
+                        updated.totalWeight = newTotalWeight;
+                    } else {
+                        delete updated.totalWeight;
+                    }
+                    return updated;
                 });
             }
-            return [...prev, {
+            const newItem: SaleItem = {
                 id: product.id,
                 name: product.name,
                 qty: bagsQty,
                 weightPerBag: bagWeight,
-                totalWeight: totalWeight,
                 isManualWeight: false,
                 price: finalPrice,
-                buyingPrice: product.buyingPrice,
+                buyingPrice: product.buyingPrice ?? 0,
                 total: lineGross,
-                type: product.unitType,
-            }];
+                type: product.unitType || "count",
+            };
+            if (totalWeight !== undefined) {
+                newItem.totalWeight = totalWeight;
+            }
+            return [...prev, newItem];
         });
     };
 
@@ -165,7 +173,14 @@ export default function POSPage() {
         setCheckoutLoading(true);
 
         try {
-            const meta = { customerName, description, transport, extraCharges: extra, paymentMethod, customerId: paymentMethod === "Udhar" ? customerId : undefined };
+            const meta = {
+                customerName: customerName.trim() || "Counter Sale",
+                description: description.trim(),
+                transport: transport.trim(),
+                extraCharges: extra,
+                paymentMethod,
+                ...(paymentMethod === "Udhar" && customerId ? { customerId } : {}),
+            };
             const shortInvoiceNo = isOnline
                 ? await createOnlineSale(currentUser.uid, cart, grandTotal, meta)
                 : queueOfflineSale(currentUser.uid, cart, grandTotal, meta, products);
@@ -227,13 +242,18 @@ export default function POSPage() {
             const totalWeight = isWeight ? qty * bagWeight : undefined;
             const lineGross = isWeight ? ((totalWeight ?? 0) * item.price) : (qty * item.price);
 
-            return {
+            const updated: SaleItem = {
                 ...item,
                 qty,
-                totalWeight,
                 isManualWeight: false,
                 total: lineGross,
             };
+            if (totalWeight !== undefined) {
+                updated.totalWeight = totalWeight;
+            } else {
+                delete updated.totalWeight;
+            }
+            return updated;
         }));
     };
 

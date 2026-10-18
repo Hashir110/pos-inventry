@@ -36,14 +36,78 @@ const savePendingSales = (queue: PendingSale[]) => {
   localStorage.setItem(PENDING_KEY, JSON.stringify(queue));
 };
 
-const buildMeta = (meta: SaleMeta) => ({
-  customerName: meta.customerName || "Counter Sale",
-  description: meta.description || "",
-  ...(meta.transport?.trim() ? { transport: meta.transport.trim() } : {}),
-  ...(meta.extraCharges && meta.extraCharges > 0 ? { extraCharges: meta.extraCharges } : {}),
-  paymentMethod: meta.paymentMethod,
-  ...(meta.paymentMethod === "Udhar" && meta.customerId ? { customerId: meta.customerId } : {}),
-});
+export const stripUndefined = <T>(obj: T): T => {
+  if (Array.isArray(obj)) {
+    return obj
+      .filter((item) => item !== undefined)
+      .map((item) => stripUndefined(item)) as unknown as T;
+  }
+  if (obj !== null && typeof obj === "object" && !(obj instanceof Date)) {
+    const cleaned: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = stripUndefined(value);
+      }
+    }
+    return cleaned as unknown as T;
+  }
+  return obj;
+};
+
+export const cleanSaleItem = (item: SaleItem): SaleItem => {
+  const isWeight = item.type === "weight";
+  const cleaned: Record<string, unknown> = {
+    id: item.id || "",
+    name: item.name || "",
+    qty: Number(item.qty) || 0,
+    price: Number(item.price ?? item.sellingPrice ?? 0),
+    buyingPrice: Number(item.buyingPrice ?? 0),
+    total: Number(item.total) || 0,
+    type: item.type || "count",
+  };
+
+  if (item.weightPerBag !== undefined && item.weightPerBag !== null) {
+    cleaned.weightPerBag = Number(item.weightPerBag);
+  }
+  if (isWeight && item.totalWeight !== undefined && item.totalWeight !== null) {
+    cleaned.totalWeight = Number(item.totalWeight);
+  }
+  if (item.isManualWeight !== undefined) {
+    cleaned.isManualWeight = Boolean(item.isManualWeight);
+  }
+  if (item.returnedQty !== undefined && item.returnedQty !== null) {
+    cleaned.returnedQty = Number(item.returnedQty);
+  }
+  if (item.sellingPrice !== undefined && item.sellingPrice !== null) {
+    cleaned.sellingPrice = Number(item.sellingPrice);
+  }
+  if (item.productId) {
+    cleaned.productId = item.productId;
+  }
+  if (item.dispatchFrom) {
+    cleaned.dispatchFrom = item.dispatchFrom;
+  }
+
+  return cleaned as unknown as SaleItem;
+};
+
+const buildMeta = (meta: SaleMeta) => {
+  const result: Record<string, unknown> = {
+    customerName: meta.customerName?.trim() || "Counter Sale",
+    description: meta.description?.trim() || "",
+    paymentMethod: meta.paymentMethod || "Cash",
+  };
+  if (meta.transport?.trim()) {
+    result.transport = meta.transport.trim();
+  }
+  if (typeof meta.extraCharges === "number" && meta.extraCharges > 0) {
+    result.extraCharges = meta.extraCharges;
+  }
+  if (meta.paymentMethod === "Udhar" && meta.customerId) {
+    result.customerId = meta.customerId;
+  }
+  return result;
+};
 
 const isUdharWithCustomer = (paymentMethod: PaymentMethod, customerId?: string): customerId is string =>
   paymentMethod === "Udhar" && !!customerId;
@@ -115,15 +179,16 @@ export const createOnlineSale = async (
     }
 
     const saleRef = doc(collection(db, "sales"));
-    transaction.set(saleRef, {
+    const saleData = stripUndefined({
       saleId: saleRef.id,
-      ownerId,
-      items: cart,
-      totalAmount,
+      ownerId: ownerId || "",
+      items: cart.map(cleanSaleItem),
+      totalAmount: roundMoney(totalAmount || 0),
       date: new Date().toISOString(),
       invoiceNo,
       ...buildMeta(meta),
     });
+    transaction.set(saleRef, saleData);
   });
 
   return invoiceNo;
@@ -145,15 +210,15 @@ export const queueOfflineSale = (
   }
 
   const invoiceNo = "OFF-" + Date.now().toString(36).toUpperCase().slice(-6);
-  const order: PendingSale = {
-    ownerId,
-    items: cart,
-    totalAmount,
+  const order: PendingSale = stripUndefined({
+    ownerId: ownerId || "",
+    items: cart.map(cleanSaleItem),
+    totalAmount: roundMoney(totalAmount || 0),
     date: new Date().toISOString(),
     isOffline: true,
     invoiceNo,
     ...buildMeta(meta),
-  };
+  }) as PendingSale;
   savePendingSales([...getPendingSales(), order]);
   return invoiceNo;
 };
@@ -214,7 +279,12 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
 
       const { isOffline: _isOffline, ...cleanOrder } = order;
       void _isOffline;
-      transaction.set(saleRef, { ...cleanOrder, syncedAt: new Date().toISOString() });
+      const saleData = stripUndefined({
+        ...cleanOrder,
+        items: (cleanOrder.items || []).map(cleanSaleItem),
+        syncedAt: new Date().toISOString(),
+      });
+      transaction.set(saleRef, saleData);
     });
 
     queue = queue.filter((o) => o.invoiceNo !== order.invoiceNo);
@@ -350,8 +420,8 @@ export const updateSaleItems = async (
       transaction.update(customerRef, { balance: Math.max(0, roundMoney(balance + newTotal - oldTotal)) });
     }
 
-    transaction.update(saleRef, { items: newItems, totalAmount: newTotal, extraCharges: extra, editedAt: new Date().toISOString() });
-    result = { items: newItems, totalAmount: newTotal, extraCharges: extra };
+    transaction.update(saleRef, stripUndefined({ items: newItems.map(cleanSaleItem), totalAmount: newTotal, extraCharges: extra, editedAt: new Date().toISOString() }));
+    result = { items: newItems.map(cleanSaleItem), totalAmount: newTotal, extraCharges: extra };
   });
 
   return result;

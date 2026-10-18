@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Loader2, MessageCircle, Printer, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Copy, Loader2, Printer, X } from "lucide-react";
 import { toBlob } from "html-to-image";
 import { toast } from "react-toastify";
 import InvoiceSheet from "./InvoiceSheet";
@@ -37,7 +37,8 @@ export default function SaleReceipt({
   onClose,
 }: SaleReceiptProps) {
   const invoiceRef = useRef<HTMLDivElement>(null);
-  const [sharing, setSharing] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const makeSlipBlob = async (): Promise<Blob> => {
     if (!invoiceRef.current) throw new Error("Slip nahi mili");
@@ -46,31 +47,48 @@ export default function SaleReceipt({
     return blob;
   };
 
-  const handleWhatsApp = async () => {
-    setSharing(true);
+  const handleCopySlip = async (isManualClick = false) => {
+    if (copying) return;
+    setCopying(true);
     try {
+      const blob = await makeSlipBlob();
       if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-        await navigator.clipboard.write([new ClipboardItem({ "image/png": makeSlipBlob() })]);
-        window.open("https://web.whatsapp.com/", "whatsapp_web");
-        toast.success("Slip copy ho gayi. WhatsApp mein chat khol kar Ctrl+V karein");
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+        toast.success(
+          isManualClick
+            ? "Slip image copy ho gayi! WhatsApp par Ctrl+V karein"
+            : "Slip image auto-copy ho gayi! (WhatsApp par Ctrl+V karein)"
+        );
       } else {
-        const url = URL.createObjectURL(await makeSlipBlob());
+        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
         a.download = `slip-${invoiceNo}.png`;
         a.click();
         URL.revokeObjectURL(url);
-        window.open("https://web.whatsapp.com/", "whatsapp_web");
-        toast.info("Slip download ho gayi. WhatsApp chat mein attach karein");
+        toast.info("Slip download ho gayi");
       }
     } catch (error) {
-      console.error("WhatsApp slip error:", error);
-      const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-      toast.error(`Slip nahi ban saki (${reason})`);
+      if (isManualClick) {
+        console.error("Copy slip error:", error);
+        const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        toast.error(`Slip image copy nahi ho saki (${reason})`);
+      } else {
+        console.warn("Auto copy blocked by browser gesture policy:", error);
+      }
     } finally {
-      setSharing(false);
+      setCopying(false);
     }
   };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleCopySlip(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, []);
   const handlePrint = () => {
     try {
       window.print();
@@ -202,12 +220,24 @@ export default function SaleReceipt({
             <Printer size={18} /> {printLabel}
           </button>
           <button
-            onClick={handleWhatsApp}
-            disabled={sharing}
-            className="w-full py-3 bg-[#25D366] text-white rounded-lg font-bold flex justify-center items-center gap-2 hover:bg-[#1ebe5a] disabled:opacity-60"
+            onClick={() => handleCopySlip(true)}
+            disabled={copying}
+            className={`w-full py-3 text-white rounded-lg font-bold flex justify-center items-center gap-2 transition-colors shadow-sm disabled:opacity-60 ${
+              copied
+                ? "bg-emerald-600 hover:bg-emerald-700"
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
-            {sharing ? <Loader2 size={18} className="animate-spin" /> : <MessageCircle size={18} />} WhatsApp
-          </button>          <button onClick={onClose} className="w-full py-3 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700">
+            {copying ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : copied ? (
+              <Check size={18} className="text-white" />
+            ) : (
+              <Copy size={18} />
+            )}
+            {copied ? "Slip Image Copied!" : "Copy Slip Image"}
+          </button>
+          <button onClick={onClose} className="w-full py-3 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700">
             {closeLabel}
           </button>
         </div>
