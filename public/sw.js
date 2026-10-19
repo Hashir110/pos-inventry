@@ -86,7 +86,7 @@ async function cacheFirst(request) {
 async function networkFirst(request) {
   try {
     const response = await fetch(request);
-    if (response.ok) (await caches.open(PAGES_CACHE)).put(request, response.clone());
+    if (response.ok && response.status !== 206) (await caches.open(PAGES_CACHE)).put(request, response.clone());
     return response;
   } catch (error) {
     const cached = await caches.match(request);
