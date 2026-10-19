@@ -19,11 +19,6 @@ import {
     Menu,
     RefreshCw,
     Store,
-    AlertTriangle,
-    CreditCard,
-    MessageCircle,
-    Phone,
-    X,
     Wallet,
     RotateCcw,
     Users,
@@ -32,7 +27,8 @@ import {
     FileText,
     Truck,
     HandCoins,
-    ClipboardCheck
+    ClipboardCheck,
+    X
 } from "lucide-react";
 import Link from "next/link";
 import type { Shop } from "../types";
@@ -54,11 +50,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [isSyncing, setIsSyncing] = useState(false);
     const syncingRef = useRef(false);
     const autoSyncTried = useRef(false);
-
-    const [licenseStatus, setLicenseStatus] = useState("active");
-    const [daysOverdue, setDaysOverdue] = useState(0);
-
-    const [showPaymentModal, setShowPaymentModal] = useState(false);
 
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -87,7 +78,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             setCurrentUser(user);
             if (shopData) {
                 setCurrentShop(shopData);
-                checkLicense(shopData);
             }
             setLoading(false);
         });
@@ -95,27 +85,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         return () => unsubscribe();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
-
-    const checkLicense = (shop: Shop | null) => {
-        if (!shop?.licenseExpiry) return;
-
-        const expiryDate = new Date(shop.licenseExpiry);
-        const today = new Date();
-
-        expiryDate.setHours(0, 0, 0, 0);
-        today.setHours(0, 0, 0, 0);
-
-        const diffDays = Math.round((today.getTime() - expiryDate.getTime()) / (1000 * 60 * 60 * 24));
-
-        if (diffDays >= 2) {
-            router.push("/license-expired");
-        } else if (diffDays >= -3) {
-            setLicenseStatus("warning");
-            setDaysOverdue(diffDays);
-        } else {
-            setLicenseStatus("active");
-        }
-    };
 
     useEffect(() => {
         const checkPending = () => {
@@ -241,7 +210,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         navSections.flatMap((s) => s.items).find((i) => i.href === pathname)?.name ??
         (pathname.includes("/inventry/edit") ? t("navEditProduct") : t("navDashboard"));
     const shopInitial = (currentShop?.shopName || "S").trim().charAt(0).toUpperCase();
-    const licenseExpired = daysOverdue > 0;
 
     return (
         <div className="flex h-screen bg-canvas">
@@ -349,26 +317,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             <div className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0">
 
-                {licenseStatus === "warning" && (
-                    <div className={`${licenseExpired ? "bg-red-50 text-red-800 border-red-200" : "bg-amber-50 text-amber-900 border-amber-200"} border-b px-4 py-2.5 flex items-center justify-between gap-3 shrink-0`}>
-                        <div className="flex items-center gap-3 min-w-0">
-                            <AlertTriangle className={`h-5 w-5 shrink-0 ${licenseExpired ? "text-red-600" : "text-amber-600"}`} />
-                            <p className="text-sm">
-                                <b>{licenseExpired ? t("shell_licenseExpired") : t("shell_licenseExpiring")}</b>
-                                {daysOverdue < 0 && <span>{t("shell_licenseDaysLeft", { days: Math.abs(daysOverdue) })}</span>}
-                                {daysOverdue === 0 && <span>{t("shell_licenseLastDay")}</span>}
-                                {daysOverdue > 0 && <span>{t("shell_licenseBlocked", { days: 2 - daysOverdue })}</span>}
-                            </p>
-                        </div>
-                        <button
-                            onClick={() => setShowPaymentModal(true)}
-                            className="shrink-0 rounded-lg bg-white px-3.5 py-1.5 text-xs font-bold text-stone-800 border border-stone-300 hover:bg-stone-50"
-                        >
-                            {t("shell_payNow")}
-                        </button>
-                    </div>
-                )}
-
                 <header className="h-16 bg-white border-b border-stone-200 px-4 md:px-6 flex items-center justify-between gap-3 shrink-0 z-10">
                     <div className="flex items-center gap-3 min-w-0">
                         <button
@@ -408,53 +356,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     {children}
                 </main>
             </div>
-
-            {showPaymentModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-pop w-full max-w-md overflow-hidden">
-                        <div className="p-5 border-b border-stone-200 flex justify-between items-start">
-                            <div>
-                                <h2 className="text-lg font-extrabold text-stone-900">{t("shell_subscriptionPayment")}</h2>
-                                <p className="text-sm text-stone-500 mt-0.5">{t("shell_contactAdmin")}</p>
-                            </div>
-                            <button onClick={() => setShowPaymentModal(false)} className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"><X size={20} /></button>
-                        </div>
-
-                        <div className="p-5 space-y-5">
-                            <div className="flex items-center gap-4 p-4 bg-stone-50 rounded-xl border border-stone-200">
-                                <div className="bg-brand-100 p-2.5 rounded-xl text-brand-700">
-                                    <CreditCard size={22} />
-                                </div>
-                                <div>
-                                    <p className="text-[11px] text-stone-500 uppercase font-bold tracking-wider">Easypaisa</p>
-                                    <p className="text-lg font-extrabold text-stone-900">0309-0391673</p>
-                                    <p className="text-xs text-stone-500">{t("shell_accountTitle", { name: "Rizwan Ahmed" })}</p>
-                                </div>
-                            </div>
-
-                            <div>
-                                <p className="text-sm text-stone-500 mb-3 text-center">{t("shell_sendScreenshot")}</p>
-                                <div className="flex gap-3">
-                                    <a
-                                        href="https://wa.me/923001234567"
-                                        target="_blank"
-                                        className="btn-primary flex-1 !py-3"
-                                    >
-                                        <MessageCircle size={18} /> {t("whatsappSupport")}
-                                    </a>
-                                    <a href="tel:03001234567" className="btn-ghost flex-1 !py-3">
-                                        <Phone size={18} /> {t("callNow")}
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-stone-50 px-5 py-3 text-center border-t border-stone-200">
-                            <p className="text-xs text-stone-400">{t("shell_supportId", { id: currentShop?.uid ?? "" })}</p>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
