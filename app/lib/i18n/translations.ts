@@ -1,13 +1,25 @@
+import { gatePass } from "./messages/gatePass";
+import { suppliers } from "./messages/suppliers";
+import { pos } from "./messages/pos";
+import { closing } from "./messages/closing";
+import { inventory } from "./messages/inventory";
+import { sales } from "./messages/sales";
+import { credit } from "./messages/credit";
+import { expenses } from "./messages/expenses";
+import { settings } from "./messages/settings";
+import { dashboard } from "./messages/dashboard";
+import { shell } from "./messages/shell";
+import { auth } from "./messages/auth";
+import { shared } from "./messages/shared";
+
 export type Language = "en" | "ur";
 
-export const translations = {
+const base = {
   en: {
-    // Navigation Sections
     navSales: "Sales",
     navStock: "Stock",
     navAccounts: "Accounts",
 
-    // Navigation Items
     navPos: "POS",
     navSalesHistory: "Sales History",
     navReturns: "Returns",
@@ -19,14 +31,12 @@ export const translations = {
     navSettings: "Settings",
     navEditProduct: "Edit Product",
 
-    // Header & Status
     online: "Online",
     offline: "Offline",
     syncNeeded: "Sync Needed",
     newSale: "New Sale",
     logout: "Logout",
 
-    // Common Buttons & Labels
     save: "Save",
     cancel: "Cancel",
     delete: "Delete",
@@ -63,7 +73,6 @@ export const translations = {
     balance: "Balance",
     back: "Back",
 
-    // License Banner & Modal
     licenseWarningTitle: "License Expiring Soon",
     licenseExpiredTitle: "License Expired",
     daysRemaining: "days remaining, please renew.",
@@ -77,7 +86,6 @@ export const translations = {
     callNow: "Call Now",
     afterPaymentNotice: "Send payment screenshot on WhatsApp after transfer.",
 
-    // Login Page
     loginTitle: "Login to your account",
     loginSubtitle: "Manage your inventory, track sales, and handle point of sale operations efficiently.",
     continueWithGoogle: "Continue with Google",
@@ -88,11 +96,10 @@ export const translations = {
     heroSubtitle: "One place to manage inventory, orders, and customer details.",
     rightsReserved: "All rights reserved.",
 
-    // Setup Page
     shopSetup: "Shop Setup",
     setupSubtitle: "Welcome! Set up your store details.",
     shopName: "Shop Name",
-    shopNamePlaceholder: "Dukan ka naam",
+    shopNamePlaceholder: "Shop name",
     businessType: "Business Type",
     startShop: "Start Shop",
     creating: "Creating...",
@@ -101,7 +108,6 @@ export const translations = {
     hardwareType: "Hardware Store",
     generalType: "General / Other",
 
-    // Dashboard Home
     dashboardOverview: "{shop} overview • {period}",
     selectedPeriod: "Selected Period",
     thisMonth: "This Month",
@@ -116,12 +122,12 @@ export const translations = {
     paymentBreakdown: "Payment Breakdown",
     cash: "Cash",
     bankOnline: "Bank / Online",
-    udhar: "Udhar (Credit)",
+    udhar: "Credit",
     lowStock: "Low Stock",
     itemsLowStock: "items with low stock (< 5)",
     viewInventory: "View Inventory",
     recentInvoices: "Recent Invoices",
-    searchInvoicesPlaceholder: "Invoice number search karein",
+    searchInvoicesPlaceholder: "Search by invoice number",
     noInvoicesPeriod: "No invoices in this period",
     startNewSale: "Start New Sale",
     viewAllSalesHistory: "View All Sales History →",
@@ -129,10 +135,9 @@ export const translations = {
     enterPasswordToView: "Enter dashboard password to view this figure.",
     unlock: "Unlock",
 
-    // POS Page
     products: "Products",
     clickToAdd: "Click item to add to bill",
-    searchItemsPlaceholder: "Item search karein",
+    searchItemsPlaceholder: "Search items",
     orderList: "Order List",
     newBill: "New Bill",
     walkInCustomer: "Counter Sale",
@@ -150,7 +155,6 @@ export const translations = {
     selectCustomerForCredit: "Select customer for credit sale",
     notePlaceholder: "Note (optional)",
 
-    // Sales History & Details
     salesHistory: "Sales History",
     viewPastSales: "View and manage past sales invoices",
     totalProfitRecent: "Total Profit (Recent)",
@@ -160,8 +164,7 @@ export const translations = {
     sortNewest: "Sort: Newest",
     noSalesRecorded: "No sales recorded yet",
 
-    // Udhar / Credit Ledger
-    creditLedger: "Credit Ledger (Udhar)",
+    creditLedger: "Credit Ledger",
     manageCustomerBalances: "Manage customer credit balances & receivables",
     totalReceivable: "Total Receivable",
     customersCount: "Customers",
@@ -185,7 +188,6 @@ export const translations = {
     receivePayment: "Receive Payment",
     viewLedger: "View History",
 
-    // Inventory & Products Page
     inventoryManagement: "Inventory Management",
     manageStockPrices: "Manage stock items, prices and quantities",
     totalItems: "Total Products",
@@ -196,13 +198,12 @@ export const translations = {
     unitType: "Unit Type",
     barcode: "Barcode (Optional)",
 
-    // Add / Edit Product Form
     newProduct: "New Product",
     addProductSubtitle: "Add new item to inventory",
     editProductSubtitle: "Update product details & prices",
     productDetails: "Product Details",
     productNameLabel: "Name",
-    productNamePlaceholder: "Item ka naam",
+    productNamePlaceholder: "Product name",
     categoryOptional: "Category (optional — POS tabs)",
     categoryPlaceholder: "Category (optional)",
     howToSell: "How to sell?",
@@ -220,19 +221,17 @@ export const translations = {
     saveProduct: "Save Product",
     updateProduct: "Update Product",
 
-    // Expenses Page
     expensesTitle: "Expenses",
     expensesSubtitle: "Track daily store operational expenses",
     newExpense: "New Expense",
     expenseTitleLabel: "Expense Title",
-    expenseTitlePlaceholder: "Kharche ka naam",
+    expenseTitlePlaceholder: "Expense title",
     expenseAmountLabel: "Amount (Rs.)",
     addExpenseBtn: "Add Expense",
     addingExpense: "Adding Expense...",
     history: "History",
     noExpenses: "No expenses logged yet.",
 
-    // Settings Page
     storeSettings: "Store Settings",
     settingsSubtitle: "Manage store profile, receipt text & security",
     shopProfile: "Shop Profile",
@@ -264,12 +263,10 @@ export const translations = {
     deleteSalesBtn: "Delete Sales",
   },
   ur: {
-    // Navigation Sections
     navSales: "فروخت",
     navStock: "اسٹاک",
     navAccounts: "حساب کتاب",
 
-    // Navigation Items
     navPos: "پوائنٹ آف سیل",
     navSalesHistory: "فروخت کی ہسٹری",
     navReturns: "واپسی (ریٹرن)",
@@ -281,14 +278,12 @@ export const translations = {
     navSettings: "سیٹنگز",
     navEditProduct: "پروڈکٹ کی ترمیم",
 
-    // Header & Status
     online: "آن لائن",
     offline: "آف لائن",
     syncNeeded: "سنک درکار ہے",
     newSale: "نئی فروخت",
     logout: "لاگ آؤٹ",
 
-    // Common Buttons & Labels
     save: "محفوظ کریں",
     cancel: "منسوخ کریں",
     delete: "حذف کریں",
@@ -325,7 +320,6 @@ export const translations = {
     balance: "بقیہ رقم",
     back: "واپس",
 
-    // License Banner & Modal
     licenseWarningTitle: "لائسنس جلد ختم ہونے والا ہے",
     licenseExpiredTitle: "لائسنس ختم ہو چکا ہے",
     daysRemaining: "دن باقی ہیں، برائے مہربانی ریچارج کریں۔",
@@ -339,7 +333,6 @@ export const translations = {
     callNow: "کال کریں",
     afterPaymentNotice: "ادائیگی کے بعد اسکرین شاٹ واٹس ایپ پر بھیجیں۔",
 
-    // Login Page
     loginTitle: "اپنے اکاؤنٹ میں لاگ ان کریں",
     loginSubtitle: "اپنی انوینٹری کا انتظام، فروخت کا حساب اور پی او ایس آپریشنز آسانی سے سنبھالیں۔",
     continueWithGoogle: "گوگل کے ساتھ جاری رکھیں",
@@ -350,7 +343,6 @@ export const translations = {
     heroSubtitle: "انوینٹری، آرڈرز اور گاہکوں کی تفصیلات ایک ہی جگہ دیکھیں۔",
     rightsReserved: "جملہ حقوق محفوظ ہیں۔",
 
-    // Setup Page
     shopSetup: "دکان کی سیٹنگ",
     setupSubtitle: "خوش آمدید! اپنی دکان کی تفصیلات درج کریں۔",
     shopName: "دکان کا نام",
@@ -363,7 +355,6 @@ export const translations = {
     hardwareType: "ہارڈ ویئر اسٹور",
     generalType: "جنرل / دیگر",
 
-    // Dashboard Home
     dashboardOverview: "{shop} کا خلاصہ • {period}",
     selectedPeriod: "منتخب کردہ مدت",
     thisMonth: "اس مہینے کا",
@@ -391,7 +382,6 @@ export const translations = {
     enterPasswordToView: "یہ رقم دیکھنے کے لیے ڈیش بورڈ پاس ورڈ درج کریں۔",
     unlock: "ان لاک کریں",
 
-    // POS Page
     products: "پروڈکٹس",
     clickToAdd: "بل میں شامل کرنے کے لیے آئٹم پر کلک کریں",
     searchItemsPlaceholder: "آئٹم تلاش کریں...",
@@ -412,7 +402,6 @@ export const translations = {
     selectCustomerForCredit: "ادھار کے لیے کسٹمر منتخب کریں",
     notePlaceholder: "بل کا نوٹ...",
 
-    // Sales History & Details
     salesHistory: "فروخت کی ہسٹری",
     viewPastSales: "گزشتہ تمام فروخت اور انوائسز دیکھیں",
     totalProfitRecent: "کل منافع (حالیہ)",
@@ -422,7 +411,6 @@ export const translations = {
     sortNewest: "ترتیب: نئی پہلے",
     noSalesRecorded: "ابھی تک کوئی فروخت ریکارڈ نہیں ہوئی",
 
-    // Udhar / Credit Ledger
     creditLedger: "ادھار کھاتہ",
     manageCustomerBalances: "کسٹمرز کے ادھار اور واجب الوصول رقوم کا انتظام",
     totalReceivable: "کل واجب الوصول رقم",
@@ -447,7 +435,6 @@ export const translations = {
     receivePayment: "رقم وصول کریں",
     viewLedger: "تفصیلات / ہسٹری",
 
-    // Inventory & Products Page
     inventoryManagement: "انوینٹری کا انتظام",
     manageStockPrices: "اشیاء، قیمتوں اور اسٹاک کا انتظام",
     totalItems: "کل پروڈکٹس",
@@ -458,7 +445,6 @@ export const translations = {
     unitType: "پیکنگ کی قسم",
     barcode: "بارکوڈ (اختیاری)",
 
-    // Add / Edit Product Form
     newProduct: "نیا پروڈکٹ",
     addProductSubtitle: "انوینٹری میں نیا آئٹم شامل کریں",
     editProductSubtitle: "پروڈکٹ کی تفصیلات اور قیمتیں تبدیل کریں",
@@ -482,7 +468,6 @@ export const translations = {
     saveProduct: "پروڈکٹ محفوظ کریں",
     updateProduct: "پروڈکٹ اپ ڈیٹ کریں",
 
-    // Expenses Page
     expensesTitle: "اخراجات",
     expensesSubtitle: "دکان کے روزمرہ کے اخراجات کا حساب کتاب رکھیں",
     newExpense: "نیا خرچہ",
@@ -494,7 +479,6 @@ export const translations = {
     history: "ہسٹری",
     noExpenses: "ابھی تک کوئی خرچہ درج نہیں ہوا",
 
-    // Settings Page
     storeSettings: "دکان کی سیٹنگز",
     settingsSubtitle: "دکان کی تفصیلات، سیکیورٹی اور پرنٹر",
     shopProfile: "دکان کا پروفائل",
@@ -526,5 +510,40 @@ export const translations = {
     deleteSalesBtn: "فروخت حذف کریں",
   }
 } as const;
+
+export const translations = {
+  en: {
+    ...base.en,
+    ...gatePass.en,
+    ...suppliers.en,
+    ...pos.en,
+    ...closing.en,
+    ...inventory.en,
+    ...sales.en,
+    ...credit.en,
+    ...expenses.en,
+    ...settings.en,
+    ...dashboard.en,
+    ...shell.en,
+    ...auth.en,
+    ...shared.en,
+  },
+  ur: {
+    ...base.ur,
+    ...gatePass.ur,
+    ...suppliers.ur,
+    ...pos.ur,
+    ...closing.ur,
+    ...inventory.ur,
+    ...sales.ur,
+    ...credit.ur,
+    ...expenses.ur,
+    ...settings.ur,
+    ...dashboard.ur,
+    ...shell.ur,
+    ...auth.ur,
+    ...shared.ur,
+  },
+};
 
 export type TranslationKey = keyof typeof translations.en;

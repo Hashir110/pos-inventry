@@ -37,7 +37,6 @@ export function DualSeriesCanvasChart({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // High DPI scaling
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     canvas.width = rect.width * dpr;
@@ -61,7 +60,6 @@ export function DualSeriesCanvasChart({
     const chartW = width - padding.left - padding.right;
     const chartH = h - padding.top - padding.bottom;
 
-    // Calculate dynamic max value
     const maxValRaw = Math.max(
       ...data.flatMap((d) => [d.val1 || 0, d.val2 || 0]),
       10
@@ -70,7 +68,6 @@ export function DualSeriesCanvasChart({
 
     const gridRows = 4;
 
-    // 1. Draw Horizontal Grid Lines & Y-Axis Labels matching POS theme
     ctx.strokeStyle = "#f1f5f9";
     ctx.lineWidth = 1;
 
@@ -82,7 +79,6 @@ export function DualSeriesCanvasChart({
       ctx.lineTo(width - padding.right, y);
       ctx.stroke();
 
-      // Label Y-Axis
       const val = Math.round(maxVal - (maxVal / gridRows) * i);
       ctx.fillStyle = "#64748b";
       ctx.font = "600 11px sans-serif";
@@ -90,7 +86,6 @@ export function DualSeriesCanvasChart({
       ctx.fillText(`Rs.${val}`, padding.left - 8, y + 4);
     }
 
-    // 2. Compute Points
     const pts1 = data.map((d, idx) => {
       const x = padding.left + (chartW / Math.max(data.length - 1, 1)) * idx;
       const y = padding.top + chartH - ((d.val1 || 0) / maxVal) * chartH;
@@ -103,7 +98,6 @@ export function DualSeriesCanvasChart({
       return { x, y, label: d.label, val: d.val2 };
     });
 
-    // 3. Draw Soft Shaded Gradient Area Fill matching POS Brand Orange
     if (pts1.length > 0) {
       ctx.beginPath();
       ctx.moveTo(pts1[0].x, pts1[0].y);
@@ -118,13 +112,12 @@ export function DualSeriesCanvasChart({
       ctx.closePath();
 
       const fillGrad = ctx.createLinearGradient(0, padding.top, 0, h - padding.bottom);
-      fillGrad.addColorStop(0, "rgba(254, 159, 67, 0.22)"); // Brand orange transparent
+      fillGrad.addColorStop(0, "rgba(254, 159, 67, 0.22)");
       fillGrad.addColorStop(1, "rgba(254, 159, 67, 0.0)");
       ctx.fillStyle = fillGrad;
       ctx.fill();
     }
 
-    // Helper to draw smooth line curve with glowing nodes
     const drawSmoothCurve = (
       points: Array<{ x: number; y: number }>,
       strokeColor: string,
@@ -144,7 +137,6 @@ export function DualSeriesCanvasChart({
       ctx.lineWidth = 2.8;
       ctx.stroke();
 
-      // Nodes
       points.forEach((p) => {
         ctx.beginPath();
         ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
@@ -156,13 +148,10 @@ export function DualSeriesCanvasChart({
       });
     };
 
-    // Draw Series 2 (Emerald Green)
     drawSmoothCurve(pts2, series2Color, series2Color);
 
-    // Draw Series 1 (Brand Orange)
     drawSmoothCurve(pts1, series1Color, series1Color);
 
-    // 4. Draw X-Axis Labels
     pts1.forEach((p) => {
       ctx.fillStyle = "#475569";
       ctx.font = "600 11px sans-serif";
@@ -173,7 +162,6 @@ export function DualSeriesCanvasChart({
 
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-card font-sans">
-      {/* Header with Title & POS Colored Legend */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-stone-100 pb-3">
         <div>
           <h3 className="text-base font-extrabold text-stone-900 tracking-tight">
@@ -182,7 +170,6 @@ export function DualSeriesCanvasChart({
           {subtitle && <p className="text-xs text-stone-500 font-medium">{subtitle}</p>}
         </div>
 
-        {/* Legend */}
         <div className="flex items-center gap-4 text-xs font-bold">
           <div className="flex items-center gap-1.5 rounded-lg bg-orange-50 px-2.5 py-1 text-amber-900 border border-orange-200">
             <span
@@ -201,7 +188,6 @@ export function DualSeriesCanvasChart({
         </div>
       </div>
 
-      {/* Inner Canvas Area */}
       <div className="w-full rounded-xl bg-stone-50/50 p-1 border border-stone-100">
         <canvas
           ref={canvasRef}
@@ -213,7 +199,6 @@ export function DualSeriesCanvasChart({
   );
 }
 
-// Legacy exports
 export function SalesCanvasChart({
   salesData,
   height = 220,

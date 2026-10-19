@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Search, ChevronDown, User, X, Plus, Check, Wallet } from "lucide-react";
+import { useLanguage } from "../store/useLanguage";
 import type { Customer } from "../types";
 
 interface CustomerSelectProps {
@@ -19,6 +20,7 @@ export default function CustomerSelect({
   isUdhar = false,
 }: CustomerSelectProps) {
   const router = useRouter();
+  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -88,7 +90,7 @@ export default function CustomerSelect({
                 </span>
                 {selectedCustomer.balance > 0 ? (
                   <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">
-                    Due: Rs. {Math.round(selectedCustomer.balance).toLocaleString()}
+                    {t("pos_select_due", { amount: Math.round(selectedCustomer.balance).toLocaleString() })}
                   </span>
                 ) : (
                   <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded shrink-0">
@@ -98,7 +100,7 @@ export default function CustomerSelect({
               </div>
             ) : (
               <span className="text-sm font-medium text-stone-600">
-                {isUdhar ? "Party chunein (zaroori)" : "Counter Sale"}
+                {isUdhar ? t("pos_select_party_required") : t("pos_select_counter_sale")}
               </span>
             )}
           </div>
@@ -114,7 +116,7 @@ export default function CustomerSelect({
                 onSelectCustomer(null);
               }}
               className="p-1 text-stone-400 hover:text-stone-700 rounded hover:bg-stone-100"
-              title="Counter Sale par wapis"
+              title={t("pos_select_back_counter")}
             >
               <X size={14} />
             </span>
@@ -136,7 +138,7 @@ export default function CustomerSelect({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Party ya phone search karein"
+                placeholder={t("pos_select_search_party")}
                 className="w-full pl-9 pr-8 py-2 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
               />
               {search && (
@@ -169,7 +171,7 @@ export default function CustomerSelect({
                   <div className="w-6 h-6 rounded-full bg-stone-100 flex items-center justify-center text-stone-500 text-[10px] font-bold">
                     W
                   </div>
-                  <span>Counter Sale</span>
+                  <span>{t("pos_select_counter_sale")}</span>
                 </div>
                 {!selectedCustomerId && <Check size={14} className="text-brand-600" />}
               </button>
@@ -177,7 +179,7 @@ export default function CustomerSelect({
 
             {filteredCustomers.length === 0 ? (
               <div className="p-6 text-center text-stone-400 text-xs">
-                <p>Koi party nahi mili {search ? `"${search}"` : ""}</p>
+                <p>{t("pos_select_no_party", { query: search ? `"${search}"` : "" })}</p>
               </div>
             ) : (
               filteredCustomers.map((c) => {
@@ -232,7 +234,7 @@ export default function CustomerSelect({
               onClick={handleGoToUdhar}
               className="btn-primary w-full !py-2 text-xs flex items-center justify-center gap-1.5 font-bold shadow-sm"
             >
-              <Plus size={14} /> Nayi Party Banayein
+              <Plus size={14} /> {t("pos_select_new_party")}
             </button>
           </div>
         </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useStore } from "../../store/useStore";
+import { useLanguage } from "../../store/useLanguage";
 import {
   subscribeSuppliers,
   addSupplier,
@@ -32,6 +33,7 @@ import DataTable from "../../components/DataTable";
 
 export default function SuppliersPage() {
   const { currentShop } = useStore();
+  const { t } = useLanguage();
   const ownerId = currentShop?.uid || "";
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -78,7 +80,7 @@ export default function SuppliersPage() {
         setPurchases(pur);
         setPayments(pay);
       } catch (e) {
-        console.error("Failed loading supplier history:", e);
+        console.error("Failed to load supplier history:", e);
       }
     };
 
@@ -95,7 +97,7 @@ export default function SuppliersPage() {
   const handleAddSupplierSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSupName.trim()) {
-      toast.warn("Supplier ka naam enter karein");
+      toast.warn(t("suppliers_warn_name"));
       return;
     }
     try {
@@ -105,13 +107,13 @@ export default function SuppliersPage() {
         phone: newSupPhone,
         address: newSupAddress,
       });
-      toast.success(`Supplier "${newSupName}" add ho gaya!`);
+      toast.success(t("suppliers_added", { name: newSupName }));
       setShowAddSupplierModal(false);
       setNewSupName("");
       setNewSupPhone("");
       setNewSupAddress("");
     } catch (err: any) {
-      toast.error(err.message || "Failed to add supplier");
+      toast.error(err.message || t("suppliers_err_add"));
     } finally {
       setAddingSupplier(false);
     }
@@ -120,11 +122,11 @@ export default function SuppliersPage() {
   const handlePurchaseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!purchaseSupId) {
-      toast.warn("Supplier select karein");
+      toast.warn(t("suppliers_warn_select_supplier"));
       return;
     }
     if (!purchaseProdId) {
-      toast.warn("Product select karein");
+      toast.warn(t("suppliers_warn_select_product"));
       return;
     }
     const prod = products.find((p) => p.id === purchaseProdId);
@@ -156,7 +158,11 @@ export default function SuppliersPage() {
         paidAmount: Number(purchasePaidAmount),
       });
 
-      toast.success(`Purchase bill recorded! Stock updated in ${purchaseDestination.toUpperCase()}`);
+      toast.success(
+        t("suppliers_purchase_recorded", {
+          location: t(purchaseDestination === "gudam" ? "suppliers_dest_warehouse" : "suppliers_dest_shop"),
+        })
+      );
       setShowPurchaseModal(false);
 
       const pur = await listSupplierPurchases(ownerId);
@@ -168,7 +174,7 @@ export default function SuppliersPage() {
       setPurchaseBuyingPrice(0);
       setPurchasePaidAmount(0);
     } catch (err: any) {
-      toast.error(err.message || "Purchase entry failed");
+      toast.error(err.message || t("suppliers_err_purchase"));
     } finally {
       setSavingPurchase(false);
     }
@@ -177,11 +183,11 @@ export default function SuppliersPage() {
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!paymentSupId) {
-      toast.warn("Supplier select karein");
+      toast.warn(t("suppliers_warn_select_supplier"));
       return;
     }
     if (paymentAmount <= 0) {
-      toast.warn("Payment amount 0 se bari honi chahiye");
+      toast.warn(t("suppliers_warn_amount"));
       return;
     }
     const sup = suppliers.find((s) => s.id === paymentSupId);
@@ -197,7 +203,7 @@ export default function SuppliersPage() {
         note: paymentNote,
       });
 
-      toast.success(`Payment of Rs. ${paymentAmount} paid to ${sup.name}`);
+      toast.success(t("suppliers_payment_recorded", { amount: paymentAmount, name: sup.name }));
       setShowPaymentModal(false);
 
       const pay = await listSupplierPayments(ownerId);
@@ -207,7 +213,7 @@ export default function SuppliersPage() {
       setPaymentAmount(0);
       setPaymentNote("");
     } catch (err: any) {
-      toast.error(err.message || "Payment entry failed");
+      toast.error(err.message || t("suppliers_err_payment"));
     } finally {
       setSavingPayment(false);
     }
@@ -224,10 +230,10 @@ export default function SuppliersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-sm">
         <div>
           <h1 className="text-xl font-extrabold text-stone-900 flex items-center gap-2">
-            <Truck className="text-brand-600" size={24} /> Suppliers & Vendor Accounts
+            <Truck className="text-brand-600" size={24} /> {t("suppliers_title")}
           </h1>
           <p className="text-xs text-stone-500 mt-1">
-            Jin parties se maal khareedte hain unka ledger, purchase bills aur payouts maintain karein
+            {t("suppliers_subtitle")}
           </p>
         </div>
 
@@ -236,19 +242,19 @@ export default function SuppliersPage() {
             onClick={() => setShowAddSupplierModal(true)}
             className="btn-ghost text-xs font-bold flex items-center gap-1.5"
           >
-            <UserPlus size={16} /> Naya Supplier
+            <UserPlus size={16} /> {t("suppliers_new_supplier")}
           </button>
           <button
             onClick={() => setShowPurchaseModal(true)}
             className="btn-primary text-xs font-bold flex items-center gap-1.5 !bg-amber-600 hover:!bg-amber-700"
           >
-            <ArrowUpRight size={16} /> Maal Uthaya (Purchase)
+            <ArrowUpRight size={16} /> {t("suppliers_purchase_btn")}
           </button>
           <button
             onClick={() => setShowPaymentModal(true)}
             className="btn-primary text-xs font-bold flex items-center gap-1.5"
           >
-            <ArrowDownLeft size={16} /> Payment Di (Payout)
+            <ArrowDownLeft size={16} /> {t("suppliers_pay_btn")}
           </button>
         </div>
       </div>
@@ -259,11 +265,11 @@ export default function SuppliersPage() {
             <DollarSign size={24} />
           </div>
           <div>
-            <p className="text-xs text-stone-500 font-bold uppercase">Total Suppliers Payable</p>
+            <p className="text-xs text-stone-500 font-bold uppercase">{t("suppliers_total_payable")}</p>
             <p className="text-xl font-black text-amber-900">
               Rs. {totalSupplierPayable.toLocaleString()}
             </p>
-            <p className="text-[11px] text-stone-400">Humne jin parties ke paise dene hain</p>
+            <p className="text-[11px] text-stone-400">{t("suppliers_total_payable_hint")}</p>
           </div>
         </div>
 
@@ -272,9 +278,9 @@ export default function SuppliersPage() {
             <Building2 size={24} />
           </div>
           <div>
-            <p className="text-xs text-stone-500 font-bold uppercase">Total Registered Suppliers</p>
+            <p className="text-xs text-stone-500 font-bold uppercase">{t("suppliers_total_registered")}</p>
             <p className="text-xl font-black text-stone-900">{suppliers.length}</p>
-            <p className="text-[11px] text-stone-400">Active Vendor Accounts</p>
+            <p className="text-[11px] text-stone-400">{t("suppliers_active_accounts")}</p>
           </div>
         </div>
 
@@ -283,9 +289,9 @@ export default function SuppliersPage() {
             <Package size={24} />
           </div>
           <div>
-            <p className="text-xs text-stone-500 font-bold uppercase">Total Purchase Bills</p>
+            <p className="text-xs text-stone-500 font-bold uppercase">{t("suppliers_total_bills")}</p>
             <p className="text-xl font-black text-stone-900">{purchases.length}</p>
-            <p className="text-[11px] text-stone-400">Recorded Stock Receipts</p>
+            <p className="text-[11px] text-stone-400">{t("suppliers_recorded_receipts")}</p>
           </div>
         </div>
       </div>
@@ -293,15 +299,15 @@ export default function SuppliersPage() {
       <DataTable
         data={filteredSuppliers}
         rowKey={(s) => s.id}
-        emptyText={<>Koi Supplier record nahi mila. &quot;Naya Supplier&quot; par click karke add karein.</>}
+        emptyText={<>{t("suppliers_empty")}</>}
         toolbarLeft={
-          <h2 className="text-sm font-bold text-stone-800 uppercase tracking-wider">Suppliers List & Balance</h2>
+          <h2 className="text-sm font-bold text-stone-800 uppercase tracking-wider">{t("suppliers_list_title")}</h2>
         }
         toolbarRight={
           <div className="relative w-full sm:w-64">
             <input
               type="text"
-              placeholder="Supplier ya phone search karein"
+              placeholder={t("suppliers_search_placeholder")}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="input-field pl-9 text-xs"
@@ -310,18 +316,18 @@ export default function SuppliersPage() {
           </div>
         }
         columns={[
-          { key: "name", header: "Supplier Name", cell: (s) => <span className="font-extrabold text-stone-900">{s.name}</span> },
-          { key: "phone", header: "Phone", cell: (s) => <span className="text-stone-600">{s.phone || "-"}</span> },
-          { key: "address", header: "Address", cell: (s) => <span className="text-stone-500">{s.address || "-"}</span> },
+          { key: "name", header: t("suppliers_col_name"), cell: (s) => <span className="font-extrabold text-stone-900">{s.name}</span> },
+          { key: "phone", header: t("phone"), cell: (s) => <span className="text-stone-600">{s.phone || "-"}</span> },
+          { key: "address", header: t("address"), cell: (s) => <span className="text-stone-500">{s.address || "-"}</span> },
           {
             key: "balance",
-            header: "Humne Dene Hain (Balance)",
+            header: t("suppliers_col_balance"),
             align: "right",
             cell: (s) => <span className="font-black text-amber-700">Rs. {(s.balance || 0).toLocaleString()}</span>,
           },
           {
             key: "actions",
-            header: "Actions",
+            header: t("actions"),
             align: "center",
             cell: (s) => (
               <div className="flex justify-center gap-2 text-xs">
@@ -332,7 +338,7 @@ export default function SuppliersPage() {
                   }}
                   className="px-2.5 py-1 rounded bg-amber-50 text-amber-700 font-bold border border-amber-200 hover:bg-amber-100"
                 >
-                  + Purchase Bill
+                  {t("suppliers_add_purchase_bill")}
                 </button>
                 <button
                   onClick={() => {
@@ -341,12 +347,12 @@ export default function SuppliersPage() {
                   }}
                   className="px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 hover:bg-emerald-100"
                 >
-                  + Payment Di
+                  {t("suppliers_add_payment")}
                 </button>
                 <button
                   onClick={() => setShowHistoryModal(s)}
                   className="p-1 text-stone-500 hover:bg-stone-100 rounded"
-                  title="View Ledger"
+                  title={t("suppliers_view_ledger")}
                 >
                   <History size={16} />
                 </button>
@@ -361,7 +367,7 @@ export default function SuppliersPage() {
           <div className="bg-white rounded-2xl shadow-pop w-full max-w-md overflow-hidden">
             <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-stone-50">
               <h3 className="font-extrabold text-stone-900 text-sm flex items-center gap-2">
-                <UserPlus size={18} className="text-brand-600" /> Naya Supplier Add Karein
+                <UserPlus size={18} className="text-brand-600" /> {t("suppliers_modal_add_title")}
               </h3>
               <button
                 onClick={() => setShowAddSupplierModal(false)}
@@ -373,11 +379,11 @@ export default function SuppliersPage() {
             <form onSubmit={handleAddSupplierSubmit} className="p-5 space-y-4">
               <div>
                 <label className="text-xs font-bold text-stone-700 block mb-1">
-                  Supplier / Mill Name *
+                  {t("suppliers_label_name")}
                 </label>
                 <input
                   type="text"
-                  placeholder="Supplier ka naam"
+                  placeholder={t("suppliers_placeholder_name")}
                   value={newSupName}
                   onChange={(e) => setNewSupName(e.target.value)}
                   className="input-field"
@@ -386,7 +392,7 @@ export default function SuppliersPage() {
               </div>
               <div>
                 <label className="text-xs font-bold text-stone-700 block mb-1">
-                  Phone Number
+                  {t("suppliers_label_phone")}
                 </label>
                 <input
                   type="text"
@@ -397,10 +403,10 @@ export default function SuppliersPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">Address</label>
+                <label className="text-xs font-bold text-stone-700 block mb-1">{t("address")}</label>
                 <input
                   type="text"
-                  placeholder="Address"
+                  placeholder={t("address")}
                   value={newSupAddress}
                   onChange={(e) => setNewSupAddress(e.target.value)}
                   className="input-field"
@@ -412,7 +418,7 @@ export default function SuppliersPage() {
                   onClick={() => setShowAddSupplierModal(false)}
                   className="btn-ghost flex-1 text-xs"
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button
                   type="submit"
@@ -422,7 +428,7 @@ export default function SuppliersPage() {
                   {addingSupplier ? (
                     <Loader2 className="animate-spin text-white" size={16} />
                   ) : (
-                    "Save Supplier"
+                    t("suppliers_save_supplier")
                   )}
                 </button>
               </div>
@@ -436,7 +442,7 @@ export default function SuppliersPage() {
           <div className="bg-white rounded-2xl shadow-pop w-full max-w-lg overflow-hidden">
             <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-amber-50">
               <h3 className="font-extrabold text-amber-900 text-sm flex items-center gap-2">
-                <ArrowUpRight size={18} className="text-amber-600" /> Maal Uthaya / Purchase Entry
+                <ArrowUpRight size={18} className="text-amber-600" /> {t("suppliers_modal_purchase_title")}
               </h3>
               <button
                 onClick={() => setShowPurchaseModal(false)}
@@ -448,7 +454,7 @@ export default function SuppliersPage() {
             <form onSubmit={handlePurchaseSubmit} className="p-5 space-y-4">
               <div>
                 <label className="text-xs font-bold text-stone-700 block mb-1">
-                  Supplier *
+                  {t("suppliers_label_supplier")}
                 </label>
                 <select
                   value={purchaseSupId}
@@ -456,10 +462,10 @@ export default function SuppliersPage() {
                   className="input-field"
                   required
                 >
-                  <option value="">Supplier chunein</option>
+                  <option value="">{t("suppliers_select_supplier")}</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} (Current Balance: Rs. {s.balance || 0})
+                      {t("suppliers_option_balance", { name: s.name, amount: s.balance || 0 })}
                     </option>
                   ))}
                 </select>
@@ -467,7 +473,7 @@ export default function SuppliersPage() {
 
               <div>
                 <label className="text-xs font-bold text-stone-700 block mb-1">
-                  Item *
+                  {t("suppliers_label_item")}
                 </label>
                 <select
                   value={purchaseProdId}
@@ -479,10 +485,10 @@ export default function SuppliersPage() {
                   className="input-field"
                   required
                 >
-                  <option value="">Item chunein</option>
+                  <option value="">{t("suppliers_select_item")}</option>
                   {products.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} (Buying Rate: Rs. {p.buyingPrice})
+                      {t("suppliers_option_rate", { name: p.name, amount: p.buyingPrice })}
                     </option>
                   ))}
                 </select>
@@ -491,7 +497,7 @@ export default function SuppliersPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-stone-700 block mb-1">
-                    {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" ? "Quantity (Bags / Katte) *" : "Quantity (Pcs) *"}
+                    {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" ? t("suppliers_label_qty_bags") : t("suppliers_label_qty_pcs")}
                   </label>
                   <input
                     type="number"
@@ -503,13 +509,13 @@ export default function SuppliersPage() {
                   />
                   {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
                     <p className="text-[10px] text-stone-500 mt-1 font-medium">
-                      Wazan: <b className="text-stone-800">{purchaseQty * 25} kg</b> (25kg/Bag)
+                      {t("suppliers_weight_line", { weight: purchaseQty * 25 })}
                     </p>
                   )}
                 </div>
                 <div>
                   <label className="text-xs font-bold text-stone-700 block mb-1">
-                    Buying Rate ({products.find((p) => p.id === purchaseProdId)?.unitType === "weight" ? "per KG" : "per Pc"}) *
+                    {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" ? t("suppliers_label_rate_kg") : t("suppliers_label_rate_pc")}
                   </label>
                   <input
                     type="number"
@@ -522,7 +528,7 @@ export default function SuppliersPage() {
                   />
                   {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
                     <p className="text-[10px] text-stone-500 mt-1 font-medium">
-                      Per Bag: <b className="text-stone-800">Rs. {(purchaseBuyingPrice * 25).toLocaleString()}</b>
+                      {t("suppliers_per_bag", { amount: (purchaseBuyingPrice * 25).toLocaleString() })}
                     </p>
                   )}
                 </div>
@@ -531,7 +537,7 @@ export default function SuppliersPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-stone-700 block mb-1">
-                    Maal kahan Shift karein?
+                    {t("suppliers_label_destination")}
                   </label>
                   <select
                     value={purchaseDestination}
@@ -540,13 +546,13 @@ export default function SuppliersPage() {
                     }
                     className="input-field"
                   >
-                    <option value="gudam">Gudam (Warehouse)</option>
-                    <option value="shop">Dukan (Shop)</option>
+                    <option value="gudam">{t("suppliers_dest_warehouse")}</option>
+                    <option value="shop">{t("suppliers_dest_shop")}</option>
                   </select>
                 </div>
                 <div>
                   <label className="text-xs font-bold text-stone-700 block mb-1">
-                    Advance Payment Di (Optional)
+                    {t("suppliers_label_advance")}
                   </label>
                   <input
                     type="number"
@@ -560,7 +566,7 @@ export default function SuppliersPage() {
 
               <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs flex justify-between font-bold items-center">
                 <span>
-                  Total Bill Amount:
+                  {t("suppliers_total_bill")}
                   {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
                     <span className="text-[11px] text-stone-500 font-normal ml-1">
                       ({purchaseQty * 25} kg × Rs. {purchaseBuyingPrice})
@@ -582,7 +588,7 @@ export default function SuppliersPage() {
                   onClick={() => setShowPurchaseModal(false)}
                   className="btn-ghost flex-1 text-xs"
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button
                   type="submit"
@@ -592,7 +598,7 @@ export default function SuppliersPage() {
                   {savingPurchase ? (
                     <Loader2 className="animate-spin text-white" size={16} />
                   ) : (
-                    "Save Purchase Entry"
+                    t("suppliers_save_purchase")
                   )}
                 </button>
               </div>
@@ -606,7 +612,7 @@ export default function SuppliersPage() {
           <div className="bg-white rounded-2xl shadow-pop w-full max-w-md overflow-hidden">
             <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-emerald-50">
               <h3 className="font-extrabold text-emerald-900 text-sm flex items-center gap-2">
-                <ArrowDownLeft size={18} className="text-emerald-600" /> Supplier Ko Payment Di (Payout)
+                <ArrowDownLeft size={18} className="text-emerald-600" /> {t("suppliers_modal_payment_title")}
               </h3>
               <button
                 onClick={() => setShowPaymentModal(false)}
@@ -618,7 +624,7 @@ export default function SuppliersPage() {
             <form onSubmit={handlePaymentSubmit} className="p-5 space-y-4">
               <div>
                 <label className="text-xs font-bold text-stone-700 block mb-1">
-                  Supplier *
+                  {t("suppliers_label_supplier")}
                 </label>
                 <select
                   value={paymentSupId}
@@ -626,10 +632,10 @@ export default function SuppliersPage() {
                   className="input-field"
                   required
                 >
-                  <option value="">Supplier chunein</option>
+                  <option value="">{t("suppliers_select_supplier")}</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} (Current Payable: Rs. {s.balance || 0})
+                      {t("suppliers_option_payable", { name: s.name, amount: s.balance || 0 })}
                     </option>
                   ))}
                 </select>
@@ -637,7 +643,7 @@ export default function SuppliersPage() {
 
               <div>
                 <label className="text-xs font-bold text-stone-700 block mb-1">
-                  Payment Amount (Rs.) *
+                  {t("suppliers_label_payment_amount")}
                 </label>
                 <input
                   type="number"
@@ -653,7 +659,7 @@ export default function SuppliersPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-stone-700 block mb-1">
-                    Payment Method
+                    {t("suppliers_label_payment_method")}
                   </label>
                   <select
                     value={paymentMethod}
@@ -662,15 +668,15 @@ export default function SuppliersPage() {
                     }
                     className="input-field"
                   >
-                    <option value="Cash">Cash</option>
-                    <option value="Bank Account">Bank Account</option>
+                    <option value="Cash">{t("cash")}</option>
+                    <option value="Bank Account">{t("suppliers_method_bank")}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">Note</label>
+                  <label className="text-xs font-bold text-stone-700 block mb-1">{t("suppliers_label_note")}</label>
                   <input
                     type="text"
-                    placeholder="Reference (optional)"
+                    placeholder={t("suppliers_placeholder_note")}
                     value={paymentNote}
                     onChange={(e) => setPaymentNote(e.target.value)}
                     className="input-field"
@@ -684,7 +690,7 @@ export default function SuppliersPage() {
                   onClick={() => setShowPaymentModal(false)}
                   className="btn-ghost flex-1 text-xs"
                 >
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button
                   type="submit"
@@ -694,7 +700,7 @@ export default function SuppliersPage() {
                   {savingPayment ? (
                     <Loader2 className="animate-spin text-white" size={16} />
                   ) : (
-                    "Save Payment Entry"
+                    t("suppliers_save_payment")
                   )}
                 </button>
               </div>
@@ -709,10 +715,10 @@ export default function SuppliersPage() {
             <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-stone-50">
               <div>
                 <h3 className="font-extrabold text-stone-900 text-sm">
-                  {showHistoryModal.name} - Supplier Ledger History
+                  {t("suppliers_history_title", { name: showHistoryModal.name })}
                 </h3>
                 <p className="text-xs text-amber-700 font-bold">
-                  Current Balance: Rs. {(showHistoryModal.balance || 0).toLocaleString()}
+                  {t("suppliers_history_balance", { amount: (showHistoryModal.balance || 0).toLocaleString() })}
                 </p>
               </div>
               <button
@@ -726,7 +732,7 @@ export default function SuppliersPage() {
             <div className="p-5 overflow-y-auto space-y-6">
               <div>
                 <h4 className="text-xs font-bold text-stone-700 uppercase border-b pb-2 mb-3">
-                  📦 Purchase Bills (Maal Uthaya History)
+                  {t("suppliers_history_purchases")}
                 </h4>
                 <div className="space-y-2">
                   {purchases
@@ -738,7 +744,11 @@ export default function SuppliersPage() {
                       >
                         <div>
                           <p className="font-bold text-stone-900">
-                            {pur.items.map((i) => `${i.productName} (${i.qty} Bags @ Rs. ${i.buyingPrice})`).join(", ")}
+                            {pur.items
+                              .map((i) =>
+                                t("suppliers_history_item", { name: i.productName, qty: i.qty, price: i.buyingPrice })
+                              )
+                              .join(", ")}
                           </p>
                           <p className="text-[11px] text-stone-500">
                             {new Date(pur.date).toLocaleDateString()}
@@ -754,7 +764,7 @@ export default function SuppliersPage() {
 
               <div>
                 <h4 className="text-xs font-bold text-stone-700 uppercase border-b pb-2 mb-3">
-                  💵 Payments Made (Payout History)
+                  {t("suppliers_history_payments")}
                 </h4>
                 <div className="space-y-2">
                   {payments
@@ -766,7 +776,10 @@ export default function SuppliersPage() {
                       >
                         <div>
                           <p className="font-bold text-emerald-900">
-                            Payment ({pay.method}) {pay.note ? `- ${pay.note}` : ""}
+                            {t("suppliers_history_payment_line", {
+                              method: pay.method === "Cash" ? t("cash") : pay.method === "Bank Account" ? t("suppliers_method_bank") : pay.method,
+                            })}{" "}
+                            {pay.note ? `- ${pay.note}` : ""}
                           </p>
                           <p className="text-[11px] text-emerald-600">
                             {new Date(pay.date).toLocaleDateString()}

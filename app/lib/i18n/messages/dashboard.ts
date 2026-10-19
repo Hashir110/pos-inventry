@@ -1,0 +1,43 @@
+const en = {
+  dashboard_yourShop: "Your shop",
+  dashboard_closingLoadFailed: "Failed to load closing summary (deploy Firestore rules)",
+  dashboard_paidToSuppliers: "Paid to Suppliers",
+  dashboard_paidOutSubtitle: "Paid Out (supplier payments)",
+  dashboard_balance: "Balance",
+  dashboard_balanceSubtitle: "Sales − Supplier payments",
+  dashboard_cumulativeBalance: "Cumulative Balance",
+  dashboard_cumulativeSubtitle: "Balance of all days (to date)",
+  dashboard_noClosings: "No closings in this period.",
+  dashboard_dayByDay: "Day by Day Closing Summary",
+  dashboard_colSale: "Sale",
+  dashboard_colPaidOut: "Paid Out",
+  dashboard_colBalance: "Balance",
+  dashboard_colCumulative: "Cumulative (to date)",
+  dashboard_chartTitle: "Sales & Expenses",
+  dashboard_salesVolume: "Sales Volume",
+  dashboard_credit: "Credit",
+  dashboard_bank: "Bank",
+};
+
+const ur: Record<keyof typeof en, string> = {
+  dashboard_yourShop: "آپ کی دکان",
+  dashboard_closingLoadFailed: "کلوزنگ کا حساب لوڈ نہیں ہو سکا (Firestore رولز ڈیپلائے کریں)",
+  dashboard_paidToSuppliers: "سپلائرز کو ادا کیا",
+  dashboard_paidOutSubtitle: "ادائیگیاں (سپلائر کو)",
+  dashboard_balance: "بقیہ",
+  dashboard_balanceSubtitle: "فروخت − سپلائر کی ادائیگیاں",
+  dashboard_cumulativeBalance: "کل جمع شدہ بقیہ",
+  dashboard_cumulativeSubtitle: "تمام دنوں کا بقیہ (اب تک)",
+  dashboard_noClosings: "اس مدت میں کوئی کلوزنگ نہیں ہے۔",
+  dashboard_dayByDay: "دن بہ دن کلوزنگ کا حساب",
+  dashboard_colSale: "فروخت",
+  dashboard_colPaidOut: "ادائیگی",
+  dashboard_colBalance: "بقیہ",
+  dashboard_colCumulative: "مجموعی (اب تک)",
+  dashboard_chartTitle: "فروخت اور اخراجات",
+  dashboard_salesVolume: "فروخت کا حجم",
+  dashboard_credit: "ادھار",
+  dashboard_bank: "بینک",
+};
+
+export const dashboard = { en, ur };

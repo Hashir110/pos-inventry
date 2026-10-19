@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-toastify";
 import PageHeader from "../../components/PageHeader";
+import { useLanguage } from "../../store/useLanguage";
 
 interface PassItem {
   productId: string;
@@ -38,7 +39,15 @@ interface PassItem {
 
 export default function GatePassPage() {
   const { currentShop } = useStore();
+  const { t } = useLanguage();
   const ownerId = currentShop?.uid || "";
+  const unitLabel = (isWt: boolean) => (isWt ? "KG" : t("gatePass_unitBags"));
+  const storedUnitLabel = (unit?: string) =>
+    !unit || unit === "Bags"
+      ? t("gatePass_unitBags")
+      : unit === "Bags/Pcs"
+        ? t("gatePass_unitBagsPcs")
+        : unit;
 
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -153,19 +162,19 @@ export default function GatePassPage() {
 
   const handleAddItem = () => {
     if (!selectedProductId || !selectedProduct) {
-      toast.warn("Item / Product select karein");
+      toast.warn(t("gatePass_toastSelectProduct"));
       return;
     }
 
     const gudamStock = selectedProduct.gudamStock ?? 0;
     if (gudamStock <= 0) {
-      toast.error(`"${selectedProduct.name}" ka Gudam mein stock 0 hai!`);
+      toast.error(t("gatePass_toastOutOfStock", { name: selectedProduct.name }));
       return;
     }
 
     const qty = Number(itemQty) || 1;
     if (qty <= 0) {
-      toast.warn("Sahi quantity likhein");
+      toast.warn(t("gatePass_toastValidQty"));
       return;
     }
 
@@ -175,7 +184,7 @@ export default function GatePassPage() {
     const deductAmount = qty;
     if (deductAmount > gudamStock) {
       toast.warn(
-        `Gudam mein sirf ${gudamStock} ${isWeight ? "KG" : "Bags"} available hain!`
+        t("gatePass_toastOnlyAvailable", { qty: gudamStock, unit: unitLabel(isWeight) })
       );
       return;
     }
@@ -205,11 +214,11 @@ export default function GatePassPage() {
     e.preventDefault();
     const finalPartyName = customerName.trim();
     if (!finalPartyName) {
-      toast.warn("Party / Customer select karein");
+      toast.warn(t("gatePass_toastSelectParty"));
       return;
     }
     if (items.length === 0) {
-      toast.warn("Maal / Item add karein");
+      toast.warn(t("gatePass_toastAddItems"));
       return;
     }
 
@@ -227,7 +236,7 @@ export default function GatePassPage() {
         })),
       });
 
-      toast.success(`Gate Pass #${created.gatePassNo} save ho gaya!`);
+      toast.success(t("gatePass_toastSaved", { no: created.gatePassNo }));
 
       setCustomerName("");
       setCustomerId("");
@@ -236,7 +245,7 @@ export default function GatePassPage() {
       setItemQty(1);
       setItemWeight(25);
     } catch (err: any) {
-      toast.error(err.message || "Failed to issue gate pass");
+      toast.error(err.message || t("gatePass_toastFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -265,8 +274,8 @@ export default function GatePassPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Gate Pass"
-        subtitle="Gudam se party ko maal dispatch karne ke liye entry karein aur stock maintain karein"
+        title={t("gatePass_title")}
+        subtitle={t("gatePass_subtitle")}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -278,14 +287,14 @@ export default function GatePassPage() {
                     <span className="flex h-5 w-5 items-center justify-center rounded-full border border-brand-500 text-brand-600 text-xs font-bold">
                       <User size={12} />
                     </span>
-                    <span>Party & Maal Details</span>
+                    <span>{t("gatePass_detailsTitle")}</span>
                   </h5>
                 </div>
 
                 <div className="p-6 space-y-5">
                   <div>
                     <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                      Party / Customer Name <span className="text-red-500">*</span>
+                      {t("gatePass_partyLabel")} <span className="text-red-500">*</span>
                     </label>
 
                     <div className="relative w-full" ref={partyDropdownRef}>
@@ -314,7 +323,7 @@ export default function GatePassPage() {
                                   )}
                                   {selectedCustomer.balance > 0 ? (
                                     <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">
-                                      Due: Rs. {Math.round(selectedCustomer.balance).toLocaleString()}
+                                      {t("gatePass_due", { amount: Math.round(selectedCustomer.balance).toLocaleString() })}
                                     </span>
                                   ) : (
                                     <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded shrink-0">
@@ -324,7 +333,7 @@ export default function GatePassPage() {
                                 </div>
                               ) : (
                                 <span className="text-xs font-medium text-stone-400">
-                                  Party chunein
+                                  {t("gatePass_selectParty")}
                                 </span>
                               )}
                             </div>
@@ -341,7 +350,7 @@ export default function GatePassPage() {
                                   setCustomerName("");
                                 }}
                                 className="p-1 text-stone-400 hover:text-stone-700 rounded hover:bg-stone-100"
-                                title="Clear Selection"
+                                title={t("gatePass_clearSelection")}
                               >
                                 <X size={14} />
                               </span>
@@ -367,7 +376,7 @@ export default function GatePassPage() {
                                   autoFocus
                                   value={partySearch}
                                   onChange={(e) => setPartySearch(e.target.value)}
-                                  placeholder="Party ya phone search karein"
+                                  placeholder={t("gatePass_searchParty")}
                                   className="w-full pl-8 pr-7 py-2 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                                 />
                                 {partySearch && (
@@ -385,7 +394,7 @@ export default function GatePassPage() {
                             <div className="max-h-56 overflow-y-auto divide-y divide-stone-50">
                               {filteredCustomers.length === 0 ? (
                                 <div className="p-5 text-center text-stone-400 text-xs">
-                                  <p>Koi party nahi mili {partySearch ? `"${partySearch}"` : ""}</p>
+                                  <p>{t("gatePass_noParty")} {partySearch ? `"${partySearch}"` : ""}</p>
                                 </div>
                               ) : (
                                 filteredCustomers.map((c) => {
@@ -442,13 +451,13 @@ export default function GatePassPage() {
                   <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-4 space-y-4">
                     <div className="flex items-center gap-2 text-xs font-bold text-stone-700 uppercase tracking-wider">
                       <Package size={15} className="text-brand-600" />
-                      <span>Dispatch Item Entry</span>
+                      <span>{t("gatePass_dispatchEntry")}</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
                       <div className="sm:col-span-6">
                         <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                          Item / Product <span className="text-red-500">*</span>
+                          {t("gatePass_itemProduct")} <span className="text-red-500">*</span>
                         </label>
                         <div className="relative w-full" ref={productDropdownRef}>
                           <button
@@ -475,13 +484,15 @@ export default function GatePassPage() {
                                           : "bg-red-50 text-red-700 border border-red-200"
                                         }`}
                                     >
-                                      Gudam: {selectedProduct.gudamStock ?? 0}{" "}
-                                      {selectedProduct.unitType === "weight" ? "KG" : "Bags"}
+                                      {t("gatePass_warehouseStock", {
+                                        qty: selectedProduct.gudamStock ?? 0,
+                                        unit: unitLabel(selectedProduct.unitType === "weight"),
+                                      })}
                                     </span>
                                   </div>
                                 ) : (
                                   <span className="text-xs font-medium text-stone-400">
-                                    Item chunein
+                                    {t("gatePass_selectItem")}
                                   </span>
                                 )}
                               </div>
@@ -499,7 +510,7 @@ export default function GatePassPage() {
                                     setItemWeight(25);
                                   }}
                                   className="p-1 text-stone-400 hover:text-stone-700 rounded hover:bg-stone-100"
-                                  title="Clear Selection"
+                                  title={t("gatePass_clearSelection")}
                                 >
                                   <X size={13} />
                                 </span>
@@ -525,7 +536,7 @@ export default function GatePassPage() {
                                     autoFocus
                                     value={productSearch}
                                     onChange={(e) => setProductSearch(e.target.value)}
-                                    placeholder="Item search karein"
+                                    placeholder={t("gatePass_searchItem")}
                                     className="w-full pl-7 pr-7 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                                   />
                                   {productSearch && (
@@ -543,7 +554,7 @@ export default function GatePassPage() {
                               <div className="max-h-56 overflow-y-auto divide-y divide-stone-50">
                                 {filteredDropdownProducts.length === 0 ? (
                                   <div className="p-4 text-center text-stone-400 text-xs">
-                                    <p>Koi product nahi mila {productSearch ? `"${productSearch}"` : ""}</p>
+                                    <p>{t("gatePass_noProduct")} {productSearch ? `"${productSearch}"` : ""}</p>
                                   </div>
                                 ) : (
                                   filteredDropdownProducts.map((p) => {
@@ -564,7 +575,7 @@ export default function GatePassPage() {
                                         <div className="min-w-0 pr-2">
                                           <p className="font-bold truncate">{p.name}</p>
                                           <p className="text-[10px] text-stone-400">
-                                            {p.category || "General"}
+                                            {p.category || t("gatePass_general")}
                                           </p>
                                         </div>
 
@@ -575,7 +586,7 @@ export default function GatePassPage() {
                                                 : "bg-red-50 text-red-700 border border-red-200"
                                               }`}
                                           >
-                                            Gudam: {stock} {isWt ? "KG" : "Bags"}
+                                            {t("gatePass_warehouseStock", { qty: stock, unit: unitLabel(isWt) })}
                                           </span>
                                           {isSelected && (
                                             <Check size={14} className="text-brand-600" />
@@ -593,12 +604,12 @@ export default function GatePassPage() {
 
                       <div className="sm:col-span-3">
                         <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                          Qty (Bags) <span className="text-red-500">*</span>
+                          {t("gatePass_qtyBags")} <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="number"
                           min="1"
-                          placeholder="Qty"
+                          placeholder={t("gatePass_qtyPlaceholder")}
                           value={itemQty}
                           onChange={(e) => handleQtyChange(Number(e.target.value))}
                           className="field w-full text-xs font-bold tabular !py-2"
@@ -607,12 +618,12 @@ export default function GatePassPage() {
 
                       <div className="sm:col-span-3">
                         <label className="block text-[11px] font-bold text-stone-600 mb-1">
-                          Total Wt (KG)
+                          {t("gatePass_totalWtKg")}
                         </label>
                         <input
                           type="number"
                           step="any"
-                          placeholder="Weight"
+                          placeholder={t("gatePass_weightPlaceholder")}
                           value={itemWeight}
                           onChange={(e) => setItemWeight(Number(e.target.value))}
                           disabled={selectedProduct?.unitType === "count"}
@@ -627,7 +638,7 @@ export default function GatePassPage() {
                         onClick={handleAddItem}
                         className="btn-primary !py-2 !px-4 text-xs font-bold flex items-center gap-1.5"
                       >
-                        <Plus size={15} /> Item Add Karein
+                        <Plus size={15} /> {t("gatePass_addItem")}
                       </button>
                     </div>
                   </div>
@@ -638,11 +649,11 @@ export default function GatePassPage() {
                         <thead className="bg-stone-100 text-stone-700 uppercase font-bold border-b border-stone-200">
                           <tr>
                             <th className="p-3 text-center">#</th>
-                            <th className="p-3">Item Name</th>
-                            <th className="p-3 text-center">Qty (Bags)</th>
-                            <th className="p-3 text-center">Total Weight</th>
-                            <th className="p-3 text-right">Gudam Stock</th>
-                            <th className="p-3 text-center">Action</th>
+                            <th className="p-3">{t("gatePass_colItemName")}</th>
+                            <th className="p-3 text-center">{t("gatePass_qtyBags")}</th>
+                            <th className="p-3 text-center">{t("gatePass_colTotalWeight")}</th>
+                            <th className="p-3 text-right">{t("gatePass_colWarehouseStock")}</th>
+                            <th className="p-3 text-center">{t("action")}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-stone-100">
@@ -651,20 +662,20 @@ export default function GatePassPage() {
                               <td className="p-3 text-center font-bold text-stone-400">{idx + 1}</td>
                               <td className="p-3 font-bold text-stone-900">{it.productName}</td>
                               <td className="p-3 text-center font-bold text-stone-800 tabular">
-                                {String(it.qty).padStart(2, "0")} Bags
+                                {t("gatePass_bagsCount", { qty: String(it.qty).padStart(2, "0") })}
                               </td>
                               <td className="p-3 text-center font-extrabold text-brand-700 tabular">
                                 {it.weight > 0 ? `${it.weight} kg` : "—"}
                               </td>
                               <td className="p-3 text-right text-stone-500 tabular">
-                                {it.maxGudamQty} left
+                                {t("gatePass_left", { qty: it.maxGudamQty })}
                               </td>
                               <td className="p-3 text-center">
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveItem(idx)}
                                   className="p-1 text-red-500 hover:bg-red-50 rounded"
-                                  title="Item Delete"
+                                  title={t("gatePass_deleteItem")}
                                 >
                                   <Trash2 size={15} />
                                 </button>
@@ -687,7 +698,7 @@ export default function GatePassPage() {
                       ) : (
                         <>
                           <CheckCircle2 size={18} />
-                          <span>Gate Pass Save Karein</span>
+                          <span>{t("gatePass_save")}</span>
                         </>
                       )}
                     </button>
@@ -702,10 +713,10 @@ export default function GatePassPage() {
               <div className="p-4 border-b border-stone-200 bg-white flex items-center justify-between">
                 <h5 className="flex items-center gap-2 text-xs font-bold text-stone-800 uppercase tracking-wider">
                   <Warehouse size={15} className="text-brand-600" />
-                  <span>Gudam Stock Summary</span>
+                  <span>{t("gatePass_stockSummary")}</span>
                 </h5>
                 <span className="text-[11px] font-bold text-stone-400">
-                  {products.length} Products
+                  {t("gatePass_productsCount", { count: products.length })}
                 </span>
               </div>
 
@@ -713,7 +724,7 @@ export default function GatePassPage() {
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Item search karein"
+                    placeholder={t("gatePass_searchItem")}
                     value={stockSearch}
                     onChange={(e) => setStockSearch(e.target.value)}
                     className="field w-full pl-8 !py-1.5 text-xs"
@@ -724,7 +735,7 @@ export default function GatePassPage() {
 
               <div className="p-3 space-y-2 max-h-[500px] overflow-y-auto divide-y divide-stone-50">
                 {filteredStockProducts.length === 0 ? (
-                  <p className="p-6 text-center text-xs text-stone-400">Koi item nahi mila</p>
+                  <p className="p-6 text-center text-xs text-stone-400">{t("gatePass_noItem")}</p>
                 ) : (
                   filteredStockProducts.map((p) => {
                     const stock = p.gudamStock ?? 0;
@@ -738,7 +749,7 @@ export default function GatePassPage() {
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-stone-900 truncate">{p.name}</p>
                           <p className="text-[10px] text-stone-400">
-                            {p.category || "General"}
+                            {p.category || t("gatePass_general")}
                           </p>
                         </div>
                         <span
@@ -747,7 +758,7 @@ export default function GatePassPage() {
                               : "bg-red-50 text-red-700 border border-red-200"
                             }`}
                         >
-                          {stock} {isWt ? "KG" : "Bags"}
+                          {stock} {unitLabel(isWt)}
                         </span>
                       </div>
                     );
@@ -761,18 +772,18 @@ export default function GatePassPage() {
         <DataTable
           data={filteredPasses}
           rowKey={(gp) => gp.id}
-          emptyText="Koi Gate Pass record nahi mila"
+          emptyText={t("gatePass_noRecords")}
           toolbarLeft={
             <h5 className="text-sm font-bold text-stone-800 uppercase tracking-wider flex items-center gap-2">
               <History size={16} className="text-brand-600" />
-              <span>Issued Gate Passes History</span>
+              <span>{t("gatePass_historyTitle")}</span>
             </h5>
           }
           toolbarRight={
             <div className="relative w-full sm:w-72">
               <input
                 type="text"
-                placeholder="Gate pass # ya party"
+                placeholder={t("gatePass_searchPlaceholder")}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="field w-full pl-8 !py-1.5 text-xs"
@@ -781,10 +792,24 @@ export default function GatePassPage() {
             </div>
           }
           columns={[
-            { key: "no", header: "Gate Pass #", cell: (gp) => <span className="font-extrabold text-brand-700 font-mono">{gp.gatePassNo}</span> },
+            {
+              key: "no",
+              header: t("gatePass_colNo"),
+              cell: (gp) => (
+                <div className="flex items-center gap-1.5">
+                  <span className="font-extrabold text-brand-700 font-mono">{gp.gatePassNo}</span>
+                  {(gp.gatePassNo.startsWith("OFF-") || gp.id.startsWith("local_")) && (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800">
+                      Offline
+                    </span>
+                  )}
+                </div>
+              ),
+            },
+
             {
               key: "date",
-              header: "Date",
+              header: t("date"),
               className: "whitespace-nowrap",
               cell: (gp) => (
                 <span className="text-stone-600">
@@ -792,17 +817,17 @@ export default function GatePassPage() {
                 </span>
               ),
             },
-            { key: "party", header: "Party Name", cell: (gp) => <span className="font-bold text-stone-900">{gp.customerName}</span> },
+            { key: "party", header: t("gatePass_colParty"), cell: (gp) => <span className="font-bold text-stone-900">{gp.customerName}</span> },
             {
               key: "items",
-              header: "Items & Weight",
+              header: t("gatePass_colItemsWeight"),
               cell: (gp) => (
                 <span className="font-medium text-stone-700">
                   {gp.items
                     .map((i) =>
                       i.weight && i.weight > 0
-                        ? `${i.productName} (${i.qty} Bags • ${i.weight}kg)`
-                        : `${i.productName} (${i.qty} ${i.unit || "Bags"})`
+                        ? t("gatePass_historyItemWeight", { name: i.productName, qty: i.qty, weight: i.weight })
+                        : t("gatePass_historyItemUnit", { name: i.productName, qty: i.qty, unit: storedUnitLabel(i.unit) })
                     )
                     .join(", ")}
                 </span>
@@ -810,17 +835,17 @@ export default function GatePassPage() {
             },
             {
               key: "status",
-              header: "Status",
+              header: t("status"),
               align: "center",
-              cell: (gp) => <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">{gp.status}</span>,
+              cell: (gp) => <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">{gp.status === "Issued" ? t("gatePass_statusIssued") : gp.status}</span>,
             },
             {
               key: "slip",
-              header: "Slip",
+              header: t("gatePass_colSlip"),
               align: "right",
               cell: (gp) => (
                 <button onClick={() => setPrintPass(gp)} className="btn-ghost !py-1 !px-2.5 text-xs inline-flex items-center gap-1.5">
-                  <Printer size={13} /> Parchi
+                  <Printer size={13} /> {t("printSlip")}
                 </button>
               ),
             },
@@ -834,7 +859,7 @@ export default function GatePassPage() {
               <div className="flex items-center gap-2">
                 <Printer size={16} className="text-brand-600" />
                 <h3 className="font-bold text-stone-900 text-sm">
-                  Gate Pass #{printPass.gatePassNo}
+                  {t("gatePass_modalTitle", { no: printPass.gatePassNo })}
                 </h3>
               </div>
               <button
@@ -848,10 +873,10 @@ export default function GatePassPage() {
             <div className="p-6 overflow-y-auto flex-1 bg-white">
               <div className="text-center border-b border-stone-200 pb-3 mb-3">
                 <h2 className="font-extrabold text-base text-stone-900 uppercase">
-                  {currentShop?.shopName || "GUDAM DISPATCH SLIP"}
+                  {currentShop?.shopName || t("gatePass_defaultSlipTitle")}
                 </h2>
                 <p className="text-[11px] text-stone-500 font-bold uppercase tracking-widest mt-0.5">
-                  Gate Pass
+                  {t("gatePass_slipHeading")}
                 </p>
                 <p className="text-[11px] text-stone-400 mt-1 font-mono">
                   #{printPass.gatePassNo} • {new Date(printPass.date).toLocaleDateString()}
@@ -860,16 +885,16 @@ export default function GatePassPage() {
 
               <div className="space-y-1 mb-4 text-xs text-stone-700">
                 <p>
-                  <span className="font-bold text-stone-900">Party:</span> {printPass.customerName}
+                  <span className="font-bold text-stone-900">{t("gatePass_partyColon")}</span> {printPass.customerName}
                 </p>
               </div>
 
               <table className="w-full text-left text-xs border-t border-b border-stone-200 my-3">
                 <thead>
                   <tr className="border-b border-stone-200 font-bold text-stone-700">
-                    <th className="py-2">Item</th>
-                    <th className="py-2 text-center">Bags</th>
-                    <th className="py-2 text-right">Total Wt</th>
+                    <th className="py-2">{t("gatePass_slipItem")}</th>
+                    <th className="py-2 text-center">{t("gatePass_slipBags")}</th>
+                    <th className="py-2 text-right">{t("gatePass_slipTotalWt")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
@@ -877,7 +902,7 @@ export default function GatePassPage() {
                     <tr key={idx}>
                       <td className="py-2 font-bold text-stone-900">{it.productName}</td>
                       <td className="py-2 text-center text-stone-800 font-semibold">
-                        {it.qty} Bags
+                        {t("gatePass_bagsCount", { qty: it.qty })}
                       </td>
                       <td className="py-2 text-right font-extrabold text-stone-900">
                         {it.weight ? `${it.weight} kg` : "—"}
@@ -890,24 +915,24 @@ export default function GatePassPage() {
               <div className="grid grid-cols-2 gap-4 mt-8 text-center text-[10px] text-stone-400 pt-3 border-t border-dashed border-stone-200">
                 <div>
                   <div className="border-b border-stone-300 h-6 mb-1"></div>
-                  <span>Gudam Incharge</span>
+                  <span>{t("gatePass_incharge")}</span>
                 </div>
                 <div>
                   <div className="border-b border-stone-300 h-6 mb-1"></div>
-                  <span>Receiver / Party</span>
+                  <span>{t("gatePass_receiver")}</span>
                 </div>
               </div>
             </div>
 
             <div className="p-3 border-t border-stone-200 bg-stone-50 flex justify-end gap-2">
               <button onClick={() => setPrintPass(null)} className="btn-ghost !py-2 text-xs">
-                Band Karein
+                {t("gatePass_close")}
               </button>
               <button
                 onClick={() => window.print()}
                 className="btn-primary !py-2 text-xs font-bold flex items-center gap-1.5"
               >
-                <Printer size={14} /> Print
+                <Printer size={14} /> {t("gatePass_print")}
               </button>
             </div>
           </div>

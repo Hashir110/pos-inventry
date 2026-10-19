@@ -2,14 +2,13 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useLanguage } from "../store/useLanguage";
 
 export interface DataTableColumn<T> {
   key: string;
   header: ReactNode;
-  /** Cell ka content */
   cell: (row: T, index: number) => ReactNode;
   align?: "left" | "center" | "right";
-  /** Extra classes on th/td (width, nowrap, hidden md:table-cell ...) */
   className?: string;
 }
 
@@ -19,35 +18,26 @@ interface DataTableProps<T> {
   rowKey: (row: T) => string;
   loading?: boolean;
   emptyText?: ReactNode;
-  /** Card ke sab se upar (jaise invoice ka header), toolbar se pehle */
   header?: ReactNode;
-  /** Table ke upar: left side title/search, right side filters (toolbar) */
   toolbarLeft?: ReactNode;
   toolbarRight?: ReactNode;
-  /** false = pagination footer nahi (chhoti tables ke liye) */
   paginate?: boolean;
   pageSizeOptions?: number[];
   defaultPageSize?: number;
   onRowClick?: (row: T) => void;
   rowClassName?: (row: T) => string;
-  /** Last row ke baad (totals etc.) */
   footerRow?: ReactNode;
-  /** Table card ke sab se neeche (jaise 'View all' link) */
   footer?: ReactNode;
 }
 
 const ALIGN = { left: "text-left", center: "text-center", right: "text-right" } as const;
 
-/**
- * Poori app ki ek jaisi table: toolbar, header, rows, loading/empty state, pagination.
- * Naya table banana ho to columns define karein, baqi sab yahin handle hai.
- */
 export default function DataTable<T>({
   columns,
   data,
   rowKey,
   loading = false,
-  emptyText = "Koi record nahi mila.",
+  emptyText,
   header,
   toolbarLeft,
   toolbarRight,
@@ -59,11 +49,11 @@ export default function DataTable<T>({
   footerRow,
   footer,
 }: DataTableProps<T>) {
+  const { t } = useLanguage();
   const [pageSize, setPageSize] = useState(defaultPageSize);
   const [requestedPage, setPage] = useState(1);
 
   const totalPages = Math.max(1, Math.ceil(data.length / pageSize));
-  // Filter / search se data kam ho jaye to page bahar na rahe
   const page = Math.min(requestedPage, totalPages);
 
   const rows = useMemo(
@@ -98,13 +88,13 @@ export default function DataTable<T>({
             {loading ? (
               <tr>
                 <td colSpan={colSpan} className="p-10 text-center text-stone-400">
-                  Loading...
+                  {t("loading")}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
                 <td colSpan={colSpan} className="p-10 text-center text-stone-400">
-                  {emptyText}
+                  {emptyText ?? t("shared_noRecords")}
                 </td>
               </tr>
             ) : (
@@ -132,7 +122,7 @@ export default function DataTable<T>({
       {paginate && !loading && data.length > 0 && (
         <div className="flex flex-col gap-3 border-t border-stone-100 px-5 py-3 text-sm text-stone-500 sm:flex-row sm:items-center sm:justify-between">
           <label className="flex items-center gap-2">
-            Row Per Page
+            {t("shared_rowsPerPage")}
             <select
               value={pageSize}
               onChange={(e) => {
@@ -147,7 +137,7 @@ export default function DataTable<T>({
                 </option>
               ))}
             </select>
-            Entries
+            {t("shared_entries")}
           </label>
 
           <Pagination page={page} totalPages={totalPages} onChange={setPage} />
@@ -158,7 +148,7 @@ export default function DataTable<T>({
 }
 
 function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
-  // 1 ... 4 5 6 ... 20 jaisa chhota window
+  const { t } = useLanguage();
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1).filter(
     (p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1
   );
@@ -169,7 +159,7 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
         onClick={() => onChange(page - 1)}
         disabled={page <= 1}
         className="flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 disabled:opacity-30 disabled:hover:bg-transparent"
-        aria-label="Previous page"
+        aria-label={t("shared_prevPage")}
       >
         <ChevronLeft size={16} />
       </button>
@@ -190,7 +180,7 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
         onClick={() => onChange(page + 1)}
         disabled={page >= totalPages}
         className="flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 disabled:opacity-30 disabled:hover:bg-transparent"
-        aria-label="Next page"
+        aria-label={t("shared_nextPage")}
       >
         <ChevronRight size={16} />
       </button>

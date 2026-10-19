@@ -27,7 +27,6 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(false);
     const [clearingData, setClearingData] = useState(false);
 
-    // Form State
     const [formData, setFormData] = useState({
         shopName: "",
         contact: "",
@@ -71,21 +70,21 @@ export default function SettingsPage() {
                 receiptMessage: formData.receiptMessage,
             });
 
-            toast.success("Settings Saved Successfully!");
+            toast.success(t("settings_saved"));
         } catch (error) {
             console.error(error);
-            toast.error("Error saving settings");
+            toast.error(t("settings_saveError"));
         }
         setLoading(false);
     };
 
     const handleClearData = async (collectionName: "products" | "sales") => {
-        const label = collectionName === "products" ? "Inventory" : "Sales History";
+        const label = collectionName === "products" ? t("settings_inventory") : t("salesHistory");
         if (!currentUser) return;
         const ok = await confirm({
-            title: `Poori ${label} delete karein?`,
-            message: `${label} ka saara data hamesha ke liye hat jayega aur wapis nahi aayega.`,
-            confirmLabel: "Sab Delete Karo",
+            title: t("settings_clearTitle", { label }),
+            message: t("settings_clearMessage", { label }),
+            confirmLabel: t("settings_clearConfirm"),
             tone: "danger",
             requireText: "DELETE",
         });
@@ -94,12 +93,12 @@ export default function SettingsPage() {
         setClearingData(true);
         try {
             await clearCollection(currentUser.uid, collectionName);
-            toast.success(`${label} saaf ho gayi`);
+            toast.success(t("settings_cleared", { label }));
             setTimeout(() => window.location.reload(), 900);
 
         } catch (error) {
             console.error(error);
-            toast.error("Data delete nahi hua");
+            toast.error(t("settings_clearFailed"));
         }
         setClearingData(false);
     };
@@ -140,7 +139,6 @@ export default function SettingsPage() {
             <PageHeader title={t("storeSettings")} subtitle={t("settingsSubtitle")} />
 
             <div className="space-y-6">
-                {/* --- SHOP PROFILE --- */}
                 <form onSubmit={handleSaveProfile} className="card overflow-hidden">
                     {sectionHead(Store, t("shopProfile"), t("receiptFooterMsgHint"))}
 
@@ -175,7 +173,7 @@ export default function SettingsPage() {
                             </label>
                             <input
                                 type="text"
-                                placeholder="Dukan ka address"
+                                placeholder={t("settings_addressPlaceholder")}
                                 className="field"
                                 value={formData.address}
                                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
@@ -188,7 +186,7 @@ export default function SettingsPage() {
                             </label>
                             <input
                                 type="text"
-                                placeholder="Slip ke neeche ka message (optional)"
+                                placeholder={t("settings_receiptPlaceholder")}
                                 className="field"
                                 value={formData.receiptMessage}
                                 onChange={(e) => setFormData({ ...formData, receiptMessage: e.target.value })}
@@ -205,7 +203,6 @@ export default function SettingsPage() {
                     </div>
                 </form>
 
-                {/* --- PRINTER --- */}
                 <div className="card overflow-hidden">
                     {sectionHead(Printer, t("printer"), t("printerSize"), "bg-sky-100 text-sky-700")}
                     <div className="p-5">
@@ -221,7 +218,6 @@ export default function SettingsPage() {
                     </div>
                 </div>
 
-                {/* --- DANGER ZONE --- */}
                 <div className="overflow-hidden rounded-2xl border border-red-200 bg-white">
                     {sectionHead(AlertTriangle, t("dangerZone"), t("dangerZoneHint"), "bg-red-100 text-red-700")}
                     <div className="space-y-3 p-5">

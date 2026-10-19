@@ -12,7 +12,7 @@ const getInitialLanguage = (): Language => {
     const saved = localStorage.getItem("app_language") as Language;
     if (saved === "en" || saved === "ur") return saved;
   }
-  return "en"; // Default is English
+  return "en";
 };
 
 export const useLanguage = create<LanguageState>((set, get) => ({

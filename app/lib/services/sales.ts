@@ -11,7 +11,18 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { tr } from "../i18n/translate";
 import type { Customer, PaymentMethod, PendingSale, Product, Sale, SaleItem } from "../../types";
+import {
+  cacheKeys,
+  getCached,
+  getCachedEvenStale,
+  getPendingSales,
+  savePendingSales,
+  setCached,
+} from "./offlineStorage";
+
+export { getPendingSales, savePendingSales };
 
 export interface SaleMeta {
   customerName: string;
@@ -22,21 +33,8 @@ export interface SaleMeta {
   extraCharges?: number;
 }
 
-const PENDING_KEY = "pendingSales";
-
-export const getPendingSales = (): PendingSale[] => {
-  try {
-    return JSON.parse(localStorage.getItem(PENDING_KEY) || "[]");
-  } catch {
-    return [];
-  }
-};
-
-const savePendingSales = (queue: PendingSale[]) => {
-  localStorage.setItem(PENDING_KEY, JSON.stringify(queue));
-};
-
 export const stripUndefined = <T>(obj: T): T => {
+
   if (Array.isArray(obj)) {
     return obj
       .filter((item) => item !== undefined)
@@ -134,7 +132,7 @@ export const createOnlineSale = async (
     if (isUdharWithCustomer(meta.paymentMethod, meta.customerId)) {
       customerRef = doc(db, "customers", meta.customerId);
       customerSnap = await transaction.get(customerRef);
-      if (!customerSnap.exists()) throw new Error("Customer nahi mila");
+      if (!customerSnap.exists()) throw new Error(tr("sales_errCustomerNotFound"));
     }
 
     const shopRef = doc(db, "users", ownerId);
@@ -143,10 +141,10 @@ export const createOnlineSale = async (
     invoiceNo = String(nextInvoice).padStart(6, "0");
 
     for (const { snapshot, item } of reads) {
-      if (!snapshot.exists()) throw new Error(`${item.name} not found!`);
+      if (!snapshot.exists()) throw new Error(tr("sales_errProductNotFound", { name: item.name }));
       const stock = (snapshot.data() as Product).stock;
       const deductQty = item.qty;
-      if (stock < deductQty) throw new Error(`Stock Low! ${item.name} only ${stock} left.`);
+      if (stock < deductQty) throw new Error(tr("sales_errStockLow", { name: item.name, stock }));
     }
 
     transaction.update(shopRef, { invoiceCounter: nextInvoice });
@@ -191,6 +189,40 @@ export const createOnlineSale = async (
     transaction.set(saleRef, saleData);
   });
 
+  // Optimistically update local sales cache
+  const salesKey = cacheKeys.sales(ownerId);
+  const currentSales = getCachedEvenStale<Sale[]>(salesKey) || [];
+  const createdSale: Sale = {
+    id: `${ownerId}_${invoiceNo}`,
+    saleId: `${ownerId}_${invoiceNo}`,
+    ownerId,
+    items: cart.map(cleanSaleItem),
+    totalAmount: roundMoney(totalAmount || 0),
+    date: new Date().toISOString(),
+    invoiceNo,
+    customerName: meta.customerName || "Counter Sale",
+    description: meta.description || "",
+    paymentMethod: meta.paymentMethod || "Cash",
+    ...(meta.customerId ? { customerId: meta.customerId } : {}),
+    ...(meta.transport ? { transport: meta.transport } : {}),
+    ...(meta.extraCharges ? { extraCharges: meta.extraCharges } : {}),
+  };
+  setCached(salesKey, [createdSale, ...currentSales]);
+
+  // Optimistically update local products stock cache
+  const prodsKey = cacheKeys.products(ownerId);
+  const currentProds = getCachedEvenStale<Product[]>(prodsKey);
+  if (currentProds && currentProds.length > 0) {
+    const updatedProds = currentProds.map((p) => {
+      const cartItem = cart.find((c) => c.id === p.id);
+      if (!cartItem) return p;
+      const newStock = Math.max(0, (p.stock || 0) - cartItem.qty);
+      const newShop = Math.max(0, (p.shopStock ?? p.stock ?? 0) - cartItem.qty);
+      return { ...p, stock: newStock, shopStock: newShop };
+    });
+    setCached(prodsKey, updatedProds);
+  }
+
   return invoiceNo;
 };
 
@@ -205,21 +237,47 @@ export const queueOfflineSale = (
     const p = localProducts.find((pr) => pr.id === item.id);
     const deductQty = item.qty;
     if (!p || p.stock < deductQty) {
-      throw new Error(`Stock Low! ${item.name} only ${p ? p.stock : 0} left.`);
+      throw new Error(tr("sales_errStockLow", { name: item.name, stock: p ? p.stock : 0 }));
     }
   }
 
   const invoiceNo = "OFF-" + Date.now().toString(36).toUpperCase().slice(-6);
+  const nowIso = new Date().toISOString();
   const order: PendingSale = stripUndefined({
     ownerId: ownerId || "",
     items: cart.map(cleanSaleItem),
     totalAmount: roundMoney(totalAmount || 0),
-    date: new Date().toISOString(),
+    date: nowIso,
     isOffline: true,
     invoiceNo,
     ...buildMeta(meta),
   }) as PendingSale;
+
   savePendingSales([...getPendingSales(), order]);
+
+  // Optimistically prepend to cached sales list with isOffline: true
+  const salesKey = cacheKeys.sales(ownerId);
+  const currentSales = getCachedEvenStale<Sale[]>(salesKey) || [];
+  const localSaleRow: Sale = {
+    id: `local_${invoiceNo}`,
+    ...order,
+  };
+  setCached(salesKey, [localSaleRow, ...currentSales]);
+
+  // Deduct stock in local product cache
+  const prodsKey = cacheKeys.products(ownerId);
+  const currentProds = getCachedEvenStale<Product[]>(prodsKey) || localProducts;
+  if (currentProds && currentProds.length > 0) {
+    const updatedProds = currentProds.map((p) => {
+      const cartItem = cart.find((c) => c.id === p.id);
+      if (!cartItem) return p;
+      const newStock = Math.max(0, (p.stock || 0) - cartItem.qty);
+      const newShop = Math.max(0, (p.shopStock ?? p.stock ?? 0) - cartItem.qty);
+      return { ...p, stock: newStock, shopStock: newShop };
+    });
+    setCached(prodsKey, updatedProds);
+  }
+
   return invoiceNo;
 };
 
@@ -299,32 +357,80 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
 const toSales = (docs: { id: string; data: () => unknown }[]): Sale[] =>
   docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Sale, "id">) }));
 
-export const listRecentSales = async (ownerId: string, max = 50): Promise<Sale[]> => {
-  const snap = await getDocs(
-    query(collection(db, "sales"), where("ownerId", "==", ownerId), orderBy("date", "desc"), limit(max))
-  );
-  return toSales(snap.docs);
+export const listRecentSales = async (ownerId: string, max = 50, forceRefresh = false): Promise<Sale[]> => {
+  const cacheKey = cacheKeys.sales(ownerId);
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+
+  if (!forceRefresh) {
+    const cached = isOnline ? getCached<Sale[]>(cacheKey) : getCachedEvenStale<Sale[]>(cacheKey);
+    if (cached && cached.length >= 0) return cached;
+  }
+
+  if (!isOnline) {
+    return getCachedEvenStale<Sale[]>(cacheKey) || [];
+  }
+
+  try {
+    const snap = await getDocs(
+      query(collection(db, "sales"), where("ownerId", "==", ownerId), orderBy("date", "desc"), limit(max))
+    );
+    const items = toSales(snap.docs);
+    // Merge pending offline sales that haven't synced yet
+    const pending = getPendingSales().map((p) => ({ id: `local_${p.invoiceNo}`, ...p } as Sale));
+    const merged = [...pending, ...items.filter((item) => !pending.some((p) => p.invoiceNo === item.invoiceNo))];
+    setCached(cacheKey, merged);
+    return merged;
+  } catch (error) {
+    console.warn("[sales] Failed to fetch recent sales, using offline cache:", error);
+    const stale = getCachedEvenStale<Sale[]>(cacheKey);
+    if (stale) return stale;
+    throw error;
+  }
 };
 
-export const listSales = async (ownerId: string): Promise<Sale[]> => {
-  return listRecentSales(ownerId, 500);
+export const listSales = async (ownerId: string, forceRefresh = false): Promise<Sale[]> => {
+  return listRecentSales(ownerId, 500, forceRefresh);
 };
 
 export const listSalesInRange = async (
   ownerId: string,
   fromIso: string,
-  toIso?: string
+  toIso?: string,
+  forceRefresh = false
 ): Promise<Sale[]> => {
-  const snap = await getDocs(
-    query(
-      collection(db, "sales"),
-      where("ownerId", "==", ownerId),
-      where("date", ">=", fromIso),
-      ...(toIso ? [where("date", "<=", toIso)] : []),
-      orderBy("date", "desc")
-    )
-  );
-  return toSales(snap.docs);
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+  const cached = getCachedEvenStale<Sale[]>(cacheKeys.sales(ownerId));
+
+  if (!isOnline || (!forceRefresh && cached && cached.length > 0)) {
+    if (cached && cached.length > 0) {
+      return cached.filter((s) => {
+        if (s.date < fromIso) return false;
+        if (toIso && s.date > toIso) return false;
+        return true;
+      });
+    }
+  }
+
+  if (!isOnline) return [];
+
+  try {
+    const snap = await getDocs(
+      query(
+        collection(db, "sales"),
+        where("ownerId", "==", ownerId),
+        where("date", ">=", fromIso),
+        ...(toIso ? [where("date", "<=", toIso)] : []),
+        orderBy("date", "desc")
+      )
+    );
+    return toSales(snap.docs);
+  } catch (err) {
+    console.warn("[sales] Error listing sales in range, using local cache:", err);
+    if (cached) {
+      return cached.filter((s) => s.date >= fromIso && (!toIso || s.date <= toIso));
+    }
+    return [];
+  }
 };
 
 export interface SaleItemEdit {
@@ -333,13 +439,10 @@ export interface SaleItemEdit {
   price: number;
 }
 
+
 const deductedUnits = (item: Pick<SaleItem, "type" | "totalWeight" | "qty">): number =>
   item.type === "weight" && item.totalWeight ? item.totalWeight : item.qty;
 
-/**
- * Bill ke items badalna (bags / wazan / rate): stock aur (Udhar ho to) party ka balance
- * farq ke hisaab se theek hota hai, sab ek transaction mein. Return ho chuka bill edit nahi hota.
- */
 export const updateSaleItems = async (
   saleId: string,
   edits: SaleItemEdit[],
@@ -350,23 +453,23 @@ export const updateSaleItems = async (
 
   await runTransaction(db, async (transaction) => {
     const saleSnap = await transaction.get(saleRef);
-    if (!saleSnap.exists()) throw new Error("Bill nahi mila");
+    if (!saleSnap.exists()) throw new Error(tr("sales_errBillNotFound"));
     const sale = saleSnap.data() as Omit<Sale, "id">;
 
     if ((sale.refundedAmount || 0) > 0 || sale.items.some((i) => (i.returnedQty || 0) > 0)) {
-      throw new Error("Return wala bill edit nahi ho sakta");
+      throw new Error(tr("sales_editBlocked"));
     }
-    if (edits.length !== sale.items.length) throw new Error("Items badal gaye, bill dobara kholein");
+    if (edits.length !== sale.items.length) throw new Error(tr("sales_errItemsChanged"));
 
     const newItems: SaleItem[] = sale.items.map((item, i) => {
       const e = edits[i];
-      if (!(e.qty > 0)) throw new Error(`${item.name}: bags 0 se zyada hon`);
-      if (!(e.price >= 0)) throw new Error(`${item.name}: rate galat hai`);
+      if (!(e.qty > 0)) throw new Error(tr("sales_errQtyInvalid", { name: item.name }));
+      if (!(e.price >= 0)) throw new Error(tr("sales_errRateInvalid", { name: item.name }));
 
       const isWeight = item.type === "weight";
       const perBag = item.weightPerBag || 25;
       const weight = isWeight ? e.totalWeight ?? e.qty * perBag : undefined;
-      if (isWeight && !((weight ?? 0) > 0)) throw new Error(`${item.name}: wazan 0 se zyada ho`);
+      if (isWeight && !((weight ?? 0) > 0)) throw new Error(tr("sales_errWeightInvalid", { name: item.name }));
 
       return {
         ...item,
@@ -402,7 +505,7 @@ export const updateSaleItems = async (
       let newGudam = gudam;
 
       if (diff > 0) {
-        if (prod.stock < diff) throw new Error(`Stock Low! ${name} only ${prod.stock} left.`);
+        if (prod.stock < diff) throw new Error(tr("sales_errStockLow", { name, stock: prod.stock }));
         if (shop >= diff) {
           newShop = shop - diff;
         } else {
@@ -436,7 +539,7 @@ export const updateSalePayment = async (
 
   await runTransaction(db, async (transaction) => {
     const saleSnap = await transaction.get(saleRef);
-    if (!saleSnap.exists()) throw new Error("Bill nahi mila");
+    if (!saleSnap.exists()) throw new Error(tr("sales_errBillNotFound"));
     const sale = saleSnap.data() as Omit<Sale, "id">;
 
     const current = sale.paymentMethod || "Cash";
@@ -447,10 +550,10 @@ export const updateSalePayment = async (
     const oldSnap = oldRef ? await transaction.get(oldRef) : null;
 
     const newCustomerId = method === "Udhar" ? customer?.id ?? sale.customerId : undefined;
-    if (method === "Udhar" && !newCustomerId) throw new Error("Udhar ke liye party select karein");
+    if (method === "Udhar" && !newCustomerId) throw new Error(tr("sales_errSelectParty"));
     const newRef = newCustomerId ? doc(db, "customers", newCustomerId) : null;
     const newSnap = newRef ? await transaction.get(newRef) : null;
-    if (newRef && !newSnap?.exists()) throw new Error("Party nahi mili");
+    if (newRef && !newSnap?.exists()) throw new Error(tr("sales_errPartyNotFound"));
 
     if (oldRef && oldSnap?.exists()) {
       const balance = (oldSnap.data() as Customer).balance || 0;

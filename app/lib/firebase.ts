@@ -8,7 +8,6 @@ import {
   type Firestore,
 } from "firebase/firestore";
 
-// Values .env.local se aati hain (template: .env.example)
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyDummyKeyForVercelBuildOnly12345",
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "demo-app.firebaseapp.com",
@@ -23,14 +22,8 @@ if (typeof window !== "undefined" && (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY 
   console.error("⚠️ Firebase API Key missing or using dummy fallback! Please add NEXT_PUBLIC_FIREBASE_API_KEY in your deployment environment variables and redeploy.");
 }
 
-// Hot reload par dobara initialize na ho
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-/**
- * Browser mein Firestore ka data IndexedDB mein cache hota hai (multi-tab safe).
- * Is se offline mein products/profile padhe ja sakte hain aur page refresh par blank nahi hota.
- * Server render (IndexedDB nahi) ya dobara initialize par normal Firestore.
- */
 const createFirestore = (): Firestore => {
   if (typeof window === "undefined") return getFirestore(app);
   try {
@@ -38,7 +31,6 @@ const createFirestore = (): Firestore => {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
     });
   } catch {
-    // Pehle hi initialize ho chuka (hot reload) ya browser IndexedDB allow nahi karta
     return getFirestore(app);
   }
 };

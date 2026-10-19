@@ -6,6 +6,7 @@ import FormField from "./FormField";
 import PartyAmountList, { type PartyRow } from "./PartyAmountList";
 import SegmentedControl from "./SegmentedControl";
 import { formatMoney } from "../lib/format";
+import { useLanguage } from "../store/useLanguage";
 
 export type SettleMethod = "Cash" | "Bank Account";
 
@@ -41,6 +42,7 @@ export default function SettlementPanel({
   emptyText,
   onSubmit,
 }: SettlementPanelProps) {
+  const { t } = useLanguage();
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [method, setMethod] = useState<SettleMethod>("Cash");
   const [note, setNote] = useState("");
@@ -90,14 +92,14 @@ export default function SettlementPanel({
           emptyText={emptyText}
         />
 
-        <FormField label="Payment Mode">
+        <FormField label={t("settle_paymentMode")}>
           <SegmentedControl
             tone={tone}
             value={method}
             onChange={setMethod}
             options={[
-              { value: "Cash", label: "Cash" },
-              { value: "Bank Account", label: "Bank / Online" },
+              { value: "Cash", label: t("cash") },
+              { value: "Bank Account", label: t("bankOnline") },
             ]}
           />
         </FormField>
@@ -110,7 +112,7 @@ export default function SettlementPanel({
       <div className="flex items-center justify-between gap-3 border-t border-stone-100 bg-stone-50 px-5 py-4">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500">
-            Total ({lines.length} {lines.length === 1 ? "party" : "parties"})
+            {t(lines.length === 1 ? "settle_total_one" : "settle_total_other", { count: lines.length })}
           </p>
           <p className="tabular text-lg font-extrabold text-stone-900">{formatMoney(total)}</p>
         </div>

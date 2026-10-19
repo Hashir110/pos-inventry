@@ -9,10 +9,12 @@ import type { User } from "firebase/auth";
 import type { Shop } from "../types";
 import { Loader2 } from "lucide-react";
 import { toast } from 'react-toastify';
+import { useLanguage } from "../store/useLanguage";
 
 export default function SetupPage() {
   const { setCurrentShop } = useStore();
   const router = useRouter();
+  const { t } = useLanguage();
 
   const [formData, setFormData] = useState({
     shopName: "",
@@ -42,7 +44,7 @@ export default function SetupPage() {
             const expiry = new Date(existingShop.licenseExpiry);
 
             if (now > expiry) {
-              toast.error("Aapka Trial khatam ho chuka hai!");
+              toast.error(t("auth_trialEndedToast"));
               router.replace("/license-expired?type=trial");
               return;
             }
@@ -79,12 +81,12 @@ export default function SetupPage() {
       const savedShop = await createShopProfile(user, finalDataToSave);
       setCurrentShop(savedShop);
 
-      toast.success("Account Created! 30-Day Free Trial Started 🎉");
+      toast.success(t("auth_accountCreated"));
       router.push("/dashboard");
 
     } catch (error) {
       console.error(error);
-      toast.error("Error: " + (error instanceof Error ? error.message : "setup failed"));
+      toast.error(t("auth_setupError", { message: error instanceof Error ? error.message : t("auth_setupFailed") }));
     } finally {
       setSubmitting(false);
     }
@@ -94,7 +96,7 @@ export default function SetupPage() {
     return (
       <div className="flex h-screen items-center justify-center bg-stone-50">
         <Loader2 className="h-10 w-10 animate-spin text-brand-600" />
-        <span className="ml-2 text-stone-600">Checking Profile...</span>
+        <span className="ml-2 text-stone-600">{t("auth_checkingProfile")}</span>
       </div>
     );
   }
@@ -102,33 +104,33 @@ export default function SetupPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-50 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-card border border-stone-200">
-        <h2 className="mb-2 text-2xl font-extrabold text-stone-900">Shop Setup</h2>
-        <p className="mb-6 text-sm text-stone-500">Welcome! Apni dukan setup karein.</p>
+        <h2 className="mb-2 text-2xl font-extrabold text-stone-900">{t("auth_setupTitle")}</h2>
+        <p className="mb-6 text-sm text-stone-500">{t("auth_setupWelcome")}</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-stone-700 mb-1">Dukan ka Naam</label>
+            <label className="block text-xs font-bold text-stone-700 mb-1">{t("auth_shopNameLabel")}</label>
             <input
               type="text"
               required
               className="field"
               value={formData.shopName}
               onChange={(e) => setFormData({ ...formData, shopName: e.target.value })}
-              placeholder="Dukan ka naam"
+              placeholder={t("auth_shopNamePlaceholder")}
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-stone-700 mb-1">Business Type</label>
+            <label className="block text-xs font-bold text-stone-700 mb-1">{t("auth_businessType")}</label>
             <select
               className="field cursor-pointer"
               value={formData.businessType}
               onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
             >
-              <option value="Grocery">Grocery / Kiryana</option>
-              <option value="Medical">Medical Store</option>
-              <option value="Hardware">Hardware Store</option>
-              <option value="General">General / Other</option>
+              <option value="Grocery">{t("auth_typeGrocery")}</option>
+              <option value="Medical">{t("auth_typeMedical")}</option>
+              <option value="Hardware">{t("auth_typeHardware")}</option>
+              <option value="General">{t("auth_typeGeneral")}</option>
             </select>
           </div>
 
@@ -137,7 +139,7 @@ export default function SetupPage() {
             disabled={submitting}
             className="btn-primary w-full !py-3 font-bold flex items-center justify-center min-h-[46px]"
           >
-            {submitting ? <Loader2 className="animate-spin text-white" size={20} /> : "Start Shop"}
+            {submitting ? <Loader2 className="animate-spin text-white" size={20} /> : t("auth_startShop")}
           </button>
         </form>
       </div>

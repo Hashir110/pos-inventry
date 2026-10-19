@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeftRight, Package, Pencil, Plus, Search, Trash2, X, Loader2 } from "lucide-react";
+import { ArrowLeftRight, Package, Pencil, Plus, RefreshCw, Search, Trash2, X, Loader2 } from "lucide-react";
 import { toast } from "react-toastify";
 import { useDialog } from "../../components/DialogProvider";
 import PageHeader from "../../components/PageHeader";
@@ -20,6 +20,7 @@ export default function InventoryList() {
   const { t } = useLanguage();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState<StockFilter>("all");
 
@@ -29,17 +30,21 @@ export default function InventoryList() {
   const [transferTo, setTransferTo] = useState<"gudam" | "shop">("shop");
   const [transferring, setTransferring] = useState(false);
 
-  const fetchProducts = useCallback(async () => {
+  const fetchProducts = useCallback(async (force = false) => {
     if (!currentUser) return;
+    if (force) setRefreshing(true);
     try {
-      setProducts(await listProducts(currentUser.uid));
+      setProducts(await listProducts(currentUser.uid, force));
+      if (force) toast.success("Inventory updated");
+
     } catch (error) {
       console.error("Error fetching inventory:", error);
-      toast.error("Inventory load nahi hui");
+      toast.error(t("inv_loadFailed"));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [currentUser]);
+  }, [currentUser, t]);
 
   useEffect(() => {
     fetchProducts();
@@ -47,39 +52,43 @@ export default function InventoryList() {
 
   const handleDelete = async (product: Product) => {
     const ok = await confirm({
-      title: "Item delete karein?",
-      message: `"${product.name}" hamesha ke liye delete ho jayega.`,
-      confirmLabel: "Delete",
+      title: t("inv_deleteTitle"),
+      message: t("inv_deleteMessage", { name: product.name }),
+      confirmLabel: t("delete"),
       tone: "danger",
     });
     if (!ok) return;
     try {
-      await deleteProduct(product.id);
+      await deleteProduct(product.id, currentUser?.uid);
       setProducts((prev) => prev.filter((p) => p.id !== product.id));
-      toast.success("Delete ho gaya");
+      toast.success(t("inv_deleted"));
     } catch (error) {
       console.error(error);
-      toast.error("Delete nahi hua");
+      toast.error(t("inv_deleteFailed"));
     }
   };
+
+
+  const locationLabel = (loc: "gudam" | "shop") => (loc === "gudam" ? t("inv_warehouse") : t("inv_shop"));
+  const unitLabel = (p: Product) => (p.unitType === "weight" ? t("inv_bags") : t("inv_pcs"));
 
   const handleTransferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!transferProd) return;
     if (transferFrom === transferTo) {
-      toast.warn("Different source aur destination select karein");
+      toast.warn(t("inv_selectDifferent"));
       return;
     }
     try {
       setTransferring(true);
       await transferStock(transferProd.id, Number(transferQty), transferFrom, transferTo);
       toast.success(
-        `${transferQty} units ${transferFrom.toUpperCase()} se ${transferTo.toUpperCase()} transfer ho gaye!`
+        t("inv_transferred", { qty: transferQty, from: locationLabel(transferFrom), to: locationLabel(transferTo) })
       );
       setTransferProd(null);
       fetchProducts();
     } catch (err: any) {
-      toast.error(err.message || "Transfer failed");
+      toast.error(err.message || t("inv_transferFailed"));
     } finally {
       setTransferring(false);
     }
@@ -114,13 +123,25 @@ export default function InventoryList() {
     <div>
       <PageHeader
         title={t("inventoryManagement")}
-        subtitle="Gudam & Dukan Stock Manage & Transfer Karein"
+        subtitle={t("inv_subtitle")}
         actions={
-          <Link href="/dashboard/inventry/add" className="btn-primary">
-            <Plus size={18} /> {t("addProductBtn")}
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchProducts(true)}
+              disabled={refreshing}
+              className="btn-secondary flex items-center gap-1.5"
+              title="Refresh from server"
+            >
+              <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+            <Link href="/dashboard/inventry/add" className="btn-primary">
+              <Plus size={18} /> {t("addProductBtn")}
+            </Link>
+          </div>
         }
       />
+
 
       <DataTable
         data={filteredProducts}
@@ -177,37 +198,37 @@ export default function InventoryList() {
                   item.unitType === "weight" ? "bg-orange-100 text-orange-800" : "bg-sky-100 text-sky-800"
                 }`}
               >
-                {item.unitType === "weight" ? "Weight (25kg Bag)" : "Count (pcs)"}
+                {item.unitType === "weight" ? t("inv_typeWeight") : t("inv_typeCount")}
               </span>
             ),
           },
           { key: "sell", header: t("sellingPrice"), align: "right", cell: (item) => <span className="font-bold text-stone-900">Rs. {item.sellingPrice}</span> },
           {
             key: "gudam",
-            header: "Gudam Stock",
+            header: t("inv_warehouseStock"),
             align: "center",
             cell: (item) => (
               <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-purple-100 text-purple-800 border border-purple-200">
-                {item.gudamStock ?? 0} {item.unitType === "weight" ? "Bags" : "pcs"}
+                {item.gudamStock ?? 0} {unitLabel(item)}
               </span>
             ),
           },
           {
             key: "shop",
-            header: "Dukan Stock",
+            header: t("inv_shopStock"),
             align: "center",
             cell: (item) => (
               <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
-                {item.shopStock ?? item.stock ?? 0} {item.unitType === "weight" ? "Bags" : "pcs"}
+                {item.shopStock ?? item.stock ?? 0} {unitLabel(item)}
               </span>
             ),
           },
           {
             key: "total",
-            header: "Total Stock",
+            header: t("inv_totalStock"),
             align: "right",
             cell: (item) => {
-              const unit = item.unitType === "weight" ? "Bags" : "pcs";
+              const unit = unitLabel(item);
               const out = item.stock <= 0;
               const low = !out && item.stock < 5;
               return (
@@ -230,7 +251,7 @@ export default function InventoryList() {
                 <button
                   onClick={() => setTransferProd(item)}
                   className="rounded-lg p-2 text-purple-600 hover:bg-purple-50"
-                  title="Gudam <-> Dukan Transfer"
+                  title={t("inv_transferTooltip")}
                 >
                   <ArrowLeftRight size={17} />
                 </button>
@@ -259,7 +280,7 @@ export default function InventoryList() {
           <div className="bg-white rounded-2xl shadow-pop w-full max-w-md overflow-hidden">
             <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-purple-50">
               <h3 className="font-extrabold text-purple-900 text-sm flex items-center gap-2">
-                <ArrowLeftRight size={18} className="text-purple-600" /> Stock Transfer ({transferProd.name})
+                <ArrowLeftRight size={18} className="text-purple-600" /> {t("inv_stockTransfer")} ({transferProd.name})
               </h3>
               <button
                 onClick={() => setTransferProd(null)}
@@ -271,16 +292,16 @@ export default function InventoryList() {
 
             <form onSubmit={handleTransferSubmit} className="p-5 space-y-4">
               <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs space-y-1">
-                <p className="font-bold text-stone-800">Available Stock Breakdown:</p>
+                <p className="font-bold text-stone-800">{t("inv_availableBreakdown")}</p>
                 <div className="flex justify-between text-stone-600">
-                  <span>Gudam Stock: <b className="text-purple-700">{transferProd.gudamStock ?? 0} {transferProd.unitType === "weight" ? "Bags" : "pcs"}</b></span>
-                  <span>Dukan Stock: <b className="text-blue-700">{transferProd.shopStock ?? transferProd.stock ?? 0} {transferProd.unitType === "weight" ? "Bags" : "pcs"}</b></span>
+                  <span>{t("inv_warehouseStock")}: <b className="text-purple-700">{transferProd.gudamStock ?? 0} {unitLabel(transferProd)}</b></span>
+                  <span>{t("inv_shopStock")}: <b className="text-blue-700">{transferProd.shopStock ?? transferProd.stock ?? 0} {unitLabel(transferProd)}</b></span>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">From (Kahan Se)</label>
+                  <label className="text-xs font-bold text-stone-700 block mb-1">{t("inv_from")}</label>
                   <select
                     value={transferFrom}
                     onChange={(e) => {
@@ -290,13 +311,13 @@ export default function InventoryList() {
                     }}
                     className="input-field"
                   >
-                    <option value="gudam">Gudam</option>
-                    <option value="shop">Dukan</option>
+                    <option value="gudam">{t("inv_warehouse")}</option>
+                    <option value="shop">{t("inv_shop")}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">To (Kahan Tak)</label>
+                  <label className="text-xs font-bold text-stone-700 block mb-1">{t("inv_to")}</label>
                   <select
                     value={transferTo}
                     onChange={(e) => {
@@ -306,14 +327,14 @@ export default function InventoryList() {
                     }}
                     className="input-field"
                   >
-                    <option value="shop">Dukan</option>
-                    <option value="gudam">Gudam</option>
+                    <option value="shop">{t("inv_shop")}</option>
+                    <option value="gudam">{t("inv_warehouse")}</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">Transfer Quantity *</label>
+                <label className="text-xs font-bold text-stone-700 block mb-1">{t("inv_transferQty")} *</label>
                 <input
                   type="number"
                   min="1"
@@ -326,7 +347,7 @@ export default function InventoryList() {
 
               <div className="pt-2 flex gap-3">
                 <button type="button" onClick={() => setTransferProd(null)} className="btn-ghost flex-1 text-xs">
-                  Cancel
+                  {t("cancel")}
                 </button>
                 <button
                   type="submit"
@@ -336,7 +357,7 @@ export default function InventoryList() {
                   {transferring ? (
                     <Loader2 className="animate-spin text-white" size={16} />
                   ) : (
-                    "Confirm Transfer"
+                    t("inv_confirmTransfer")
                   )}
                 </button>
               </div>

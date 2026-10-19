@@ -1,7 +1,7 @@
-/** Rs. 5,850 */
+import { tr } from "./i18n/translate";
+
 export const formatMoney = (n: number): string => `Rs. ${Math.round(n).toLocaleString()}`;
 
-/** Oct 13, 2026, 01:47 PM */
 export const formatDate = (iso: string): string =>
   new Date(iso).toLocaleString("en-US", {
     month: "short",
@@ -28,7 +28,6 @@ const belowThousand = (n: number): string => {
   return parts.join(" ");
 };
 
-/** 49700 -> "Forty Nine Thousand Seven Hundred Only" (Lakh / Crore hisaab) */
 export const amountInWords = (amount: number): string => {
   let n = Math.round(Math.abs(amount));
   if (n === 0) return "Zero Only";
@@ -54,4 +53,4 @@ export const isCounterSale = (name?: string): boolean => {
   return n === "" || n === "walk-in" || n === "counter sale";
 };
 
-export const customerLabel = (name?: string): string => (isCounterSale(name) ? COUNTER_SALE : (name as string));
+export const customerLabel = (name?: string): string => (isCounterSale(name) ? tr("counterSale") : (name as string));

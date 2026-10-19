@@ -7,30 +7,22 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Existing doc ka malik
     function isOwner() {
       return signedIn() && resource.data.ownerId == request.auth.uid;
     }
 
-    // Read: doc maujood nahi (resource null) to bhi allow, taake transaction mein "kya yeh pehle se hai?"
-    // check chal sake. Maujood doc sirf uska malik padh sakta hai.
     function canRead() {
       return signedIn() && (resource == null || resource.data.ownerId == request.auth.uid);
     }
 
-    // Naya doc banate waqt ownerId apni uid hi honi chahiye
     function createsOwn() {
       return signedIn() && request.resource.data.ownerId == request.auth.uid;
     }
 
-    // Update mein ownerId badli nahi honi chahiye
     function keepsOwner() {
       return request.resource.data.ownerId == resource.data.ownerId;
     }
 
-    // --- Shop profile: users/{uid} ---
-    // licenseExpiry / createdAt / uid / email client se kabhi change nahi honge.
-    // Renew karne ke liye Firebase console (ya admin SDK) se licenseExpiry edit karein.
     match /users/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
 
@@ -45,7 +37,6 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // --- Products ---
     match /products/{id} {
       allow read: if canRead();
       allow create: if createsOwn();
@@ -53,25 +44,21 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
 
-    // --- Sales ---
     match /sales/{id} {
       allow read: if canRead();
       allow create: if createsOwn();
-      // Update: items, refundedAmount, aur gatePassGenerated
       allow update: if isOwner() && keepsOwner()
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['items', 'refundedAmount', 'gatePassGenerated', 'totalAmount', 'editedAt', 'extraCharges', 'paymentMethod', 'customerId', 'customerName']);
       allow delete: if isOwner();
     }
 
-    // --- Returns (sirf add + read, edit/delete nahi) ---
     match /returns/{id} {
       allow read: if canRead();
       allow create: if createsOwn();
       allow update, delete: if false;
     }
 
-    // --- Customers (Udhar khata) ---
     match /customers/{id} {
       allow read: if canRead();
       allow create: if createsOwn();
@@ -79,14 +66,12 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
 
-    // --- Payments (customer se wasooli): sirf add + read ---
     match /payments/{id} {
       allow read: if canRead();
       allow create: if createsOwn();
       allow update, delete: if false;
     }
 
-    // --- Expenses ---
     match /expenses/{id} {
       allow read: if canRead();
       allow create: if createsOwn();
@@ -94,7 +79,6 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
 
-    // --- Gate Passes ---
     match /gate_passes/{id} {
       allow read: if canRead();
       allow create: if createsOwn();
@@ -102,7 +86,6 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
 
-    // --- Suppliers ---
     match /suppliers/{id} {
       allow read: if canRead();
       allow create: if createsOwn();
@@ -110,7 +93,6 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
 
-    // --- Supplier Purchases ---
     match /supplier_purchases/{id} {
       allow read: if canRead();
       allow create: if createsOwn();
@@ -118,7 +100,6 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
 
-    // --- Supplier Payments ---
     match /supplier_payments/{id} {
       allow read: if canRead();
       allow create: if createsOwn();
@@ -139,14 +120,12 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
 
-    // --- Stock Transfers ---
     match /stock_transfers/{id} {
       allow read: if canRead();
       allow create: if createsOwn();
       allow update, delete: if false;
     }
 
-    // Baaki sab band
     match /{document=**} {
       allow read, write: if false;
     }

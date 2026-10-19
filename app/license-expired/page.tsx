@@ -2,19 +2,18 @@
 import { Lock, Phone, Clock } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { useLanguage } from "../store/useLanguage";
 
-// 1. Asli logic aur design ko ek alag function mein daal diya
 function ExpiredContent() {
+  const { t } = useLanguage();
   const searchParams = useSearchParams();
   const type = searchParams.get("type");
 
   const isTrial = type === "trial";
 
-  const title = isTrial ? "Free Trial Expired!" : "License Expired";
+  const title = isTrial ? t("auth_trialExpiredTitle") : t("auth_licenseExpiredTitle");
 
-  const message = isTrial
-    ? "Aapka 3 din ka muft trial khatam ho chuka hai. Apne system ko regular chalane aur data mehfooz rakhne ke liye package upgrade karein."
-    : "Aapke software ka license expire ho chuka hai. Bara-e-meharbani service continue rakhne ke liye apni monthly payment clear karein.";
+  const message = isTrial ? t("auth_trialExpiredMessage") : t("auth_licenseExpiredMessage");
 
   const Icon = isTrial ? Clock : Lock;
   const iconColor = isTrial ? "text-orange-600" : "text-red-600";
@@ -33,7 +32,7 @@ function ExpiredContent() {
       </p>
 
       <div className="bg-stone-50 p-4 rounded-xl border border-stone-200">
-        <p className="text-sm text-stone-500 mb-2">Contact Support:</p>
+        <p className="text-sm text-stone-500 mb-2">{t("auth_contactSupport")}</p>
         <div className="flex items-center justify-center gap-2 text-xl font-bold text-brand-600 tracking-wide">
           <Phone size={20} />
           <span>0314-2811181</span>
@@ -44,18 +43,21 @@ function ExpiredContent() {
         onClick={() => window.location.href = "/"}
         className="mt-6 text-sm text-stone-400 hover:text-stone-700 font-medium underline transition-colors"
       >
-        Logout & Go to Home
+        {t("auth_logoutHome")}
       </button>
     </div>
   );
 }
 
-// 2. Main page mein us component ko <Suspense> ke andar wrap kar diya
+function LoadingFallback() {
+  const { t } = useLanguage();
+  return <div className="text-stone-500">{t("loading")}</div>;
+}
+
 export default function LicenseExpiredPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-stone-50 p-4 text-center">
-      {/* Fallback mein aap loading state dikha sakte hain jab tak URL params load na hon */}
-      <Suspense fallback={<div className="text-stone-500">Loading...</div>}>
+      <Suspense fallback={<LoadingFallback />}>
         <ExpiredContent />
       </Suspense>
     </div>

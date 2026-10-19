@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 
-// Offline ke liye pehle se cache hone wale pages
 const WARM_ROUTES = [
   "/dashboard",
   "/dashboard/pos",
@@ -14,7 +13,6 @@ const WARM_ROUTES = [
   "/dashboard/settings",
 ];
 
-/** Production mein service worker register karta hai (dev mein cache se confusion hoti hai) */
 export default function ServiceWorkerRegister() {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
@@ -27,7 +25,7 @@ export default function ServiceWorkerRegister() {
           registration.active?.postMessage({ type: "WARM", urls: WARM_ROUTES });
         }
       } catch (error) {
-        console.error("Service worker register nahi hua:", error);
+        console.error("Service worker registration failed:", error);
       }
     })();
   }, []);

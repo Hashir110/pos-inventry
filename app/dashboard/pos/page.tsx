@@ -16,6 +16,8 @@ import AddTransportModal from '../../components/AddTransportModal';
 import CustomerSelect from '../../components/CustomerSelect';
 import SaleReceipt from '../../components/SaleReceipt';
 
+const OTHER_CATEGORY = "__other__";
+
 export default function POSPage() {
     const { currentUser, currentShop } = useStore();
     const { t } = useLanguage();
@@ -161,13 +163,13 @@ export default function POSPage() {
     const handleFinalizeSale = async () => {
         if (!currentUser) return;
         if (cart.length === 0) {
-            return toast.error("Cart khali hai");
+            return toast.error(t("pos_cart_empty_toast"));
         }
         if (cart.some(item => !(item.qty > 0))) {
-            return toast.error("Quantity 0 hai — theek karein ya item hata dein");
+            return toast.error(t("pos_qty_zero"));
         }
         if (paymentMethod === "Udhar" && !customerId) {
-            toast.error("Udhar ke liye party select karein!");
+            toast.error(t("pos_select_party_credit"));
             return;
         }
         setCheckoutLoading(true);
@@ -195,20 +197,20 @@ export default function POSPage() {
             }
 
             setInvoiceNumber(shortInvoiceNo);
-            toast.success("Sale Successful!");
+            toast.success(t("pos_sale_success"));
             if (paymentMethod === "Udhar") refreshCustomers();
             setShowReceipt(true);
 
         } catch (error) {
             console.error(error);
-            toast.error("Failed: " + (typeof error === 'string' ? error : error instanceof Error ? error.message : 'Unknown error'));
+            toast.error(t("pos_sale_failed", { reason: typeof error === 'string' ? error : error instanceof Error ? error.message : t("pos_unknown_error") }));
         }
         setCheckoutLoading(false);
     };
 
     const categories = useMemo(() => {
         const set = new Set<string>();
-        products.forEach(p => set.add(p.category?.trim() || "Baqi"));
+        products.forEach(p => set.add(p.category?.trim() || OTHER_CATEGORY));
         return [...set].sort((a, b) => a.localeCompare(b));
     }, [products]);
 
@@ -216,7 +218,7 @@ export default function POSPage() {
         const term = search.toLowerCase();
         return products.filter(p => {
             if (!p.name.toLowerCase().includes(term)) return false;
-            return activeCategory === "all" || (p.category?.trim() || "Baqi") === activeCategory;
+            return activeCategory === "all" || (p.category?.trim() || OTHER_CATEGORY) === activeCategory;
         });
     }, [products, search, activeCategory]);
 
@@ -298,7 +300,7 @@ export default function POSPage() {
                         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" size={17} />
                         <input
                             type="text"
-                            placeholder={t("searchItemsPlaceholder")}
+                            placeholder={t("pos_search_items")}
                             className="field pl-10"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -306,7 +308,7 @@ export default function POSPage() {
                     </div>
 
                     <div className="flex gap-2 overflow-x-auto pb-1">
-                        {[{ key: "all", label: t("all") }, ...categories.map(c => ({ key: c, label: c }))].map(tab => (
+                        {[{ key: "all", label: t("all") }, ...categories.map(c => ({ key: c, label: c === OTHER_CATEGORY ? t("pos_category_other") : c }))].map(tab => (
                             <button
                                 key={tab.key}
                                 onClick={() => setActiveCategory(tab.key)}
@@ -336,7 +338,7 @@ export default function POSPage() {
                                 const inCartQty = cart.find(c => c.id === product.id)?.qty ?? 0;
                                 const isLow = !isOutOfStock && product.stock < 5;
                                 const rateUnit = product.unitType === 'weight' ? 'kg' : 'pc';
-                                const stockUnit = product.unitType === 'weight' ? 'Bags' : 'pcs';
+                                const stockUnit = product.unitType === 'weight' ? t("pos_unit_bags") : t("pos_unit_pcs");
 
                                 return (
                                     <button
@@ -372,7 +374,7 @@ export default function POSPage() {
                                                     ? 'bg-amber-100 text-amber-800'
                                                     : 'bg-stone-100 text-stone-600'
                                                 }`}>
-                                                {isOutOfStock ? 'Khatam' : `${product.stock} ${stockUnit}`}
+                                                {isOutOfStock ? t("pos_out_of_stock") : `${product.stock} ${stockUnit}`}
                                             </span>
                                         </div>
                                     </button>
@@ -384,11 +386,11 @@ export default function POSPage() {
             </div>
             <div className="fixed bottom-0 left-0 z-30 flex w-full items-center justify-between border-t border-stone-200 bg-white p-4 shadow-pop lg:hidden">
                 <div onClick={() => setShowMobileCart(true)}>
-                    <p className="text-xs text-stone-500">{cart.length} Items</p>
+                    <p className="text-xs text-stone-500">{cart.length} {t("items")}</p>
                     <h3 className="tabular font-display text-xl font-bold text-stone-900">Rs. {Math.round(grandTotal).toLocaleString()}</h3>
                 </div>
                 <button onClick={() => setShowMobileCart(true)} className="btn-primary">
-                    <ShoppingCart size={18} /> Bill dekhein
+                    <ShoppingCart size={18} /> {t("pos_view_bill")}
                     <ChevronUp size={16} />
                 </button>
             </div>
@@ -423,11 +425,11 @@ export default function POSPage() {
                     <div className="w-full max-w-[280px] space-y-1">
                         <div className="flex justify-between items-center">
                             <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
-                                {paymentMethod === "Udhar" ? "Party / Khata (Udhar)" : t("customer")}
+                                {paymentMethod === "Udhar" ? t("pos_party_credit_label") : t("customer")}
                             </label>
                             {paymentMethod === "Udhar" && !customerId && (
                                 <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
-                                    Selection Zaroori
+                                    {t("pos_selection_required")}
                                 </span>
                             )}
                         </div>
@@ -441,16 +443,16 @@ export default function POSPage() {
                     </div>
 
                     <div className="min-w-0 flex-1 space-y-1">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Transport</label>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{t("pos_transport")}</label>
                         <div className="flex gap-2">
                             <div className="min-w-0 flex-1">
                                 <SearchSelect
                                     options={transports.map((tr) => ({ id: tr.id, label: tr.name }))}
                                     value={transportId}
                                     onChange={(o) => { setTransportId(o?.id ?? ""); setTransport(o?.label ?? ""); }}
-                                    placeholder="Transport select karein"
-                                    searchPlaceholder="Transport search karein..."
-                                    emptyText="Koi transport nahi, + se add karein"
+                                    placeholder={t("pos_select_transport_placeholder")}
+                                    searchPlaceholder={t("pos_select_transport_search")}
+                                    emptyText={t("pos_select_transport_empty")}
                                     icon={<Truck size={16} />}
                                 />
                             </div>
@@ -458,7 +460,7 @@ export default function POSPage() {
                                 type="button"
                                 onClick={() => setShowTransportModal(true)}
                                 className="flex shrink-0 items-center justify-center rounded-lg border border-brand-500 bg-brand-50 px-3 text-brand-700 transition hover:bg-brand-100"
-                                title="Nayi transport company add karein"
+                                title={t("pos_select_transport_add_title")}
                             >
                                 <Plus size={18} />
                             </button>
@@ -475,11 +477,11 @@ export default function POSPage() {
                     ) : (
                         <div className="min-w-[640px]">
                             <div className="sticky top-0 z-10 grid grid-cols-[minmax(0,1fr)_110px_90px_90px_100px_28px] items-center gap-3 border-b border-stone-200 bg-stone-100 px-3.5 py-2 text-[11px] font-bold uppercase tracking-wider text-stone-500">
-                                <span>Product</span>
-                                <span className="text-center">Bags</span>
-                                <span className="text-center">Weight (kg)</span>
-                                <span className="text-center">Rate</span>
-                                <span className="text-right">Total</span>
+                                <span>{t("pos_col_product")}</span>
+                                <span className="text-center">{t("pos_col_bags")}</span>
+                                <span className="text-center">{t("pos_col_weight")}</span>
+                                <span className="text-center">{t("pos_col_rate")}</span>
+                                <span className="text-right">{t("total")}</span>
                                 <span />
                             </div>
 
@@ -528,7 +530,7 @@ export default function POSPage() {
                                                 className={`tabular w-full rounded-lg border px-2 py-1.5 text-center text-sm font-bold outline-none focus:border-brand-500 focus:bg-white ${item.isManualWeight ? "border-amber-300 bg-amber-50" : "border-stone-200 bg-stone-50"}`}
                                                 value={currentWeight}
                                                 onChange={(e) => updateTotalWeight(index, e.target.value)}
-                                                title="Bori mein wazan kam/zyada ho to yahan badlein"
+                                                title={t("pos_weight_hint")}
                                             />
                                         ) : (
                                             <span className="text-center text-sm text-stone-300">—</span>
@@ -541,7 +543,7 @@ export default function POSPage() {
                                             className="tabular w-full rounded-lg border border-stone-200 bg-stone-50 px-2 py-1.5 text-center text-sm font-bold outline-none focus:border-brand-500 focus:bg-white"
                                             value={item.price}
                                             onChange={(e) => updatePrice(index, e.target.value)}
-                                            title={isWeight ? "Rate per kg" : "Rate per piece"}
+                                            title={isWeight ? t("pos_rate_per_kg") : t("pos_rate_per_piece")}
                                         />
 
                                         <span className="tabular text-right text-sm font-extrabold text-stone-900">
@@ -551,7 +553,7 @@ export default function POSPage() {
                                         <button
                                             onClick={() => removeFromCart(index)}
                                             className="rounded-md p-1 text-red-400 hover:bg-red-50 hover:text-red-600"
-                                            title="Hatayein"
+                                            title={t("pos_remove")}
                                         >
                                             <Trash2 size={15} />
                                         </button>
@@ -564,7 +566,7 @@ export default function POSPage() {
                 <div className="border-t border-stone-200 p-2.5 space-y-1.5 bg-white">
                     <div className="flex items-center justify-between gap-3">
                         <label htmlFor="extra-charges" className="text-xs font-bold uppercase tracking-wider text-stone-500">
-                            Extra Charges <span className="font-medium normal-case tracking-normal text-stone-400">(transport waghera)</span>
+                            {t("pos_extra_charges")} <span className="font-medium normal-case tracking-normal text-stone-400">{t("pos_extra_charges_hint")}</span>
                         </label>
                         <div className="relative w-32">
                             <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-stone-400">Rs.</span>
@@ -618,9 +620,9 @@ export default function POSPage() {
 
                     <div className="grid grid-cols-3 gap-1.5">
                         {([
-                            { value: "Cash", label: t("cash"), icon: Banknote },
-                            { value: "Bank Account", label: t("bankOnline"), icon: Landmark },
-                            { value: "Udhar", label: t("udhar"), icon: HandCoins },
+                            { value: "Cash", label: t("pos_pay_cash"), icon: Banknote },
+                            { value: "Bank Account", label: t("pos_pay_bank"), icon: Landmark },
+                            { value: "Udhar", label: t("pos_pay_credit"), icon: HandCoins },
                         ] as { value: PaymentMethod; label: string; icon: typeof Banknote }[]).map(opt => {
                             const Icon = opt.icon;
                             const active = paymentMethod === opt.value;
@@ -645,7 +647,7 @@ export default function POSPage() {
 
                     {paymentMethod === "Udhar" && !customerId && (
                         <p className="rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 text-center">
-                            ⚠️ Party select karein
+                            ⚠️ {t("pos_select_party_warning")}
                         </p>
                     )}
 

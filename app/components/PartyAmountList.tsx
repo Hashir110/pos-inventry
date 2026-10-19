@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { formatMoney } from "../lib/format";
+import { useLanguage } from "../store/useLanguage";
 
 export interface PartyRow {
   id: string;
@@ -34,7 +35,8 @@ export default function PartyAmountList({
   emptyText,
 }: PartyAmountListProps) {
   const [search, setSearch] = useState("");
-  const t = TONES[tone];
+  const { t } = useLanguage();
+  const colors = TONES[tone];
 
   const filtered = useMemo(() => {
     const term = search.toLowerCase().trim();
@@ -49,7 +51,7 @@ export default function PartyAmountList({
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Party search..."
+          placeholder={t("settle_partySearch")}
           className="field pl-10"
         />
       </div>
@@ -70,14 +72,14 @@ export default function PartyAmountList({
               <div
                 key={p.id}
                 className={`rounded-xl border p-3 transition ${
-                  over ? "border-red-300 bg-red-50/50" : active ? t.ring : "border-stone-200 bg-white"
+                  over ? "border-red-300 bg-red-50/50" : active ? colors.ring : "border-stone-200 bg-white"
                 }`}
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-stone-900">{p.name}</p>
-                    <span className={`tabular mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${t.badge}`}>
-                      Baqi: {formatMoney(p.balance)}
+                    <span className={`tabular mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${colors.badge}`}>
+                      {t("settle_balance", { amount: formatMoney(p.balance) })}
                     </span>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
@@ -85,9 +87,9 @@ export default function PartyAmountList({
                       type="button"
                       onClick={() => onChange(p.id, String(p.balance))}
                       className="rounded-lg border border-stone-200 px-2 py-1 text-[11px] font-bold text-stone-500 hover:bg-stone-100"
-                      title="Poori raqam"
+                      title={t("settle_fullTitle")}
                     >
-                      Full
+                      {t("settle_full")}
                     </button>
                     <input
                       type="number"
@@ -101,10 +103,14 @@ export default function PartyAmountList({
                   </div>
                 </div>
                 {active && (
-                  <p className={`tabular mt-2 text-xs font-semibold ${over ? "text-red-600" : t.text}`}>
+                  <p className={`tabular mt-2 text-xs font-semibold ${over ? "text-red-600" : colors.text}`}>
                     {over
-                      ? `Baqi se zyada (${formatMoney(p.balance)})`
-                      : `${formatMoney(p.balance)} − ${formatMoney(value)} = ${formatMoney(remaining)} reh jayega`}
+                      ? t("settle_overBalance", { amount: formatMoney(p.balance) })
+                      : t("settle_remaining", {
+                          balance: formatMoney(p.balance),
+                          value: formatMoney(value),
+                          remaining: formatMoney(remaining),
+                        })}
                   </p>
                 )}
               </div>

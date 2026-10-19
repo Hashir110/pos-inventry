@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2, Lock, X } from "lucide-react";
 import { toast } from "react-toastify";
+import { useLanguage } from "../store/useLanguage";
 
 interface AdminLoginModalProps {
   open: boolean;
@@ -11,6 +12,7 @@ interface AdminLoginModalProps {
 }
 
 export default function AdminLoginModal({ open, onClose, onSuccess }: AdminLoginModalProps) {
+  const { t } = useLanguage();
   const [password, setPassword] = useState("");
   const [checking, setChecking] = useState(false);
 
@@ -35,11 +37,13 @@ export default function AdminLoginModal({ open, onClose, onSuccess }: AdminLogin
         setPassword("");
         onSuccess();
       } else {
-        toast.error(data.error || "Password galat hai");
+        toast.error(
+          res.status === 401 ? t("admin_wrongPassword") : res.status === 503 ? t("admin_notConfigured") : t("admin_requestFailed")
+        );
         setPassword("");
       }
     } catch {
-      toast.error("Server se rabta nahi hua");
+      toast.error(t("admin_connectionFailed"));
     } finally {
       setChecking(false);
     }
@@ -60,7 +64,7 @@ export default function AdminLoginModal({ open, onClose, onSuccess }: AdminLogin
           <span className="rounded-xl bg-violet-100 p-2.5 text-violet-700">
             <Lock size={20} />
           </span>
-          <h3 className="text-lg font-extrabold text-stone-900">Admin Access</h3>
+          <h3 className="text-lg font-extrabold text-stone-900">{t("admin_accessTitle")}</h3>
         </div>
 
         <input
@@ -68,12 +72,12 @@ export default function AdminLoginModal({ open, onClose, onSuccess }: AdminLogin
           autoFocus
           autoComplete="off"
           className="field mb-4 text-center text-lg tracking-widest"
-          placeholder="Password"
+          placeholder={t("admin_passwordPlaceholder")}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
         <button type="submit" disabled={checking || !password} className="btn-primary w-full !py-3">
-          {checking ? <Loader2 className="animate-spin" size={18} /> : "Unlock"}
+          {checking ? <Loader2 className="animate-spin" size={18} /> : t("unlock")}
         </button>
       </form>
     </div>

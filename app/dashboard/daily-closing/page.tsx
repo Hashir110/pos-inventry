@@ -1,9 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, Banknote, CheckCircle2, CreditCard, HandCoins, Loader2, Lock, Pencil, ReceiptText, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Banknote, CheckCircle2, CreditCard, HandCoins, Loader2, Lock, Pencil, ReceiptText, RefreshCw, Wallet } from "lucide-react";
+
 import { toast } from "react-toastify";
 import { useStore } from "../../store/useStore";
+
+import { useLanguage } from "../../store/useLanguage";
+import { tr } from "../../lib/i18n/translate";
 import PageHeader from "../../components/PageHeader";
 import DataTable from "../../components/DataTable";
 import StatCard from "../../components/StatCard";
@@ -27,16 +31,17 @@ interface MoneyRow {
   date: string;
   kind: Kind;
   party: string;
-  details: string;
+  method: string;
+  note: string;
   amount: number;
 }
 
 const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-const methodLabel = (m: string) => (m === "Cash" ? "Cash" : "Bank / Online");
+const methodLabel = (m: string) => (m === "Cash" ? tr("cash") : tr("bankOnline"));
 const signed = (n: number) => `${n < 0 ? "− " : ""}${formatMoney(Math.abs(n))}`;
 
-const PAYMENT_LABEL: Record<PaymentMethod, string> = { Cash: "Cash", "Bank Account": "Bank", Udhar: "Udhar" };
+const paymentLabel = (m: PaymentMethod) => (m === "Cash" ? tr("cash") : m === "Bank Account" ? tr("closing_payBank") : tr("closing_credit"));
 const PAYMENT_TONE: Record<PaymentMethod, string> = {
   Cash: "!border-emerald-200 !bg-emerald-50 !text-emerald-800",
   "Bank Account": "!border-sky-200 !bg-sky-50 !text-sky-800",
@@ -56,13 +61,14 @@ const qtySummary = (sale: Sale) => {
   const bags = sale.items.filter((i) => i.type === "weight").reduce((s, i) => s + i.qty, 0);
   const kg = sale.items.filter((i) => i.type === "weight").reduce((s, i) => s + (i.totalWeight ?? i.qty * (i.weightPerBag || 25)), 0);
   const pcs = sale.items.filter((i) => i.type !== "weight").reduce((s, i) => s + i.qty, 0);
-  return [bags ? `${bags} bags (${kg} kg)` : "", pcs ? `${pcs} pcs` : ""].filter(Boolean).join(" • ") || "—";
+  return [bags ? tr("closing_bags", { bags, kg }) : "", pcs ? tr("closing_pcs", { pcs }) : ""].filter(Boolean).join(" • ") || "—";
 };
 
 export default function DailyClosingPage() {
   const { currentUser } = useStore();
   const ownerId = currentUser?.uid ?? "";
   const { confirm } = useDialog();
+  const { t } = useLanguage();
 
   const [date, setDate] = useState(() => dayKey(new Date().toISOString()));
   const [loading, setLoading] = useState(true);
@@ -78,32 +84,50 @@ export default function DailyClosingPage() {
   const [editSale, setEditSale] = useState<Sale | null>(null);
   const [partyForSale, setPartyForSale] = useState<Sale | null>(null);
 
-  const load = useCallback(async () => {
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async (force = false) => {
     if (!ownerId) return;
+    if (force) setRefreshing(true);
     const { startIso, endIso } = dayRange(date);
-    const names = ["Sales", "Expenses", "Customers", "Suppliers", "Wasooli", "Supplier payments", "Closings (firestore rules deploy karein)"];
+    const names = [
+      tr("closing_src_sales"),
+      tr("expenses"),
+      tr("closing_src_customers"),
+      tr("closing_src_suppliers"),
+      tr("closing_src_collections"),
+      tr("closing_src_supplierPayments"),
+      tr("closing_src_closings"),
+    ];
     const results = await Promise.allSettled([
-      listSalesInRange(ownerId, startIso, endIso).then(setSales),
-      listExpensesInRange(ownerId, startIso, endIso).then(setExpenses),
-      listCustomers(ownerId).then(setCustomers),
-      listSuppliers(ownerId).then(setSuppliers),
+      listSalesInRange(ownerId, startIso, endIso, force).then(setSales),
+      listExpensesInRange(ownerId, startIso, endIso, force).then(setExpenses),
+      listCustomers(ownerId, force).then(setCustomers),
+      listSuppliers(ownerId, force).then(setSuppliers),
       listAllPayments(ownerId).then(setPayments),
-      listSupplierPayments(ownerId).then(setSupplierPayments),
-      listDayClosings(ownerId).then(setDayClosings),
+      listSupplierPayments(ownerId, force).then(setSupplierPayments),
+      listDayClosings(ownerId, force).then(setDayClosings),
     ]);
+    const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
     results.forEach((r, i) => {
-      if (r.status === "rejected") {
+      if (r.status === "rejected" && isOnline) {
         console.error(names[i], r.reason);
-        toast.error(`${names[i]} load nahi hue`);
+        toast.error(tr("closing_loadFailed", { name: names[i] }));
       }
     });
+    if (force && isOnline) {
+      toast.success("Data refreshed");
+    }
+
     setLoading(false);
-  }, [ownerId, date]);
+    setRefreshing(false);
+  }, [ownerId, date, t]);
 
   useEffect(() => {
     setLoading(true);
     load();
   }, [load]);
+
 
   const debtors = useMemo(() => customers.filter((c) => c.balance > 0), [customers]);
   const payables = useMemo(() => suppliers.filter((s) => s.balance > 0), [suppliers]);
@@ -161,10 +185,16 @@ export default function DailyClosingPage() {
         cashInHand: totals.cashInHand,
       });
       setDayClosings((prev) => [record, ...prev.filter((c) => c.date !== date)].sort((a, b) => b.date.localeCompare(a.date)));
-      toast.success(saved ? "Closing update ho gayi" : "Closing ho gayi");
+      toast.success(
+        (record as any).isOffline
+          ? "Closing saved offline (will sync when internet is connected)"
+          : saved
+            ? t("closing_updated")
+            : t("closing_saved")
+      );
     } catch (error) {
       console.error(error);
-      toast.error("Closing save nahi hui (firestore rules deploy karein)");
+      toast.error(t("closing_saveFailed"));
     } finally {
       setClosing(false);
     }
@@ -173,10 +203,10 @@ export default function DailyClosingPage() {
   const applyPayment = async (sale: Sale, method: PaymentMethod, customer?: Customer) => {
     try {
       await updateSalePayment(sale.id, method, customer ? { id: customer.id, name: customer.name } : undefined);
-      toast.success(`Payment ${PAYMENT_LABEL[method]} kar di`);
+      toast.success(t("closing_paymentChanged", { method: paymentLabel(method) }));
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Payment badli nahi");
+      toast.error(error instanceof Error ? error.message : t("closing_paymentFailed"));
     }
   };
 
@@ -189,9 +219,13 @@ export default function DailyClosingPage() {
     }
     if (current === "Udhar") {
       const ok = await confirm({
-        title: "Payment badlein?",
-        message: `Ye bill ab ${PAYMENT_LABEL[method]} hoga aur ${customerLabel(sale.customerName)} ka ${formatMoney(saleNetAmount(sale))} udhar kam ho jayega.`,
-        confirmLabel: "Haan, badlein",
+        title: t("closing_changePayTitle"),
+        message: t("closing_changePayMsg", {
+          method: paymentLabel(method),
+          customer: customerLabel(sale.customerName),
+          amount: formatMoney(saleNetAmount(sale)),
+        }),
+        confirmLabel: t("closing_changePayConfirm"),
         tone: "brand",
       });
       if (!ok) return;
@@ -205,10 +239,10 @@ export default function DailyClosingPage() {
         await receivePayment(ownerId, party.id, amount, method, note);
       } catch (error) {
         failed++;
-        toast.error(`${party.name}: ${error instanceof Error ? error.message : "save nahi hua"}`);
+        toast.error(`${party.name}: ${error instanceof Error ? error.message : t("closing_saveItemFailed")}`);
       }
     }
-    if (failed < lines.length) toast.success(`${lines.length - failed} party se wasooli save ho gayi`);
+    if (failed < lines.length) toast.success(t("closing_collectionSaved", { count: lines.length - failed }));
     await load();
     return failed === 0;
   };
@@ -220,10 +254,10 @@ export default function DailyClosingPage() {
         await addSupplierPayment(ownerId, { supplierId: party.id, supplierName: party.name, amount, method, note });
       } catch (error) {
         failed++;
-        toast.error(`${party.name}: ${error instanceof Error ? error.message : "save nahi hua"}`);
+        toast.error(`${party.name}: ${error instanceof Error ? error.message : t("closing_saveItemFailed")}`);
       }
     }
-    if (failed < lines.length) toast.success(`${lines.length - failed} supplier ko payment save ho gayi`);
+    if (failed < lines.length) toast.success(t("closing_supplierSaved", { count: lines.length - failed }));
     await load();
     return failed === 0;
   };
@@ -236,7 +270,8 @@ export default function DailyClosingPage() {
           date: p.date,
           kind: "amad" as Kind,
           party: p.customerName,
-          details: `${methodLabel(p.method)}${p.note ? ` • ${p.note}` : ""}`,
+          method: p.method,
+          note: p.note ?? "",
           amount: p.amount,
         })),
         ...daySupplierPayments.map((p) => ({
@@ -244,7 +279,8 @@ export default function DailyClosingPage() {
           date: p.date,
           kind: "jamad" as Kind,
           party: p.supplierName,
-          details: `${methodLabel(p.method)}${p.note ? ` • ${p.note}` : ""}`,
+          method: p.method,
+          note: p.note ?? "",
           amount: p.amount,
         })),
       ].sort((a, b) => b.date.localeCompare(a.date)),
@@ -254,10 +290,19 @@ export default function DailyClosingPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Daily Closing"
-        subtitle="Din ki sales khud aati hain. Amad aur Jamad likho aur closing karo"
+        title={t("closing_title")}
+        subtitle={t("closing_subtitle")}
         actions={
-          <>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => load(true)}
+              disabled={refreshing}
+              className="btn-secondary flex items-center gap-1.5"
+              title="Refresh from server"
+            >
+              <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
             <input
               type="date"
               value={date}
@@ -267,11 +312,12 @@ export default function DailyClosingPage() {
             />
             <button onClick={handleClose} disabled={closing || loading} className="btn-primary">
               {closing ? <Loader2 className="animate-spin" size={18} /> : <Lock size={16} />}
-              {saved ? "Closing Update Karein" : "Closing Karein"}
+              {saved ? t("closing_btnUpdate") : t("closing_btnClose")}
             </button>
-          </>
+          </div>
         }
       />
+
 
       {saved && (
         <div
@@ -281,36 +327,36 @@ export default function DailyClosingPage() {
         >
           <CheckCircle2 size={18} />
           {changedAfterClose
-            ? "Closing ke baad is din mein tabdeeli hui hai. Naya hisaab save karne ke liye Closing Update dabayein."
-            : `Closing ho chuki hai (${formatDate(saved.closedAt)})`}
+            ? t("closing_changedAfter")
+            : t("closing_closedOn", { date: formatDate(saved.closedAt) })}
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Total Sales" value={formatMoney(totals.salesTotal)} subtitle={`${sales.length} bills`} icon={ReceiptText} theme="blue" loading={loading} />
-        <StatCard title="Cash" value={formatMoney(totals.cash)} subtitle="Cash sales" icon={Banknote} theme="green" loading={loading} />
-        <StatCard title="Bank / Online" value={formatMoney(totals.bank)} subtitle="Bank sales" icon={CreditCard} theme="cyan" loading={loading} />
-        <StatCard title="Udhar" value={formatMoney(totals.udhar)} subtitle="Udhar par diya" icon={HandCoins} theme="amber" loading={loading} />
-        <StatCard title="Amad" value={formatMoney(totals.amad)} subtitle="Parties se wasooli" icon={ArrowDownLeft} theme="green" loading={loading} />
-        <StatCard title="Jamad" value={formatMoney(totals.jamad)} subtitle="Suppliers ko diye" icon={ArrowUpRight} theme="red" loading={loading} />
-        <StatCard title="Expenses" value={formatMoney(totals.expenses)} subtitle="Aaj ke kharche" icon={Wallet} theme="orange" loading={loading} />
-        <StatCard title="Cash in Hand" value={signed(totals.cashInHand)} subtitle="Cash + Amad − Jamad − Expenses" icon={Wallet} theme="purple" loading={loading} />
+        <StatCard title={t("totalSales")} value={formatMoney(totals.salesTotal)} subtitle={t("closing_billsCount", { count: sales.length })} icon={ReceiptText} theme="blue" loading={loading} />
+        <StatCard title={t("cash")} value={formatMoney(totals.cash)} subtitle={t("closing_cashSales")} icon={Banknote} theme="green" loading={loading} />
+        <StatCard title={t("bankOnline")} value={formatMoney(totals.bank)} subtitle={t("closing_bankSales")} icon={CreditCard} theme="cyan" loading={loading} />
+        <StatCard title={t("closing_credit")} value={formatMoney(totals.udhar)} subtitle={t("closing_creditGiven")} icon={HandCoins} theme="amber" loading={loading} />
+        <StatCard title={t("closing_received")} value={formatMoney(totals.amad)} subtitle={t("closing_receivedHint")} icon={ArrowDownLeft} theme="green" loading={loading} />
+        <StatCard title={t("closing_paidOut")} value={formatMoney(totals.jamad)} subtitle={t("closing_paidOutHint")} icon={ArrowUpRight} theme="red" loading={loading} />
+        <StatCard title={t("expenses")} value={formatMoney(totals.expenses)} subtitle={t("closing_expensesToday")} icon={Wallet} theme="orange" loading={loading} />
+        <StatCard title={t("closing_cashInHand")} value={signed(totals.cashInHand)} subtitle={t("closing_cashFormula")} icon={Wallet} theme="purple" loading={loading} />
       </div>
 
       <DataTable
         data={sales}
         rowKey={(s) => s.id}
         loading={loading}
-        emptyText="Is din koi sale nahi hui."
+        emptyText={t("closing_noSales")}
         paginate={sales.length > 10}
-        toolbarLeft={<h3 className="text-base font-bold text-stone-900">Sales ({sales.length})</h3>}
+        toolbarLeft={<h3 className="text-base font-bold text-stone-900">{t("closing_salesHeading", { count: sales.length })}</h3>}
         columns={[
-          { key: "time", header: "Time", className: "whitespace-nowrap", cell: (s) => <span className="text-stone-500">{timeOf(s.date)}</span> },
-          { key: "inv", header: "Invoice", cell: (s) => <span className="font-mono text-xs font-bold text-brand-700">#{s.invoiceNo || "-"}</span> },
-          { key: "cust", header: "Customer", cell: (s) => <span className="font-semibold text-stone-900">{customerLabel(s.customerName)}</span> },
+          { key: "time", header: t("closing_colTime"), className: "whitespace-nowrap", cell: (s) => <span className="text-stone-500">{timeOf(s.date)}</span> },
+          { key: "inv", header: t("closing_colInvoice"), cell: (s) => <span className="font-mono text-xs font-bold text-brand-700">#{s.invoiceNo || "-"}</span> },
+          { key: "cust", header: t("customer"), cell: (s) => <span className="font-semibold text-stone-900">{customerLabel(s.customerName)}</span> },
           {
             key: "items",
-            header: "Items",
+            header: t("items"),
             cell: (s) => (
               <>
                 <p className="max-w-[260px] truncate text-stone-800">{s.items.map((i) => i.name).join(", ")}</p>
@@ -320,7 +366,7 @@ export default function DailyClosingPage() {
           },
           {
             key: "pay",
-            header: "Payment",
+            header: t("closing_colPayment"),
             cell: (s) => {
               const current = paymentOf(s);
               return (
@@ -329,13 +375,14 @@ export default function DailyClosingPage() {
                   onChange={(e) => handlePaymentChange(s, e.target.value as PaymentMethod)}
                   className={`field !w-28 !py-1.5 text-xs font-bold ${PAYMENT_TONE[current]}`}
                 >
-                  <option value="Cash">Cash</option>
-                  <option value="Bank Account">Bank</option>
-                  <option value="Udhar">Udhar</option>
+                  <option value="Cash">{paymentLabel("Cash")}</option>
+                  <option value="Bank Account">{paymentLabel("Bank Account")}</option>
+                  <option value="Udhar">{paymentLabel("Udhar")}</option>
                 </select>
               );
             },
-          },          { key: "amount", header: "Amount", align: "right", cell: (s) => <span className="tabular font-extrabold text-stone-900">{formatMoney(saleNetAmount(s))}</span> },
+          },
+          { key: "amount", header: t("amount"), align: "right", cell: (s) => <span className="tabular font-extrabold text-stone-900">{formatMoney(saleNetAmount(s))}</span> },
           {
             key: "edit",
             header: "",
@@ -344,7 +391,7 @@ export default function DailyClosingPage() {
               <button
                 onClick={() => setEditSale(s)}
                 className="rounded-lg p-2 text-stone-500 transition hover:bg-brand-50 hover:text-brand-700"
-                title="Bill edit karein"
+                title={t("closing_editBill")}
               >
                 <Pencil size={17} />
               </button>
@@ -354,31 +401,31 @@ export default function DailyClosingPage() {
       />
 
       <div>
-        <h2 className="mb-3 text-lg font-extrabold text-stone-900">Amad &amp; Jamad</h2>
+        <h2 className="mb-3 text-lg font-extrabold text-stone-900">{t("closing_sectionTitle")}</h2>
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           <SettlementPanel
-            title="Amad (Wasooli)"
-            subtitle="Jin parties par hamara udhar hai, unse aaye paise"
+            title={t("closing_receivedTitle")}
+            subtitle={t("closing_receivedSubtitle")}
             icon={<ArrowDownLeft size={20} />}
             tone="emerald"
             parties={debtors}
             capToBalance
-            noteLabel="Note"
-            notePlaceholder="Optional"
-            submitLabel="Wasooli Save"
-            emptyText="Kisi party par udhar nahi hai"
+            noteLabel={t("closing_note")}
+            notePlaceholder={t("closing_optional")}
+            submitLabel={t("closing_saveCollection")}
+            emptyText={t("closing_noCreditParties")}
             onSubmit={handleAmad}
           />
           <SettlementPanel
-            title="Jamad (Supplier Payment)"
-            subtitle="Jin suppliers se maal liya, unhein diye gaye paise"
+            title={t("closing_paidTitle")}
+            subtitle={t("closing_paidSubtitle")}
             icon={<ArrowUpRight size={20} />}
             tone="amber"
             parties={payables}
-            noteLabel="Kiu diye (Reason)"
-            notePlaceholder="Wajah (optional)"
-            submitLabel="Payment Save"
-            emptyText="Kisi supplier ka hisaab baqi nahi"
+            noteLabel={t("closing_reasonLabel")}
+            notePlaceholder={t("closing_reasonPlaceholder")}
+            submitLabel={t("closing_savePayment")}
+            emptyText={t("closing_noSupplierDue")}
             onSubmit={handleJamad}
           />
         </div>
@@ -388,33 +435,33 @@ export default function DailyClosingPage() {
         data={moneyRows}
         rowKey={(r) => r.id}
         loading={loading}
-        emptyText="Is din koi wasooli ya payment nahi hui."
+        emptyText={t("closing_noMoneyEntries")}
         paginate={false}
-        toolbarLeft={<h3 className="text-base font-bold text-stone-900">Amad aur Jamad ki entries ({moneyRows.length})</h3>}
+        toolbarLeft={<h3 className="text-base font-bold text-stone-900">{t("closing_entriesHeading", { count: moneyRows.length })}</h3>}
         columns={[
-          { key: "time", header: "Time", className: "whitespace-nowrap", cell: (r) => <span className="text-stone-500">{timeOf(r.date)}</span> },
+          { key: "time", header: t("closing_colTime"), className: "whitespace-nowrap", cell: (r) => <span className="text-stone-500">{timeOf(r.date)}</span> },
           {
             key: "kind",
-            header: "Type",
+            header: t("type"),
             cell: (r) => (
               <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${r.kind === "amad" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                {r.kind === "amad" ? "Amad" : "Jamad"}
+                {r.kind === "amad" ? t("closing_received") : t("closing_paidOut")}
               </span>
             ),
           },
           {
             key: "party",
-            header: "Party",
+            header: t("closing_colParty"),
             cell: (r) => (
               <>
                 <p className="font-semibold text-stone-900">{r.party}</p>
-                <p className="text-xs text-stone-500">{r.details}</p>
+                <p className="text-xs text-stone-500">{`${methodLabel(r.method)}${r.note ? ` • ${r.note}` : ""}`}</p>
               </>
             ),
           },
           {
             key: "amount",
-            header: "Amount",
+            header: t("amount"),
             align: "right",
             cell: (r) => (
               <span className={`tabular font-extrabold ${r.kind === "amad" ? "text-emerald-600" : "text-red-600"}`}>
@@ -430,32 +477,44 @@ export default function DailyClosingPage() {
         data={dayClosings}
         rowKey={(c) => c.id}
         loading={loading}
-        emptyText="Abhi koi closing nahi hui."
+        emptyText={t("closing_noClosings")}
         onRowClick={(c) => setDate(c.date)}
         rowClassName={(c) => (c.date === date ? "bg-brand-50/60" : "")}
-        toolbarLeft={<h3 className="text-base font-bold text-stone-900">Closing History</h3>}
+        toolbarLeft={<h3 className="text-base font-bold text-stone-900">{t("closing_history")}</h3>}
         columns={[
           {
             key: "date",
-            header: "Date",
+            header: t("date"),
             className: "whitespace-nowrap",
-            cell: (c) => <span className="font-semibold text-stone-800">{new Date(`${c.date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>,
+            cell: (c) => (
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-stone-800">
+                  {new Date(`${c.date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </span>
+                {(c.id.startsWith("local_") || (c as any).isOffline) && (
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800">
+                    Offline
+                  </span>
+                )}
+              </div>
+            ),
           },
-          { key: "bills", header: "Bills", align: "right", cell: (c) => <span className="tabular">{c.invoiceCount}</span> },
-          { key: "sales", header: "Sales", align: "right", cell: (c) => <span className="tabular font-bold">{formatMoney(c.salesTotal)}</span> },
-          { key: "amad", header: "Amad", align: "right", cell: (c) => <span className="tabular text-emerald-600">{formatMoney(c.amad)}</span> },
-          { key: "jamad", header: "Jamad", align: "right", cell: (c) => <span className="tabular text-red-600">{formatMoney(c.jamad)}</span> },
-          { key: "exp", header: "Expenses", align: "right", cell: (c) => <span className="tabular">{formatMoney(c.expenses)}</span> },
-          { key: "cih", header: "Cash in Hand", align: "right", cell: (c) => <span className="tabular font-extrabold text-stone-900">{signed(c.cashInHand)}</span> },
+
+          { key: "bills", header: t("closing_colBills"), align: "right", cell: (c) => <span className="tabular">{c.invoiceCount}</span> },
+          { key: "sales", header: t("closing_colSales"), align: "right", cell: (c) => <span className="tabular font-bold">{formatMoney(c.salesTotal)}</span> },
+          { key: "amad", header: t("closing_received"), align: "right", cell: (c) => <span className="tabular text-emerald-600">{formatMoney(c.amad)}</span> },
+          { key: "jamad", header: t("closing_paidOut"), align: "right", cell: (c) => <span className="tabular text-red-600">{formatMoney(c.jamad)}</span> },
+          { key: "exp", header: t("expenses"), align: "right", cell: (c) => <span className="tabular">{formatMoney(c.expenses)}</span> },
+          { key: "cih", header: t("closing_cashInHand"), align: "right", cell: (c) => <span className="tabular font-extrabold text-stone-900">{signed(c.cashInHand)}</span> },
         ]}
       />
 
       <ChooseCustomerModal
         open={!!partyForSale}
         customers={customers}
-        title="Kis party ke khate mein?"
-        message="Ye bill Udhar karne ke liye party chunein"
-        confirmLabel="Udhar Karein"
+        title={t("closing_chooseTitle")}
+        message={t("closing_chooseMsg")}
+        confirmLabel={t("closing_chooseConfirm")}
         onClose={() => setPartyForSale(null)}
         onPick={async (customer) => {
           if (partyForSale) await applyPayment(partyForSale, "Udhar", customer);

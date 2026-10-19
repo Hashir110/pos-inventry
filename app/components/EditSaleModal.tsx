@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { toast } from "react-toastify";
 import FormField from "./FormField";
+import { useLanguage } from "../store/useLanguage";
 import { customerLabel, formatMoney } from "../lib/format";
 import { updateSaleItems } from "../lib/services/sales";
 import type { Sale } from "../types";
@@ -22,6 +23,7 @@ interface ItemDraft {
 }
 
 export default function EditSaleModal({ sale, onClose, onSaved }: EditSaleModalProps) {
+  const { t } = useLanguage();
   const [draft, setDraft] = useState<ItemDraft[]>([]);
   const [extra, setExtra] = useState("");
   const [saving, setSaving] = useState(false);
@@ -82,10 +84,10 @@ export default function EditSaleModal({ sale, onClose, onSaved }: EditSaleModalP
         })),
         extraNow
       );
-      toast.success("Bill update ho gaya");
+      toast.success(t("editSale_saved"));
       onSaved({ ...sale, items, totalAmount, extraCharges });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Bill update nahi hua");
+      toast.error(error instanceof Error ? error.message : t("editSale_failed"));
     } finally {
       setSaving(false);
     }
@@ -96,7 +98,7 @@ export default function EditSaleModal({ sale, onClose, onSaved }: EditSaleModalP
       <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-pop">
         <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
           <div>
-            <h3 className="text-base font-extrabold text-stone-900">Bill Edit — #{sale.invoiceNo}</h3>
+            <h3 className="text-base font-extrabold text-stone-900">{t("editSale_title", { invoice: sale.invoiceNo })}</h3>
             <p className="text-xs text-stone-500">{customerLabel(sale.customerName)}</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700">
@@ -107,7 +109,7 @@ export default function EditSaleModal({ sale, onClose, onSaved }: EditSaleModalP
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
           {hasReturns && (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-              Is bill par return ho chuka hai, is liye edit nahi ho sakta.
+              {t("editSale_returned")}
             </p>
           )}
 
@@ -115,11 +117,11 @@ export default function EditSaleModal({ sale, onClose, onSaved }: EditSaleModalP
             <table className="w-full text-left text-sm">
               <thead className="bg-stone-100">
                 <tr>
-                  <th className="px-3 py-2.5">Item</th>
-                  <th className="px-3 py-2.5 text-center">Bags / Qty</th>
-                  <th className="px-3 py-2.5 text-center">Weight (kg)</th>
-                  <th className="px-3 py-2.5 text-center">Rate</th>
-                  <th className="px-3 py-2.5 text-right">Total</th>
+                  <th className="px-3 py-2.5">{t("editSale_colItem")}</th>
+                  <th className="px-3 py-2.5 text-center">{t("editSale_colBagsQty")}</th>
+                  <th className="px-3 py-2.5 text-center">{t("editSale_colWeight")}</th>
+                  <th className="px-3 py-2.5 text-center">{t("editSale_colRate")}</th>
+                  <th className="px-3 py-2.5 text-right">{t("total")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -174,7 +176,7 @@ export default function EditSaleModal({ sale, onClose, onSaved }: EditSaleModalP
           </div>
 
           <div className="flex flex-wrap items-end justify-between gap-4">
-            <FormField label="Extra Charges (transport waghera)" className="w-full sm:w-64">
+            <FormField label={t("editSale_extra")} className="w-full sm:w-64">
               <input
                 type="number"
                 min="0"
@@ -187,22 +189,22 @@ export default function EditSaleModal({ sale, onClose, onSaved }: EditSaleModalP
               />
             </FormField>
             <div className="text-right">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500">Total</p>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500">{t("total")}</p>
               <p className="tabular text-2xl font-extrabold text-stone-900">{formatMoney(grand)}</p>
             </div>
           </div>
 
           <p className="text-xs text-stone-400">
-            Stock{sale.paymentMethod === "Udhar" ? " aur party ka udhar" : ""} farq ke hisaab se khud theek ho jayega.
+            {t(sale.paymentMethod === "Udhar" ? "editSale_stockNoteCredit" : "editSale_stockNote")}
           </p>
         </div>
 
         <div className="flex gap-3 border-t border-stone-200 bg-stone-50 px-5 py-4">
           <button onClick={onClose} disabled={saving} className="btn-ghost flex-1">
-            Cancel
+            {t("cancel")}
           </button>
           <button onClick={handleSave} disabled={saving || hasReturns} className="btn-primary flex-1">
-            {saving ? <Loader2 className="animate-spin" size={18} /> : "Save Karein"}
+            {saving ? <Loader2 className="animate-spin" size={18} /> : t("save")}
           </button>
         </div>
       </div>

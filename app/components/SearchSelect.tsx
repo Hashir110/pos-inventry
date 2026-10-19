@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, ChevronDown, Loader2, Plus, Search, X } from "lucide-react";
+import { useLanguage } from "../store/useLanguage";
 
 export interface SearchSelectOption {
   id: string;
@@ -24,11 +25,12 @@ export default function SearchSelect({
   value,
   onChange,
   placeholder,
-  searchPlaceholder = "Search...",
+  searchPlaceholder,
   icon,
-  emptyText = "Kuch nahi mila",
+  emptyText,
   onCreate,
 }: SearchSelectProps) {
+  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
@@ -95,7 +97,7 @@ export default function SearchSelect({
                 onChange(null);
               }}
               className="p-1 text-stone-400 hover:text-stone-700 rounded hover:bg-stone-100"
-              title="Hatayein"
+              title={t("pos_select_remove")}
             >
               <X size={14} />
             </span>
@@ -125,7 +127,7 @@ export default function SearchSelect({
                     }
                   }
                 }}
-                placeholder={searchPlaceholder}
+                placeholder={searchPlaceholder ?? t("search")}
                 className="w-full pl-9 pr-8 py-2 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
               />
               {search && (
@@ -142,7 +144,7 @@ export default function SearchSelect({
 
           <div className="max-h-60 overflow-y-auto divide-y divide-stone-50">
             {filtered.length === 0 ? (
-              <div className="p-5 text-center text-stone-400 text-xs">{emptyText}</div>
+              <div className="p-5 text-center text-stone-400 text-xs">{emptyText ?? t("pos_select_nothing_found")}</div>
             ) : (
               filtered.map((o) => {
                 const isSelected = o.id === value;
@@ -175,7 +177,7 @@ export default function SearchSelect({
                 className="btn-primary w-full !py-2 text-xs flex items-center justify-center gap-1.5 font-bold shadow-sm"
               >
                 {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                &quot;{search.trim()}&quot; add karein
+                {t("pos_select_create", { name: search.trim() })}
               </button>
             </div>
           )}

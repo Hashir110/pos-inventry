@@ -1,11 +1,11 @@
-"use client"; // Client side logic k liye zaroori hai
+"use client";
 
 import { useCallback, useEffect, useState } from "react";
 import { signInWithPopup, onAuthStateChanged, type User } from "firebase/auth";
-import { getUserShopProfile } from "../app/lib/authService"; // Jo pichle step mn banaya tha
-import { useStore } from "../app/store/useStore"; // Global state
+import { getUserShopProfile } from "../app/lib/authService";
+import { useStore } from "../app/store/useStore";
 import { useRouter } from "next/navigation";
-import { Boxes, CheckCircle2, Loader2, Receipt, Store, WifiOff } from "lucide-react"; // Icons
+import { Boxes, CheckCircle2, Loader2, Receipt, Store, WifiOff } from "lucide-react";
 import { auth, googleProvider } from "../app/lib/firebase";
 import { toast } from 'react-toastify';
 import { useLanguage } from "./store/useLanguage";
@@ -17,7 +17,6 @@ export default function LoginPage() {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
 
-  // 1. Profile Check Logic
   const checkUserProfile = useCallback(
     async (user: User) => {
       setLoading(true);
@@ -32,7 +31,6 @@ export default function LoginPage() {
           router.push("/setup");
         }
       } catch (error) {
-        // Offline/network error: dashboard khud cache se load karne ki koshish karega ya retry dikhayega
         console.error("Profile check failed:", error);
         router.push("/dashboard");
       }
@@ -41,7 +39,6 @@ export default function LoginPage() {
     [router, setCurrentUser, setCurrentShop]
   );
 
-  // 2. Check if user is already logged in
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -52,14 +49,13 @@ export default function LoginPage() {
     });
     return () => unsubscribe();
   }, [checkUserProfile]);
-  // 3. Google Login Handler
   const handleGoogleLogin = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       checkUserProfile(result.user);
     } catch (error) {
       console.error("Login Failed", error);
-      toast.error("Login Failed: " + (error instanceof Error ? error.message : "unknown error"));
+      toast.error(t("auth_loginFailed", { message: error instanceof Error ? error.message : t("auth_unknownError") }));
     }
   };
 
@@ -67,7 +63,7 @@ export default function LoginPage() {
     return (
       <div className="flex h-screen items-center justify-center bg-stone-50">
         <Loader2 className="h-10 w-10 animate-spin text-brand-600" />
-        <span className="ml-2 text-stone-600 font-medium">Loading System...</span>
+        <span className="ml-2 text-stone-600 font-medium">{t("auth_loadingSystem")}</span>
       </div>
     );
   }
@@ -75,13 +71,10 @@ export default function LoginPage() {
   return (
     <div className="h-screen w-screen overflow-hidden bg-white font-sans">
 
-      {/* Full-screen split layout */}
       <div className="h-full w-full flex flex-col md:flex-row">
 
-        {/* --- LEFT SIDE: LOGIN FORM --- */}
         <div className="w-full md:w-1/2 h-full px-8 md:px-16 lg:px-24 py-8 flex flex-col justify-center bg-white relative overflow-y-auto">
           
-          {/* Logo / Brand Top Left & Language Switcher Top Right */}
           <div className="absolute top-6 left-6 md:left-16 lg:left-24 flex items-center gap-2">
              <img src="/logoPos.png" alt="ASAAN POS" className="h-[50px] w-auto object-contain" />
           </div>
@@ -99,7 +92,6 @@ export default function LoginPage() {
               {t("loginSubtitle")}
             </p>
 
-            {/* Login Button */}
             <button
               onClick={handleGoogleLogin}
               className="group relative w-full flex items-center justify-center gap-3 bg-white border-2 border-stone-200 p-3.5 rounded-xl hover:border-brand-600 hover:bg-brand-50 transition-all duration-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 py-4"
@@ -127,7 +119,6 @@ export default function LoginPage() {
               </span>
             </button>
 
-            {/* Features List */}
             <div className="mt-8 pt-6 border-t border-stone-100 space-y-3">
                 {[
                   { icon: Boxes, label: t("featureInventory") },
@@ -150,7 +141,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* --- RIGHT SIDE: ILLUSTRATION --- */}
         <div className="hidden md:flex w-1/2 h-full bg-ink relative items-center justify-center p-10 overflow-hidden">
             <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-brand-500 rounded-full opacity-50 blur-3xl"></div>
             <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-ink-700 rounded-full opacity-50 blur-3xl"></div>
@@ -162,10 +152,9 @@ export default function LoginPage() {
                     muted
                     playsInline
                     preload="auto"
-                    aria-label="Shopkeeper using POS"
+                    aria-label={t("auth_heroAlt")}
                     className="w-full max-w-[640px] max-h-[48vh] object-contain mb-8"
                 >
-                    {/* webm = transparent bg (Chrome/Edge/Firefox), mp4 = fallback */}
                     <source src="/login-hero.webm" type="video/webm" />
                     <source src="/login-hero.mp4" type="video/mp4" />
                 </video>

@@ -10,7 +10,6 @@ interface StoreState {
   setCurrentUser: (user: User | null) => void;
   setCurrentShop: (shop: Shop | null) => void;
   setLoading: (status: boolean) => void;
-  /** Logout par */
   resetStore: () => void;
 }
 

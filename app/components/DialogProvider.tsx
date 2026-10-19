@@ -1,7 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, HelpCircle } from "lucide-react";
+import { AlertTriangle, HelpCircle, X } from "lucide-react";
+import { useLanguage } from "../store/useLanguage";
 
 type Tone = "danger" | "brand";
 
@@ -11,7 +12,6 @@ interface ConfirmOptions {
   confirmLabel?: string;
   cancelLabel?: string;
   tone?: Tone;
-  /** Ye lafz likhne par hi Confirm chalta hai (bade delete ke liye, jaise DELETE) */
   requireText?: string;
 }
 
@@ -38,7 +38,7 @@ const DialogContext = createContext<DialogApi | null>(null);
 
 export const useDialog = (): DialogApi => {
   const ctx = useContext(DialogContext);
-  if (!ctx) throw new Error("useDialog sirf DialogProvider ke andar chalta hai");
+  if (!ctx) throw new Error("useDialog can only be used inside DialogProvider");
   return ctx;
 };
 
@@ -48,6 +48,7 @@ const TONES = {
 } as const;
 
 export default function DialogProvider({ children }: { children: ReactNode }) {
+  const { t } = useLanguage();
   const [dialog, setDialog] = useState<ActiveDialog | null>(null);
   const [typed, setTyped] = useState("");
   const [numberValue, setNumberValue] = useState("");
@@ -84,15 +85,8 @@ export default function DialogProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!dialog) return;
     const timer = setTimeout(() => inputRef.current?.focus(), 60);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close(dialog.kind === "confirm" ? false : null);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [dialog, close]);
+    return () => clearTimeout(timer);
+  }, [dialog]);
 
   const tone: Tone = dialog?.kind === "confirm" ? dialog.options.tone ?? "danger" : "brand";
   const styles = TONES[tone];
@@ -119,12 +113,7 @@ export default function DialogProvider({ children }: { children: ReactNode }) {
       {children}
 
       {dialog && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-900/50 p-4 backdrop-blur-sm animate-in fade-in"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) close(dialog.kind === "confirm" ? false : null);
-          }}
-        >
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-stone-900/50 p-4 backdrop-blur-sm animate-in fade-in">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -132,8 +121,15 @@ export default function DialogProvider({ children }: { children: ReactNode }) {
             }}
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-pop animate-in zoom-in-95"
+            className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-pop animate-in zoom-in-95"
           >
+            <button
+              type="button"
+              onClick={() => close(dialog.kind === "confirm" ? false : null)}
+              className="absolute right-3 top-3 rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+            >
+              <X size={20} />
+            </button>
             <div className="flex flex-col items-center px-6 pb-2 pt-7 text-center">
               <span className={`mb-4 flex h-14 w-14 items-center justify-center rounded-full ${styles.icon}`}>
                 {dialog.kind === "confirm" && tone === "danger" ? <AlertTriangle size={26} /> : <HelpCircle size={26} />}
@@ -144,7 +140,7 @@ export default function DialogProvider({ children }: { children: ReactNode }) {
               {dialog.kind === "confirm" && dialog.options.requireText && (
                 <div className="mt-4 w-full">
                   <p className="mb-1.5 text-xs font-semibold text-stone-500">
-                    Confirm ke liye <b className="text-stone-800">{dialog.options.requireText}</b> likhein
+                    {t("shared_typeToConfirm", { text: dialog.options.requireText })}
                   </p>
                   <input
                     ref={inputRef}
@@ -176,7 +172,7 @@ export default function DialogProvider({ children }: { children: ReactNode }) {
                     )}
                   </div>
                   {dialog.options.max !== undefined && (
-                    <p className="mt-1.5 text-xs text-stone-400">Zyada se zyada: {dialog.options.max}</p>
+                    <p className="mt-1.5 text-xs text-stone-400">{t("shared_maximum", { max: dialog.options.max })}</p>
                   )}
                 </div>
               )}
@@ -184,10 +180,10 @@ export default function DialogProvider({ children }: { children: ReactNode }) {
 
             <div className="flex gap-3 px-6 pb-6 pt-5">
               <button type="button" onClick={() => close(dialog.kind === "confirm" ? false : null)} className="btn-ghost flex-1">
-                {(dialog.kind === "confirm" && dialog.options.cancelLabel) || "Cancel"}
+                {(dialog.kind === "confirm" && dialog.options.cancelLabel) || t("cancel")}
               </button>
               <button type="submit" disabled={confirmDisabled} className={`btn-primary flex-1 ${styles.button}`}>
-                {dialog.options.confirmLabel || (dialog.kind === "confirm" ? "Confirm" : "OK")}
+                {dialog.options.confirmLabel || (dialog.kind === "confirm" ? t("shared_confirm") : t("shared_ok"))}
               </button>
             </div>
           </form>

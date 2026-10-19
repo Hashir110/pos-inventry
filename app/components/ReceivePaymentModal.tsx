@@ -4,15 +4,14 @@ import { useEffect, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { toast } from "react-toastify";
 import { useStore } from "../store/useStore";
+import { useLanguage } from "../store/useLanguage";
 import { formatMoney } from "../lib/format";
 import { receivePayment } from "../lib/services/customers";
 import type { Customer, CustomerPayment } from "../types";
 
 interface ReceivePaymentModalProps {
-  /** null = band. Customer dene par wasooli form khulta hai */
   customer: Customer | null;
   onClose: () => void;
-  /** Wasooli save hone ke baad (list / balance refresh ke liye) */
   onSuccess: () => void;
 }
 
@@ -24,16 +23,15 @@ interface PrintData {
   date: string;
 }
 
-/** Wasooli entry form + receipt voucher. Udhar list aur customer detail dono mein use hota hai */
 export default function ReceivePaymentModal({ customer, onClose, onSuccess }: ReceivePaymentModalProps) {
   const { currentUser } = useStore();
+  const { t } = useLanguage();
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<CustomerPayment["method"]>("Cash");
   const [note, setNote] = useState("");
   const [paying, setPaying] = useState(false);
   const [receipt, setReceipt] = useState<PrintData | null>(null);
 
-  // Naya customer khulte hi form reset, amount = poora baqi
   useEffect(() => {
     if (customer) {
       setAmount(String(customer.balance));
@@ -49,7 +47,7 @@ export default function ReceivePaymentModal({ customer, onClose, onSuccess }: Re
     const amt = parseFloat(amount);
     try {
       await receivePayment(currentUser.uid, customer.id, amt, method, note);
-      toast.success(`Rs. ${amount} wasool ho gaye`);
+      toast.success(t("receivePay_success", { amount }));
       setReceipt({
         customerName: customer.name,
         amount: amt,
@@ -60,7 +58,7 @@ export default function ReceivePaymentModal({ customer, onClose, onSuccess }: Re
       onClose();
       onSuccess();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Payment save nahi hui");
+      toast.error(error instanceof Error ? error.message : t("receivePay_failed"));
     } finally {
       setPaying(false);
     }
@@ -74,7 +72,7 @@ export default function ReceivePaymentModal({ customer, onClose, onSuccess }: Re
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-lg font-bold text-stone-800">{customer.name}</h3>
-                <p className="text-sm text-stone-500">Baqi udhar: {formatMoney(customer.balance)}</p>
+                <p className="text-sm text-stone-500">{t("receivePay_creditBalance", { amount: formatMoney(customer.balance) })}</p>
               </div>
               <button type="button" onClick={onClose} className="p-1 text-stone-400 hover:text-stone-700">
                 <X size={20} />
@@ -82,7 +80,7 @@ export default function ReceivePaymentModal({ customer, onClose, onSuccess }: Re
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-stone-500 mb-1 block">Wasool hui raqam (Rs.)</label>
+              <label className="text-xs font-semibold text-stone-500 mb-1 block">{t("receivePay_amountLabel")}</label>
               <input
                 type="number"
                 required
@@ -106,7 +104,7 @@ export default function ReceivePaymentModal({ customer, onClose, onSuccess }: Re
                     method === m ? "bg-brand-50 border-brand-500 text-brand-700" : "bg-white text-stone-500"
                   }`}
                 >
-                  {m === "Cash" ? "Cash" : "Bank / Online"}
+                  {m === "Cash" ? t("cash") : t("bankOnline")}
                 </button>
               ))}
             </div>
@@ -114,7 +112,7 @@ export default function ReceivePaymentModal({ customer, onClose, onSuccess }: Re
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Note (optional)"
+              placeholder={t("receivePay_notePlaceholder")}
               className="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500"
             />
 
@@ -123,7 +121,7 @@ export default function ReceivePaymentModal({ customer, onClose, onSuccess }: Re
               disabled={paying}
               className="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold disabled:opacity-50 min-h-[48px] flex items-center justify-center"
             >
-              {paying ? <Loader2 className="animate-spin text-white" size={20} /> : "Wasooli Save Karein"}
+              {paying ? <Loader2 className="animate-spin text-white" size={20} /> : t("receivePay_save")}
             </button>
           </form>
         </div>
@@ -133,32 +131,32 @@ export default function ReceivePaymentModal({ customer, onClose, onSuccess }: Re
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-pop w-full max-w-sm overflow-hidden">
             <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-emerald-50">
-              <h3 className="font-extrabold text-emerald-900 text-sm">Wasooli Receipt Voucher</h3>
+              <h3 className="font-extrabold text-emerald-900 text-sm">{t("receivePay_voucher")}</h3>
               <button onClick={() => setReceipt(null)} className="rounded-lg p-1 text-stone-400 hover:bg-stone-200">
                 <X size={18} />
               </button>
             </div>
             <div className="p-6 text-center space-y-4" id="wasooli-receipt">
               <div className="border-b pb-3">
-                <h2 className="font-black text-lg text-stone-900 uppercase tracking-wide">WASOOLI RECEIPT</h2>
+                <h2 className="font-black text-lg text-stone-900 uppercase tracking-wide">{t("receivePay_receiptTitle")}</h2>
                 <p className="text-xs text-stone-500 font-bold">
-                  Date: {new Date(receipt.date).toLocaleDateString()}
+                  {t("receivePay_date", { date: new Date(receipt.date).toLocaleDateString() })}
                 </p>
               </div>
 
               <div className="space-y-2 text-left text-xs bg-stone-50 p-4 rounded-xl border border-stone-200">
-                <p><span className="font-bold text-stone-500">Party Name:</span> <b className="text-stone-900 text-sm">{receipt.customerName}</b></p>
-                <p><span className="font-bold text-stone-500">Amount Received:</span> <b className="text-emerald-700 text-base">Rs. {receipt.amount.toLocaleString()}</b></p>
-                <p><span className="font-bold text-stone-500">Payment Mode:</span> <b className="text-stone-800">{receipt.method}</b></p>
-                {receipt.note && <p><span className="font-bold text-stone-500">Note:</span> {receipt.note}</p>}
+                <p><span className="font-bold text-stone-500">{t("receivePay_partyName")}</span> <b className="text-stone-900 text-sm">{receipt.customerName}</b></p>
+                <p><span className="font-bold text-stone-500">{t("receivePay_amountReceived")}</span> <b className="text-emerald-700 text-base">Rs. {receipt.amount.toLocaleString()}</b></p>
+                <p><span className="font-bold text-stone-500">{t("receivePay_paymentMode")}</span> <b className="text-stone-800">{receipt.method === "Cash" ? t("cash") : t("bankOnline")}</b></p>
+                {receipt.note && <p><span className="font-bold text-stone-500">{t("receivePay_note")}</span> {receipt.note}</p>}
               </div>
 
               <div className="flex gap-2 pt-2">
                 <button onClick={() => setReceipt(null)} className="btn-ghost flex-1 text-xs">
-                  Close
+                  {t("receivePay_close")}
                 </button>
                 <button onClick={() => window.print()} className="btn-primary flex-1 text-xs font-bold">
-                  Print Receipt
+                  {t("receivePay_print")}
                 </button>
               </div>
             </div>

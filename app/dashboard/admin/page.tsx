@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Calendar, DollarSign, Filter, Loader2, Lock, TrendingUp, Truck, Wallet } from "lucide-react";
 import { toast } from "react-toastify";
 import { useStore } from "../../store/useStore";
+import { useLanguage } from "../../store/useLanguage";
 import PageHeader from "../../components/PageHeader";
 import StatCard from "../../components/StatCard";
 import DataTable from "../../components/DataTable";
@@ -21,6 +22,7 @@ const signed = (n: number) => `${n < 0 ? "− " : ""}${formatMoney(Math.abs(n))}
 export default function AdminPage() {
   const router = useRouter();
   const { currentUser } = useStore();
+  const { t } = useLanguage();
 
   const [unlocked, setUnlocked] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -61,12 +63,12 @@ export default function AdminPage() {
         setSupplierPayments(sp.filter((p) => inRange(p.date)));
       } catch (error) {
         console.error(error);
-        toast.error("Data load nahi hua");
+        toast.error(t("admin_loadFailed"));
       } finally {
         setLoading(false);
       }
     },
-    [currentUser, startDate, endDate]
+    [currentUser, startDate, endDate, t]
   );
 
   useEffect(() => {
@@ -103,8 +105,8 @@ export default function AdminPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Admin"
-        subtitle="Sales, profit aur hisaab ka poora khulasa"
+        title={t("admin_title")}
+        subtitle={t("admin_subtitle")}
         actions={
           <>
             <div className="flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-1.5 shadow-card">
@@ -124,42 +126,50 @@ export default function AdminPage() {
               />
             </div>
             <button onClick={() => load(true)} className="btn-dark !py-2.5">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Filter size={15} />} Apply
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Filter size={15} />} {t("apply")}
             </button>
             <button onClick={lock} className="btn-ghost !py-2.5">
-              <Lock size={15} /> Lock
+              <Lock size={15} /> {t("admin_lock")}
             </button>
           </>
         }
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="POS Sales" value={formatMoney(totals.posSales)} subtitle="Refund ke baad" icon={DollarSign} theme="blue" loading={loading} />
-        <StatCard title="Gross Profit" value={signed(totals.grossProfit)} subtitle="(Selling − Buying) × bika qty" icon={TrendingUp} theme="green" loading={loading} />
-        <StatCard title="Expenses" value={formatMoney(totals.expenseSum)} subtitle="Total kharche" icon={Wallet} theme="red" loading={loading} />
-        <StatCard title="Net Profit" value={signed(totals.netProfit)} subtitle="Gross Profit − Expenses" icon={TrendingUp} theme="purple" loading={loading} />
+        <StatCard title={t("admin_posSales")} value={formatMoney(totals.posSales)} subtitle={t("afterRefunds")} icon={DollarSign} theme="blue" loading={loading} />
+        <StatCard title={t("admin_grossProfit")} value={signed(totals.grossProfit)} subtitle={t("admin_grossHint")} icon={TrendingUp} theme="green" loading={loading} />
+        <StatCard title={t("expenses")} value={formatMoney(totals.expenseSum)} subtitle={t("totalExpenses")} icon={Wallet} theme="red" loading={loading} />
+        <StatCard title={t("netProfit")} value={signed(totals.netProfit)} subtitle={t("admin_netHint")} icon={TrendingUp} theme="purple" loading={loading} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <StatCard title="Supplier ko diye" value={formatMoney(totals.jamad)} subtitle="Jamad" icon={Truck} theme="red" loading={loading} />
-        <StatCard title="Baqi" value={signed(totals.baqi)} subtitle="POS Sales − Supplier payment" icon={Wallet} theme="green" loading={loading} />
+        <StatCard title={t("admin_paidSuppliers")} value={formatMoney(totals.jamad)} subtitle={t("admin_paidOut")} icon={Truck} theme="red" loading={loading} />
+        <StatCard title={t("admin_balance")} value={signed(totals.baqi)} subtitle={t("admin_balanceHint")} icon={Wallet} theme="green" loading={loading} />
       </div>
 
       <DataTable
         data={sales}
         rowKey={(s) => s.id}
         loading={loading}
-        emptyText="Is period mein koi bill nahi."
-        toolbarLeft={<h3 className="text-base font-bold text-stone-900">Bill-wise Profit ({sales.length})</h3>}
+        emptyText={t("admin_noBills")}
+        toolbarLeft={<h3 className="text-base font-bold text-stone-900">{t("admin_billProfit", { count: sales.length })}</h3>}
         columns={[
-          { key: "date", header: "Date", className: "whitespace-nowrap", cell: (s) => <span className="text-stone-500">{formatDate(s.date)}</span> },
-          { key: "inv", header: "Invoice", cell: (s) => <span className="font-mono text-xs font-bold text-brand-700">#{s.invoiceNo || "-"}</span> },
-          { key: "cust", header: "Customer", cell: (s) => <span className="font-semibold text-stone-800">{customerLabel(s.customerName)}</span> },
-          { key: "pay", header: "Payment", cell: (s) => <span className="text-stone-600">{s.paymentMethod === "Bank Account" ? "Bank" : s.paymentMethod || "Cash"}</span> },
-          { key: "amount", header: "Amount", align: "right", cell: (s) => <span className="tabular font-bold">{formatMoney(saleNetAmount(s))}</span> },
+          { key: "date", header: t("date"), className: "whitespace-nowrap", cell: (s) => <span className="text-stone-500">{formatDate(s.date)}</span> },
+          { key: "inv", header: t("admin_colInvoice"), cell: (s) => <span className="font-mono text-xs font-bold text-brand-700">#{s.invoiceNo || "-"}</span> },
+          { key: "cust", header: t("customer"), cell: (s) => <span className="font-semibold text-stone-800">{customerLabel(s.customerName)}</span> },
+          {
+            key: "pay",
+            header: t("admin_colPayment"),
+            cell: (s) => (
+              <span className="text-stone-600">
+                {s.paymentMethod === "Bank Account" ? t("admin_payBank") : s.paymentMethod === "Udhar" ? t("admin_payCredit") : t("cash")}
+              </span>
+            ),
+          },
+          { key: "amount", header: t("amount"), align: "right", cell: (s) => <span className="tabular font-bold">{formatMoney(saleNetAmount(s))}</span> },
           {
             key: "profit",
-            header: "Profit",
+            header: t("admin_colProfit"),
             align: "right",
             cell: (s) => {
               const p = saleProfit(s);

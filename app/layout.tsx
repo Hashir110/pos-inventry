@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import ToastProvider from "./components/ToastProvider";
 import DialogProvider from "./components/DialogProvider";
+import ModalScrollLock from "./components/ModalScrollLock";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 import { Nunito, Poppins } from "next/font/google";
 import "./globals.css";
@@ -39,6 +40,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${nunito.variable} ${poppins.variable} font-sans antialiased`}>
         <ToastProvider />
+        <ModalScrollLock />
         <ServiceWorkerRegister />
         <DialogProvider>{children}</DialogProvider>
       </body>

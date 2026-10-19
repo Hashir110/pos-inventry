@@ -16,16 +16,16 @@ export default function AddProductPage() {
 
   const handleSubmit = async (values: ProductInput) => {
     if (!currentUser) {
-      toast.error("User missing");
+      toast.error(t("inv_userMissing"));
       return;
     }
     try {
       await addProduct(currentUser.uid, values);
-      toast.success("Product Added Successfully!");
+      toast.success(t("inv_added"));
       router.push("/dashboard/inventry");
     } catch (error) {
       console.error(error);
-      toast.error("Error: " + (error instanceof Error ? error.message : "save failed"));
+      toast.error(t("inv_errorPrefix", { message: error instanceof Error ? error.message : t("inv_saveFailed") }));
     }
   };
 

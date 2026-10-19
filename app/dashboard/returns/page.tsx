@@ -10,9 +10,17 @@ import DataTable from "../../components/DataTable";
 import { useStore } from '../../store/useStore';
 import { findSaleByInvoice, getSaleById } from '../../lib/services/sales';
 import { processReturn } from '../../lib/services/returns';
+import { useLanguage } from '../../store/useLanguage';
 
 export default function ReturnsPage() {
   const { promptNumber } = useDialog();
+  const { t } = useLanguage();
+  const paymentLabel = (method?: string) => {
+    if (method === "Bank Account") return t("returns_payBank");
+    if (method === "Udhar") return t("returns_payCredit");
+    if (!method || method === "Cash") return t("returns_payCash");
+    return method;
+  };
     const [invoiceId, setInvoiceId] = useState('');
     const [isDesModalOpen, setIsDesModalOpen] = useState(false);
     const [selectedDescription, setSelectedDescription] = useState("");
@@ -30,13 +38,13 @@ export default function ReturnsPage() {
             const sale = await findSaleByInvoice(currentUser.uid, invoiceId);
             if (sale) {
                 setSaleData(sale);
-                toast.success("Invoice Found!");
+                toast.success(t("returns_invoiceFound"));
             } else {
-                toast.error("Invoice not found!");
+                toast.error(t("returns_invoiceNotFound"));
             }
         } catch (error) {
             console.error(error);
-            toast.error("Error searching invoice");
+            toast.error(t("returns_searchError"));
         }
         setLoading(false);
     };
@@ -45,38 +53,38 @@ export default function ReturnsPage() {
         if (!saleData) return;
         const availableToReturn = item.qty - (item.returnedQty || 0);
         const returnQty = await promptNumber({
-            title: "Kitna wapas lena hai?",
+            title: t("returns_promptTitle"),
             message: item.name,
             max: availableToReturn,
             defaultValue: availableToReturn,
-            confirmLabel: "Wapas Lein",
+            confirmLabel: t("returns_returnBtn"),
         });
         if (returnQty === null) return;
 
         try {
             setLoading(true);
             await processReturn(saleData.id, index, item.id, returnQty);
-            toast.success(`Returned ${returnQty} x ${item.name} Successfully!`);
+            toast.success(t("returns_success", { qty: returnQty, name: item.name }));
 
             const updated = await getSaleById(saleData.id);
             if (updated) setSaleData(updated);
         } catch (error) {
             console.error("Return Error:", error);
-            toast.error("Return Failed: " + (error instanceof Error ? error.message : "unknown error"));
+            toast.error(t("returns_failed", { message: error instanceof Error ? error.message : t("returns_unknownError") }));
         } finally {
             setLoading(false);
         }
     };
     return (
         <div>
-            <PageHeader title="Returns" subtitle="Invoice number se bill dhoondein aur item wapas lein" />
+            <PageHeader title={t("returns_title")} subtitle={t("returns_subtitle")} />
 
             <form onSubmit={handleSearch} className="card mb-6 flex flex-col gap-3 p-4 sm:flex-row">
                 <div className="relative flex-1">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" size={18} />
                     <input
                         type="text"
-                        placeholder="Invoice number"
+                        placeholder={t("returns_invoicePlaceholder")}
                         className="field pl-11"
                         value={invoiceId}
                         onChange={(e) => setInvoiceId(e.target.value)}
@@ -86,14 +94,14 @@ export default function ReturnsPage() {
                     disabled={loading}
                     className="btn-primary sm:w-40 flex items-center justify-center min-h-[42px]"
                 >
-                    {loading ? <Loader2 size={18} className="animate-spin text-white" /> : "Bill dhoondein"}
+                    {loading ? <Loader2 size={18} className="animate-spin text-white" /> : t("returns_findBill")}
                 </button>
             </form>
 
             {!saleData && (
                 <div className="card flex flex-col items-center p-12 text-center text-stone-400">
                     <RotateCcw size={36} className="mb-3 text-stone-300" />
-                    <p className="text-sm font-medium">Upar invoice number likh kar bill kholein</p>
+                    <p className="text-sm font-medium">{t("returns_emptyPrompt")}</p>
                 </div>
             )}
 
@@ -105,10 +113,10 @@ export default function ReturnsPage() {
                     header={
                         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Invoice</p>
+                                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">{t("returns_invoice")}</p>
                                 <p className="font-mono text-xl font-extrabold text-brand-700">#{saleData.invoiceNo}</p>
                                 <p className="mt-1 text-sm text-stone-500">
-                                    {customerLabel(saleData.customerName)} • {saleData.paymentMethod || "Cash"}
+                                    {customerLabel(saleData.customerName)} • {paymentLabel(saleData.paymentMethod)}
                                 </p>
                                 {saleData.description && (
                                     <button
@@ -118,37 +126,37 @@ export default function ReturnsPage() {
                                         }}
                                         className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-600 hover:bg-stone-200"
                                     >
-                                        <Eye size={13} /> Note dekhein
+                                        <Eye size={13} /> {t("returns_viewNote")}
                                     </button>
                                 )}
                             </div>
                             <div className="sm:text-right">
-                                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">Date</p>
+                                <p className="text-[11px] font-bold uppercase tracking-widest text-stone-400">{t("date")}</p>
                                 <p className="font-semibold text-stone-800">{new Date(saleData.date).toLocaleDateString()}</p>
                                 <p className="mt-1 text-sm text-stone-500">
-                                    Total Rs. {Math.round(saleData.totalAmount).toLocaleString()}
+                                    {t("returns_total", { amount: Math.round(saleData.totalAmount).toLocaleString() })}
                                     {(saleData.refundedAmount || 0) > 0 && (
-                                        <span className="text-red-600"> • Refund Rs. {Math.round(saleData.refundedAmount || 0).toLocaleString()}</span>
+                                        <span className="text-red-600"> • {t("returns_refund", { amount: Math.round(saleData.refundedAmount || 0).toLocaleString() })}</span>
                                     )}
                                 </p>
                             </div>
                         </div>
                     }
                     columns={[
-                        { key: "name", header: "Item", cell: ({ item }) => <span className="font-semibold text-stone-900">{item.name}</span> },
+                        { key: "name", header: t("returns_colItem"), cell: ({ item }) => <span className="font-semibold text-stone-900">{item.name}</span> },
                         {
                             key: "qty",
-                            header: "Qty (Bags)",
+                            header: t("returns_colQty"),
                             align: "center",
                             cell: ({ item }) => (
                                 <span className="font-medium text-stone-800">
-                                    {item.type === "weight" ? `${String(item.qty).padStart(2, "0")} Bags` : `${item.qty} pcs`}
+                                    {item.type === "weight" ? `${String(item.qty).padStart(2, "0")} ${t("inv_bags")}` : `${item.qty} ${t("inv_pcs")}`}
                                 </span>
                             ),
                         },
                         {
                             key: "weight",
-                            header: "Total Weight",
+                            header: t("returns_colWeight"),
                             align: "center",
                             cell: ({ item }) => {
                                 const isWeight = item.type === "weight";
@@ -156,23 +164,23 @@ export default function ReturnsPage() {
                                 return <span className="font-bold text-stone-900">{weightVal !== undefined ? `${weightVal} kg` : "—"}</span>;
                             },
                         },
-                        { key: "price", header: "Price", align: "right", cell: ({ item }) => <span className="text-stone-600">Rs. {item.price}</span> },
+                        { key: "price", header: t("price"), align: "right", cell: ({ item }) => <span className="text-stone-600">Rs. {item.price}</span> },
                         {
                             key: "returned",
-                            header: "Wapas",
+                            header: t("returns_colReturned"),
                             align: "center",
                             cell: ({ item }) => {
                                 const alreadyReturned = item.returnedQty || 0;
                                 return (
                                     <span className="font-bold text-red-600">
-                                        {alreadyReturned > 0 ? (item.type === "weight" ? `${alreadyReturned} Bags` : alreadyReturned) : "—"}
+                                        {alreadyReturned > 0 ? (item.type === "weight" ? `${alreadyReturned} ${t("inv_bags")}` : alreadyReturned) : "—"}
                                     </span>
                                 );
                             },
                         },
                         {
                             key: "action",
-                            header: "Action",
+                            header: t("action"),
                             align: "right",
                             cell: ({ item, index }) =>
                                 item.qty - (item.returnedQty || 0) > 0 ? (
@@ -181,11 +189,11 @@ export default function ReturnsPage() {
                                         disabled={loading}
                                         className="btn-danger !px-3.5 !py-1.5 !text-xs"
                                     >
-                                        Wapas lein
+                                        {t("returns_returnBtn")}
                                     </button>
                                 ) : (
                                     <span className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-semibold text-stone-500">
-                                        Poora wapas
+                                        {t("returns_fullyReturned")}
                                     </span>
                                 ),
                         },
@@ -199,7 +207,7 @@ export default function ReturnsPage() {
                         <div className="flex items-center justify-between border-b border-stone-200 p-4">
                             <h3 className="flex items-center gap-2 font-extrabold text-stone-900">
                                 <FileText size={18} className="text-brand-600" />
-                                Sale ka Note
+                                {t("returns_saleNote")}
                             </h3>
                             <button onClick={() => setIsDesModalOpen(false)} className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700">
                                 <X size={20} />
@@ -208,11 +216,11 @@ export default function ReturnsPage() {
                         <div className="p-5">
                             <div className="max-h-[300px] min-h-[100px] overflow-y-auto rounded-xl border border-stone-200 bg-stone-50 p-4">
                                 <p className="whitespace-pre-wrap text-sm leading-relaxed text-stone-700">
-                                    {selectedDescription || "Is sale par koi note nahi."}
+                                    {selectedDescription || t("returns_noNote")}
                                 </p>
                             </div>
                             <button onClick={() => setIsDesModalOpen(false)} className="btn-dark mt-5 w-full !py-3">
-                                Band karein
+                                {t("returns_close")}
                             </button>
                         </div>
                     </div>

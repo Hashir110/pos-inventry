@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import DataTable from "../../components/DataTable";
 import Link from "next/link";
-import { Eye, Loader2, Pencil, Plus, Printer, Search, ShoppingBag, TrendingUp, X } from "lucide-react";
+import { Eye, Loader2, Pencil, Plus, Printer, RefreshCw, Search, ShoppingBag, TrendingUp, X } from "lucide-react";
 import { toast } from "react-toastify";
 import { listRecentSales, updateSaleItems } from "../../lib/services/sales";
+
 import SaleReceipt from "../../components/SaleReceipt";
 import { saleNetAmount } from "../../lib/calc";
 import { customerLabel, isCounterSale } from "../../lib/format";
@@ -13,6 +14,7 @@ import StatCard from "../../components/StatCard";
 import PageHeader from "../../components/PageHeader";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
+import type { TranslationKey } from "../../lib/i18n/translations";
 import type { Sale } from "../../types";
 
 type SaleRow = Sale;
@@ -30,18 +32,20 @@ const money = (n: number) => `Rs. ${Math.round(n || 0).toLocaleString()}`;
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
-const methodLabel = (m?: string) => (m === "Bank Account" ? "Bank" : m || "Cash");
-
-/** Bill ki halat: poora / kuch wapas / sab wapas */
-const saleStatus = (sale: Sale) => {
-  const refunded = sale.refundedAmount || 0;
-  const allReturned = sale.items?.length > 0 && sale.items.every((i) => (i.returnedQty || 0) >= i.qty);
-  if (allReturned) return { label: "Returned", tone: "bg-red-100 text-red-700" };
-  if (refunded > 0) return { label: "Partial Return", tone: "bg-amber-100 text-amber-800" };
-  return { label: "Completed", tone: "bg-emerald-100 text-emerald-700" };
+const methodLabelKey = (m?: string): TranslationKey => {
+  if (m === "Bank Account") return "sales_methodBank";
+  if (m === "Udhar") return "sales_payCredit";
+  return "cash";
 };
 
-/** Udhar bill par abhi raqam baqi hai; baqi sab paid */
+const saleStatus = (sale: Sale): { labelKey: TranslationKey; tone: string } => {
+  const refunded = sale.refundedAmount || 0;
+  const allReturned = sale.items?.length > 0 && sale.items.every((i) => (i.returnedQty || 0) >= i.qty);
+  if (allReturned) return { labelKey: "sales_statusReturned", tone: "bg-red-100 text-red-700" };
+  if (refunded > 0) return { labelKey: "sales_statusPartial", tone: "bg-amber-100 text-amber-800" };
+  return { labelKey: "sales_statusCompleted", tone: "bg-emerald-100 text-emerald-700" };
+};
+
 const paymentInfo = (sale: Sale) => {
   const net = saleNetAmount(sale);
   const isUdhar = sale.paymentMethod === "Udhar";
@@ -50,7 +54,7 @@ const paymentInfo = (sale: Sale) => {
     paid: isUdhar ? 0 : net,
     due: isUdhar ? net : 0,
     badge: isUdhar ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700",
-    label: isUdhar ? "Due" : "Paid",
+    labelKey: (isUdhar ? "due" : "paid") as TranslationKey,
   };
 };
 
@@ -129,29 +133,36 @@ export default function SalesHistoryPage() {
       setSelectedSale(null);
       setDraft(null);
       setReceiptSale(updated);
-      toast.success("Bill update ho gaya");
+      toast.success(t("sales_billUpdated"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Bill update nahi hua");
+      toast.error(error instanceof Error ? error.message : t("sales_billUpdateFailed"));
     } finally {
       setSaving(false);
     }
   };
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchSales = useCallback(async (force = false) => {
+    if (!currentUser) return;
+    if (force) setRefreshing(true);
+    try {
+      const recent = await listRecentSales(currentUser.uid, 50, force);
+      setSales(recent);
+      if (force) toast.success("Sales updated");
+
+    } catch (error) {
+      console.error("Error fetching sales:", error);
+      toast.error(t("sales_loadFailed"));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [currentUser, t]);
+
   useEffect(() => {
-    const fetchSales = async () => {
-      if (!currentUser) return;
-      try {
-        const recent = await listRecentSales(currentUser.uid, 50);
-        setSales(recent);
-      } catch (error) {
-        console.error("Error fetching sales:", error);
-        toast.error("Sales load nahi hui");
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchSales();
-  }, [currentUser]);
+  }, [fetchSales]);
 
   const stats = useMemo(
     () => ({
@@ -184,13 +195,24 @@ export default function SalesHistoryPage() {
         title={t("salesHistory")}
         subtitle={t("viewPastSales")}
         actions={
-          <Link href="/dashboard/pos" className="btn-primary">
-            <Plus size={18} /> {t("newSale")}
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchSales(true)}
+              disabled={refreshing}
+              className="btn-secondary flex items-center gap-1.5"
+              title="Refresh from server"
+            >
+              <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+            <Link href="/dashboard/pos" className="btn-primary">
+              <Plus size={18} /> {t("newSale")}
+            </Link>
+          </div>
         }
       />
 
-      {/* Stats */}
+
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
         <StatCard
           title={t("totalSales")}
@@ -210,12 +232,11 @@ export default function SalesHistoryPage() {
         />
       </div>
 
-      {/* Table card */}
       <DataTable
         data={visibleSales}
         rowKey={(sale) => sale.id}
         loading={loading}
-        emptyText="Koi bill nahi mila."
+        emptyText={t("sales_noBills")}
         toolbarLeft={
           <div className="relative w-full lg:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
@@ -238,7 +259,7 @@ export default function SalesHistoryPage() {
               <option value="all">{t("allPayments")}</option>
               <option value="Cash">{t("cash")}</option>
               <option value="Bank Account">{t("bankOnline")}</option>
-              <option value="Udhar">{t("udhar")}</option>
+              <option value="Udhar">{t("sales_payCredit")}</option>
             </select>
             <select
               value={sortKey}
@@ -246,8 +267,8 @@ export default function SalesHistoryPage() {
               className="field w-auto cursor-pointer"
             >
               <option value="new">{t("sortNewest")}</option>
-              <option value="old">Sort: Oldest</option>
-              <option value="high">Sort: Highest Amount</option>
+              <option value="old">{t("sales_sortOldest")}</option>
+              <option value="high">{t("sales_sortHighest")}</option>
             </select>
           </>
         }
@@ -267,14 +288,28 @@ export default function SalesHistoryPage() {
               );
             },
           },
-          { key: "inv", header: t("invoices"), cell: (sale) => <span className="font-mono text-xs font-bold uppercase text-brand-700">#{sale.invoiceNo || "-"}</span> },
+          {
+            key: "inv",
+            header: t("invoices"),
+            cell: (sale) => (
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-xs font-bold uppercase text-brand-700">#{sale.invoiceNo || "-"}</span>
+                {(sale.isOffline || sale.id.startsWith("local_")) && (
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800">
+                    Offline
+                  </span>
+                )}
+              </div>
+            ),
+          },
+
           { key: "date", header: t("date"), className: "whitespace-nowrap", cell: (sale) => <span className="text-stone-600">{formatDate(sale.date)}</span> },
           {
             key: "status",
             header: t("status"),
             cell: (sale) => {
               const status = saleStatus(sale);
-              return <span className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${status.tone}`}>{status.label}</span>;
+              return <span className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${status.tone}`}>{t(status.labelKey)}</span>;
             },
           },
           { key: "total", header: t("grandTotal"), align: "right", cell: (sale) => <span className="font-extrabold text-stone-900">{money(saleNetAmount(sale))}</span> },
@@ -295,21 +330,21 @@ export default function SalesHistoryPage() {
               const pay = paymentInfo(sale);
               return (
                 <div className="flex flex-col items-start gap-1">
-                  <span className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${pay.badge}`}>● {pay.label}</span>
-                  <span className="text-[11px] font-semibold text-stone-400">{methodLabel(sale.paymentMethod)}</span>
+                  <span className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${pay.badge}`}>● {t(pay.labelKey)}</span>
+                  <span className="text-[11px] font-semibold text-stone-400">{t(methodLabelKey(sale.paymentMethod))}</span>
                 </div>
               );
             },
           },
           {
             key: "actions",
-            header: "",
+            header: t("sales_viewSlip"),
             align: "right",
             cell: (sale) => (
               <button
                 onClick={() => setSelectedSale(sale)}
                 className="rounded-lg p-2 text-stone-500 transition hover:bg-brand-50 hover:text-brand-700"
-                title="Bill dekhein"
+                title={t("sales_viewBill")}
               >
                 <Eye size={18} />
               </button>
@@ -318,7 +353,6 @@ export default function SalesHistoryPage() {
         ]}
       />
 
-      {/* --- Sales Detail --- */}
       {selectedSale && (() => {
         const sale = selectedSale;
         const status = saleStatus(sale);
@@ -333,7 +367,7 @@ export default function SalesHistoryPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
             <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-pop">
               <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
-                <h3 className="text-lg font-bold text-stone-900">Sales Detail</h3>
+                <h3 className="text-lg font-bold text-stone-900">{t("sales_detailTitle")}</h3>
                 <button
                   onClick={closeDetail}
                   className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
@@ -345,62 +379,62 @@ export default function SalesHistoryPage() {
               <div className="flex-1 overflow-y-auto px-6 py-5">
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                   <div>
-                    <h4 className="mb-2 text-sm font-bold text-stone-900">Customer Info</h4>
+                    <h4 className="mb-2 text-sm font-bold text-stone-900">{t("sales_customerInfo")}</h4>
                     <p className="text-lg font-bold text-stone-900">{customerLabel(sale.customerName)}</p>
                     {sale.description && (
-                      <p className="mt-1 text-sm text-stone-500">Note: {sale.description}</p>
+                      <p className="mt-1 text-sm text-stone-500">{t("sales_noteLine", { note: sale.description })}</p>
                     )}
                   </div>
 
                   <div>
-                    <h4 className="mb-2 text-sm font-bold text-stone-900">Shop Info</h4>
+                    <h4 className="mb-2 text-sm font-bold text-stone-900">{t("sales_shopInfo")}</h4>
                     <p className="text-lg font-bold text-stone-900">{currentShop?.shopName || "—"}</p>
                     <div className="mt-1 space-y-0.5 text-sm text-stone-500">
                       {currentShop?.address && <p>{currentShop.address}</p>}
-                      {currentShop?.contact && <p>Phone: {currentShop.contact}</p>}
+                      {currentShop?.contact && <p>{t("sales_phoneLine", { phone: currentShop.contact })}</p>}
                       {currentShop?.email && <p>{currentShop.email}</p>}
                     </div>
                   </div>
 
                   <div>
-                    <h4 className="mb-2 text-sm font-bold text-stone-900">Invoice Info</h4>
+                    <h4 className="mb-2 text-sm font-bold text-stone-900">{t("sales_invoiceInfo")}</h4>
                     <dl className="space-y-1.5 text-sm">
                       <div className="flex gap-3">
-                        <dt className="w-28 shrink-0 text-stone-500">Invoice</dt>
+                        <dt className="w-28 shrink-0 text-stone-500">{t("sales_invoice")}</dt>
                         <dd className="font-mono font-bold text-brand-700">#{sale.invoiceNo}</dd>
                       </div>
                       <div className="flex gap-3">
-                        <dt className="w-28 shrink-0 text-stone-500">Date</dt>
+                        <dt className="w-28 shrink-0 text-stone-500">{t("date")}</dt>
                         <dd className="font-semibold text-stone-800">{formatDate(sale.date)}</dd>
                       </div>
                       <div className="flex items-center gap-3">
-                        <dt className="w-28 shrink-0 text-stone-500">Status</dt>
+                        <dt className="w-28 shrink-0 text-stone-500">{t("status")}</dt>
                         <dd>
-                          <span className={`rounded-md px-2.5 py-0.5 text-[11px] font-bold ${status.tone}`}>{status.label}</span>
+                          <span className={`rounded-md px-2.5 py-0.5 text-[11px] font-bold ${status.tone}`}>{t(status.labelKey)}</span>
                         </dd>
                       </div>
                       <div className="flex items-center gap-3">
-                        <dt className="w-28 shrink-0 text-stone-500">Payment Status</dt>
+                        <dt className="w-28 shrink-0 text-stone-500">{t("sales_paymentStatus")}</dt>
                         <dd>
-                          <span className={`rounded-md px-2.5 py-0.5 text-[11px] font-bold ${pay.badge}`}>● {pay.label}</span>
-                          <span className="ml-2 text-xs font-semibold text-stone-400">{methodLabel(sale.paymentMethod)}</span>
+                          <span className={`rounded-md px-2.5 py-0.5 text-[11px] font-bold ${pay.badge}`}>● {t(pay.labelKey)}</span>
+                          <span className="ml-2 text-xs font-semibold text-stone-400">{t(methodLabelKey(sale.paymentMethod))}</span>
                         </dd>
                       </div>
                     </dl>
                   </div>
                 </div>
 
-                <h4 className="mb-3 mt-7 text-sm font-bold text-stone-900">Order Summary</h4>
+                <h4 className="mb-3 mt-7 text-sm font-bold text-stone-900">{t("sales_orderSummary")}</h4>
                 <div className="overflow-x-auto rounded-lg border border-stone-200">
                   <table className="w-full text-left text-sm">
                     <thead className="bg-stone-100">
                       <tr>
-                        <th className="px-4 py-3">Product</th>
-                        <th className="px-4 py-3 text-center">Qty (Bags)</th>
-                        <th className="px-4 py-3 text-center">Total Weight</th>
-                        <th className="px-4 py-3 text-right">Rate</th>
-                        <th className="px-4 py-3 text-center">Wapas</th>
-                        <th className="px-4 py-3 text-right">Total</th>
+                        <th className="px-4 py-3">{t("sales_product")}</th>
+                        <th className="px-4 py-3 text-center">{t("sales_qtyBags")}</th>
+                        <th className="px-4 py-3 text-center">{t("sales_totalWeight")}</th>
+                        <th className="px-4 py-3 text-right">{t("sales_rate")}</th>
+                        <th className="px-4 py-3 text-center">{t("sales_statusReturned")}</th>
+                        <th className="px-4 py-3 text-right">{t("total")}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
@@ -408,7 +442,7 @@ export default function SalesHistoryPage() {
                         const isWeight = item.type === "weight";
                         const weightVal = item.totalWeight ?? (isWeight ? item.qty * (item.weightPerBag || 25) : undefined);
                         const weightStr = weightVal !== undefined ? `${weightVal} kg` : "—";
-                        const qtyStr = isWeight ? `${String(item.qty).padStart(2, "0")} Bags` : `${item.qty} pcs`;
+                        const qtyStr = isWeight ? t("sales_bagsCount", { count: String(item.qty).padStart(2, "0") }) : t("sales_pcsCount", { count: item.qty });
 
                         return (
                           <tr key={idx}>
@@ -478,7 +512,7 @@ export default function SalesHistoryPage() {
                 {draft && (
                   <div className="mt-5 flex items-center justify-end gap-3">
                     <label htmlFor="edit-extra" className="text-sm font-bold text-stone-700">
-                      Extra Charges <span className="font-normal text-stone-400">(transport waghera)</span>
+                      {t("sales_extraCharges")} <span className="font-normal text-stone-400">{t("sales_extraChargesHint")}</span>
                     </label>
                     <input
                       id="edit-extra"
@@ -496,12 +530,12 @@ export default function SalesHistoryPage() {
                 <div className="mt-3 flex justify-end">
                   <dl className="w-full max-w-sm overflow-hidden rounded-lg border border-stone-200 text-sm">
                     {[
-                      { label: "Sub Total", value: money(subTotal), tone: "" },
-                      ...(draft || (sale.extraCharges ?? 0) > 0 ? [{ label: "Extra Charges", value: money(draft ? Math.max(0, parseFloat(draftExtra) || 0) : sale.extraCharges ?? 0), tone: "" }] : []),
-                      ...(refunded > 0 ? [{ label: "Refund (return)", value: `− ${money(refunded)}`, tone: "text-red-600" }] : []),
-                      { label: "Grand Total", value: money(draft ? subTotal + Math.max(0, parseFloat(draftExtra) || 0) : saleNetAmount(sale)), tone: "font-extrabold text-stone-900" },
-                      { label: "Paid", value: money(pay.paid), tone: "" },
-                      { label: "Due", value: money(pay.due), tone: pay.due > 0 ? "font-bold text-red-600" : "" },
+                      { label: t("subtotal"), value: money(subTotal), tone: "" },
+                      ...(draft || (sale.extraCharges ?? 0) > 0 ? [{ label: t("sales_extraCharges"), value: money(draft ? Math.max(0, parseFloat(draftExtra) || 0) : sale.extraCharges ?? 0), tone: "" }] : []),
+                      ...(refunded > 0 ? [{ label: t("sales_refundReturn"), value: `− ${money(refunded)}`, tone: "text-red-600" }] : []),
+                      { label: t("grandTotal"), value: money(draft ? subTotal + Math.max(0, parseFloat(draftExtra) || 0) : saleNetAmount(sale)), tone: "font-extrabold text-stone-900" },
+                      { label: t("paid"), value: money(pay.paid), tone: "" },
+                      { label: t("due"), value: money(pay.due), tone: pay.due > 0 ? "font-bold text-red-600" : "" },
                     ].map((row, i) => (
                       <div key={row.label} className={`flex justify-between px-4 py-2.5 ${i % 2 === 0 ? "bg-stone-50" : "bg-white"}`}>
                         <dt className="text-stone-500">{row.label}</dt>
@@ -513,40 +547,39 @@ export default function SalesHistoryPage() {
 
                 {pay.isUdhar && (
                   <p className="mt-3 text-right text-xs text-stone-400">
-                    Udhar ki wasooli &quot;Udhar Khata&quot; page par customer ke naam par darj hoti hai.
+                    {t("sales_creditNote")}
                   </p>
                 )}
               </div>
 
-              {/* Footer */}
               <div className="flex flex-wrap items-center justify-end gap-2 border-t border-stone-200 px-6 py-4">
                 {draft ? (
                   <>
                     <p className="mr-auto text-xs text-stone-400">
-                      Stock{pay.isUdhar ? " aur party ka udhar" : ""} farq ke hisaab se khud theek ho jayega.
+                      {pay.isUdhar ? t("sales_editNoteStockCredit") : t("sales_editNoteStock")}
                     </p>
                     <button onClick={() => setDraft(null)} disabled={saving} className="btn-ghost">
-                      Cancel
+                      {t("cancel")}
                     </button>
                     <button onClick={() => saveEdit(sale)} disabled={saving} className="btn-primary min-w-[170px]">
-                      {saving ? <Loader2 className="animate-spin" size={18} /> : <><Printer size={16} /> Save &amp; Slip</>}
+                      {saving ? <Loader2 className="animate-spin" size={18} /> : <><Printer size={16} /> {t("sales_saveSlip")}</>}
                     </button>
                   </>
                 ) : (
                   <>
                     <button onClick={() => setReceiptSale(sale)} className="btn-ghost">
-                      <Printer size={16} /> Slip
+                      <Printer size={16} /> {t("sales_slip")}
                     </button>
                     <button
                       onClick={() => startEdit(sale)}
                       disabled={hasReturns}
-                      title={hasReturns ? "Return wala bill edit nahi ho sakta" : "Bill edit karein"}
+                      title={hasReturns ? t("sales_editBlocked") : t("sales_editBill")}
                       className="btn-primary"
                     >
-                      <Pencil size={16} /> Edit Bill
+                      <Pencil size={16} /> {t("sales_editBill")}
                     </button>
                     <button onClick={closeDetail} className="btn-dark">
-                      Band karein
+                      {t("sales_close")}
                     </button>
                   </>
                 )}
@@ -568,12 +601,11 @@ export default function SalesHistoryPage() {
           total={saleNetAmount(receiptSale)}
           paymentMethod={receiptSale.paymentMethod}
           printLabel={t("printSlip")}
-          closeLabel="Band karein"
+          closeLabel={t("sales_close")}
           onClose={() => setReceiptSale(null)}
         />
       )}
 
-      {/* Password modal */}
     </div>
   );
 }

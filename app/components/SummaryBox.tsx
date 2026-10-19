@@ -1,11 +1,9 @@
 interface SummaryBoxProps {
   label: string;
   value: string | number;
-  /** amber = highlighted (e.g. receivable), default = plain white */
   tone?: "default" | "amber";
 }
 
-/** Chhota label + value box, PageHeader ke actions mein use hota hai (udhar list, customer detail) */
 export default function SummaryBox({ label, value, tone = "default" }: SummaryBoxProps) {
   const styles =
     tone === "amber"

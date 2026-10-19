@@ -21,6 +21,12 @@ html {
   font-size: 14px;
 }
 
+html.modal-open,
+html.modal-open body,
+html.modal-open main {
+  overflow: hidden !important;
+}
+
 body {
   background-color: #f7f7f7;
   color: #212b36;

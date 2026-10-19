@@ -3,11 +3,9 @@
 interface PageHeaderProps {
   title: string;
   subtitle?: string;
-  /** Right side ke buttons / filters */
   actions?: ReactNode;
 }
 
-/** Har page ka ek jaisa upar ka hissa: title + chhoti line + action buttons */
 export default function PageHeader({ title, subtitle, actions }: PageHeaderProps) {
   return (
     <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

@@ -1,6 +1,7 @@
 import { collection, doc, runTransaction } from "firebase/firestore";
 import { db } from "../firebase";
 import type { Customer, Product, Sale } from "../../types";
+import { tr } from "../i18n/translate";
 
 export const processReturn = async (
   saleId: string,
@@ -14,13 +15,13 @@ export const processReturn = async (
 
   await runTransaction(db, async (transaction) => {
     const saleSnap = await transaction.get(saleRef);
-    if (!saleSnap.exists()) throw new Error("Sale not found");
+    if (!saleSnap.exists()) throw new Error(tr("returns_err_saleNotFound"));
     const sale = saleSnap.data() as Omit<Sale, "id">;
 
     const item = sale.items?.[itemIndex];
-    if (!item || item.id !== itemId) throw new Error("Sale items changed, search again");
+    if (!item || item.id !== itemId) throw new Error(tr("returns_err_itemsChanged"));
     const available = item.qty - (item.returnedQty || 0);
-    if (returnQty > available) throw new Error(`Max limit is ${available}`);
+    if (returnQty > available) throw new Error(tr("returns_err_maxLimit", { available }));
 
     const productRef = doc(db, "products", item.id);
     const productSnap = await transaction.get(productRef);
@@ -34,7 +35,7 @@ export const processReturn = async (
     const unitPrice = Number(item.price ?? item.sellingPrice ?? 0);
     const returnUnits = isWeight ? returnQty * bagWeight : returnQty;
     refundAmount = Math.round(returnUnits * unitPrice * 100) / 100;
-    if (isNaN(refundAmount)) throw new Error("Price calculation error");
+    if (isNaN(refundAmount)) throw new Error(tr("returns_err_priceCalc"));
 
     if (productSnap.exists()) {
       transaction.update(productRef, { stock: (productSnap.data() as Product).stock + returnQty });

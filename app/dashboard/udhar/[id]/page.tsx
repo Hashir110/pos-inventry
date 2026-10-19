@@ -22,7 +22,6 @@ interface LedgerEntry {
   kind: "sale" | "payment";
   title: string;
   details: string;
-  /** sale = +udhar, payment = -wasooli */
   amount: number;
   balance: number;
 }
@@ -54,17 +53,16 @@ export default function CustomerLedgerPage() {
       setPayments(p);
     } catch (error) {
       console.error(error);
-      toast.error("History load nahi hui");
+      toast.error(t("credit_historyLoadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [currentUser, id]);
+  }, [currentUser, id, t]);
 
   useEffect(() => {
     loadLedger();
   }, [loadLedger]);
 
-  // Purane se naye tak running balance nikaal kar, dikhane ke liye naye pehle
   const entries = useMemo<LedgerEntry[]>(() => {
     const raw = [
       ...sales.map((s) => ({
@@ -72,7 +70,7 @@ export default function CustomerLedgerPage() {
         date: s.date,
         kind: "sale" as const,
         title: `${t("maalGiven")} • #${s.invoiceNo}`,
-        details: describeItems(s) + (s.refundedAmount ? ` (Return: ${formatMoney(s.refundedAmount)})` : ""),
+        details: describeItems(s) + (s.refundedAmount ? ` ${t("credit_returnNote", { amount: formatMoney(s.refundedAmount) })}` : ""),
         amount: saleNetAmount(s),
       })),
       ...payments.map((p) => ({
@@ -80,7 +78,7 @@ export default function CustomerLedgerPage() {
         date: p.date,
         kind: "payment" as const,
         title: t("paymentReceived"),
-        details: `${p.method === "Cash" ? "Cash" : "Bank / Online"}${p.note ? ` • ${p.note}` : ""}`,
+        details: `${p.method === "Cash" ? t("cash") : t("bankOnline")}${p.note ? ` • ${p.note}` : ""}`,
         amount: p.amount,
       })),
     ].sort((a, b) => a.date.localeCompare(b.date));

@@ -63,21 +63,21 @@ export default function ExpensesPage() {
         });
 
         setFormData({ title: "", amount: "", category: "General" });
-        toast.success("Expense Added!");
+        toast.success(t("expenses_added"));
         fetchExpenses(); 
 
     } catch (error) {
         console.error(error);
-        toast.error("Failed to add expense");
+        toast.error(t("expenses_addFailed"));
     }
     setSubmitting(false);
   };
 
   const handleDelete = async (id: string) => {
     const ok = await confirm({
-      title: "Kharcha delete karein?",
-      message: "Ye kharcha hamesha ke liye hat jayega.",
-      confirmLabel: "Delete",
+      title: t("expenses_deleteTitle"),
+      message: t("expenses_deleteMessage"),
+      confirmLabel: t("delete"),
       tone: "danger",
     });
     if (!ok) return;
@@ -87,6 +87,14 @@ export default function ExpensesPage() {
     } catch (error) {
         console.error(error);
     }
+  };
+
+  const categoryLabels: Record<string, string> = {
+    General: t("expenses_catGeneral"),
+    Food: t("expenses_catFood"),
+    Transport: t("expenses_catTransport"),
+    Utility: t("expenses_catUtility"),
+    Salary: t("expenses_catSalary"),
   };
 
   const formatDate = (isoString: string) => {
@@ -154,11 +162,11 @@ export default function ExpensesPage() {
               value={formData.category}
               onChange={(e) => setFormData({ ...formData, category: e.target.value })}
             >
-              <option value="General">General</option>
-              <option value="Food">Khana / Chai</option>
-              <option value="Transport">Transport</option>
-              <option value="Utility">Bills / Utility</option>
-              <option value="Salary">Salary / Mazdoori</option>
+              <option value="General">{t("expenses_catGeneral")}</option>
+              <option value="Food">{t("expenses_catFood")}</option>
+              <option value="Transport">{t("expenses_catTransport")}</option>
+              <option value="Utility">{t("expenses_catUtility")}</option>
+              <option value="Salary">{t("expenses_catSalary")}</option>
             </select>
           </div>
 
@@ -199,7 +207,7 @@ export default function ExpensesPage() {
                 key: "category",
                 header: t("category"),
                 cell: (item) => (
-                  <span className="rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-bold text-stone-600">{item.category}</span>
+                  <span className="rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-bold text-stone-600">{categoryLabels[item.category] ?? item.category}</span>
                 ),
               },
               {

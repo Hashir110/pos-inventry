@@ -11,26 +11,61 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import type { Supplier, SupplierPurchase, SupplierPayment } from "../../types";
+import {
+  cacheKeys,
+  getCached,
+  getCachedEvenStale,
+  setCached,
+} from "./offlineStorage";
 
-/** List all suppliers for a shop owner */
-export const listSuppliers = async (ownerId: string): Promise<Supplier[]> => {
-  const snap = await getDocs(
-    query(collection(db, "suppliers"), where("ownerId", "==", ownerId))
-  );
-  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Supplier);
-  return items.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+export const listSuppliers = async (ownerId: string, forceRefresh = false): Promise<Supplier[]> => {
+  const cacheKey = cacheKeys.suppliers(ownerId);
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+
+  if (!forceRefresh) {
+    const cached = isOnline ? getCached<Supplier[]>(cacheKey) : getCachedEvenStale<Supplier[]>(cacheKey);
+    if (cached && cached.length >= 0) return cached;
+  }
+
+  if (!isOnline) {
+    return getCachedEvenStale<Supplier[]>(cacheKey) || [];
+  }
+
+  try {
+    const snap = await getDocs(
+      query(collection(db, "suppliers"), where("ownerId", "==", ownerId))
+    );
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Supplier);
+    items.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+    setCached(cacheKey, items);
+    return items;
+  } catch (err) {
+    console.warn("[suppliers] Failed to fetch suppliers, using offline cache:", err);
+    return getCachedEvenStale<Supplier[]>(cacheKey) || [];
+  }
 };
 
-/** Subscribe live to suppliers list */
 export const subscribeSuppliers = (
   ownerId: string,
   onData: (suppliers: Supplier[]) => void
 ): (() => void) => {
+  const cacheKey = cacheKeys.suppliers(ownerId);
+  const cached = getCachedEvenStale<Supplier[]>(cacheKey);
+  if (cached && cached.length > 0) {
+    onData(cached);
+  }
+
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+  if (!isOnline) {
+    return () => {};
+  }
+
   return onSnapshot(
     query(collection(db, "suppliers"), where("ownerId", "==", ownerId)),
     (snap) => {
       const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Supplier);
       items.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+      setCached(cacheKey, items);
       onData(items);
     },
     (err) => {
@@ -39,23 +74,65 @@ export const subscribeSuppliers = (
   );
 };
 
-/** Add new supplier */
 export const addSupplier = async (
   ownerId: string,
   data: { name: string; phone?: string; address?: string }
 ): Promise<string> => {
-  const ref = await addDoc(collection(db, "suppliers"), {
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+  const newObj = {
     ownerId,
     name: data.name.trim(),
     phone: data.phone?.trim() || "",
     address: data.address?.trim() || "",
     balance: 0,
     createdAt: new Date().toISOString(),
-  });
-  return ref.id;
+  };
+
+  let id = `local_sup_${Date.now()}`;
+  if (isOnline) {
+    const ref = await addDoc(collection(db, "suppliers"), newObj);
+    id = ref.id;
+  }
+
+  const cacheKey = cacheKeys.suppliers(ownerId);
+  const current = getCachedEvenStale<Supplier[]>(cacheKey) || [];
+  setCached(cacheKey, [{ id, ...newObj }, ...current]);
+
+  return id;
 };
 
-/** Record a purchase from supplier (Maal uthaya) */
+export const updateSupplier = async (
+  id: string,
+  data: { name: string; phone?: string; address?: string },
+  ownerId?: string
+): Promise<void> => {
+  await updateDoc(doc(db, "suppliers", id), {
+    name: data.name.trim(),
+    phone: data.phone?.trim() || "",
+    address: data.address?.trim() || "",
+    updatedAt: new Date().toISOString(),
+  });
+
+  if (ownerId) {
+    const cacheKey = cacheKeys.suppliers(ownerId);
+    const current = getCachedEvenStale<Supplier[]>(cacheKey);
+    if (current) {
+      setCached(cacheKey, current.map((s) => (s.id === id ? { ...s, ...data } : s)));
+    }
+  }
+};
+
+export const deleteSupplier = async (id: string, ownerId?: string): Promise<void> => {
+  await deleteDoc(doc(db, "suppliers", id));
+  if (ownerId) {
+    const cacheKey = cacheKeys.suppliers(ownerId);
+    const current = getCachedEvenStale<Supplier[]>(cacheKey);
+    if (current) {
+      setCached(cacheKey, current.filter((s) => s.id !== id));
+    }
+  }
+};
+
 export const addSupplierPurchase = async (
   ownerId: string,
   purchase: {
@@ -67,61 +144,58 @@ export const addSupplierPurchase = async (
       productName: string;
       qty: number;
       buyingPrice: number;
-      total: number;
-      destinationLocation: "gudam" | "shop";
+      destination?: "gudam" | "shop";
+      destinationLocation?: "gudam" | "shop";
+      total?: number;
     }>;
     totalAmount: number;
-    paidAmount: number;
-    notes?: string;
+    paidAmount?: number;
+    destination?: "gudam" | "shop";
   }
-): Promise<string> => {
-  const balanceAmount = purchase.totalAmount - purchase.paidAmount;
 
-  // 1. Add purchase bill
+
+): Promise<string> => {
   const purchaseRef = await addDoc(collection(db, "supplier_purchases"), {
     ownerId,
     ...purchase,
-    balanceAmount,
     date: new Date().toISOString(),
   });
 
-  // 2. Update Supplier balance (Add unpaid balance amount to supplier ledger)
-  if (balanceAmount !== 0) {
-    const supplierRef = doc(db, "suppliers", purchase.supplierId);
-    // Fetch existing supplier balance
+  const unpaid = purchase.totalAmount - (purchase.paidAmount || 0);
+
+  if (unpaid !== 0) {
     const suppliersSnap = await getDocs(
       query(collection(db, "suppliers"), where("ownerId", "==", ownerId))
     );
     const targetSupplier = suppliersSnap.docs.find((d) => d.id === purchase.supplierId);
     if (targetSupplier) {
       const currentBalance = targetSupplier.data().balance || 0;
-      await updateDoc(supplierRef, {
-        balance: currentBalance + balanceAmount,
+      await updateDoc(doc(db, "suppliers", purchase.supplierId), {
+        balance: currentBalance + unpaid,
       });
     }
   }
 
-  // 3. Increment stock in destination location if productId provided
   for (const item of purchase.items) {
     if (item.productId) {
-      const productRef = doc(db, "products", item.productId);
-      const prodSnap = await getDocs(query(collection(db, "products"), where("ownerId", "==", ownerId)));
+      const prodSnap = await getDocs(
+        query(collection(db, "products"), where("ownerId", "==", ownerId))
+      );
       const targetProd = prodSnap.docs.find((d) => d.id === item.productId);
       if (targetProd) {
-        const pData = targetProd.data();
-        let gudamStock = pData.gudamStock ?? 0;
-        let shopStock = pData.shopStock ?? pData.stock ?? 0;
+        const data = targetProd.data();
+        const dest = item.destination || purchase.destination || "gudam";
+        const currentShop = data.shopStock ?? 0;
+        const currentGudam = data.gudamStock ?? 0;
+        const newShop = dest === "shop" ? currentShop + item.qty : currentShop;
+        const newGudam = dest === "gudam" ? currentGudam + item.qty : currentGudam;
+        const newTotal = newShop + newGudam;
 
-        if (item.destinationLocation === "gudam") {
-          gudamStock += item.qty;
-        } else {
-          shopStock += item.qty;
-        }
-        await updateDoc(productRef, {
-          gudamStock,
-          shopStock,
-          stock: gudamStock + shopStock,
-          buyingPrice: item.buyingPrice, // Update latest buying price
+        await updateDoc(doc(db, "products", item.productId), {
+          stock: newTotal,
+          shopStock: newShop,
+          gudamStock: newGudam,
+          buyingPrice: item.buyingPrice,
           updatedAt: new Date().toISOString(),
         });
       }
@@ -131,7 +205,6 @@ export const addSupplierPurchase = async (
   return purchaseRef.id;
 };
 
-/** Record payment made to a supplier (Payout) */
 export const addSupplierPayment = async (
   ownerId: string,
   payment: {
@@ -148,7 +221,6 @@ export const addSupplierPayment = async (
     date: new Date().toISOString(),
   });
 
-  // Deduct from supplier balance
   const suppliersSnap = await getDocs(
     query(collection(db, "suppliers"), where("ownerId", "==", ownerId))
   );
@@ -163,20 +235,54 @@ export const addSupplierPayment = async (
   return ref.id;
 };
 
-/** List all supplier purchases */
-export const listSupplierPurchases = async (ownerId: string): Promise<SupplierPurchase[]> => {
-  const snap = await getDocs(
-    query(collection(db, "supplier_purchases"), where("ownerId", "==", ownerId))
-  );
-  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SupplierPurchase);
-  return items.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+export const listSupplierPurchases = async (ownerId: string, forceRefresh = false): Promise<SupplierPurchase[]> => {
+  const cacheKey = cacheKeys.supplierPurchases(ownerId);
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+
+  if (!forceRefresh) {
+    const cached = isOnline ? getCached<SupplierPurchase[]>(cacheKey) : getCachedEvenStale<SupplierPurchase[]>(cacheKey);
+    if (cached) return cached;
+  }
+
+  if (!isOnline) {
+    return getCachedEvenStale<SupplierPurchase[]>(cacheKey) || [];
+  }
+
+  try {
+    const snap = await getDocs(
+      query(collection(db, "supplier_purchases"), where("ownerId", "==", ownerId))
+    );
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SupplierPurchase);
+    items.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+    setCached(cacheKey, items);
+    return items;
+  } catch {
+    return getCachedEvenStale<SupplierPurchase[]>(cacheKey) || [];
+  }
 };
 
-/** List all supplier payments */
-export const listSupplierPayments = async (ownerId: string): Promise<SupplierPayment[]> => {
-  const snap = await getDocs(
-    query(collection(db, "supplier_payments"), where("ownerId", "==", ownerId))
-  );
-  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SupplierPayment);
-  return items.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+export const listSupplierPayments = async (ownerId: string, forceRefresh = false): Promise<SupplierPayment[]> => {
+  const cacheKey = cacheKeys.supplierPayments(ownerId);
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+
+  if (!forceRefresh) {
+    const cached = isOnline ? getCached<SupplierPayment[]>(cacheKey) : getCachedEvenStale<SupplierPayment[]>(cacheKey);
+    if (cached) return cached;
+  }
+
+  if (!isOnline) {
+    return getCachedEvenStale<SupplierPayment[]>(cacheKey) || [];
+  }
+
+  try {
+    const snap = await getDocs(
+      query(collection(db, "supplier_payments"), where("ownerId", "==", ownerId))
+    );
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as SupplierPayment);
+    items.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+    setCached(cacheKey, items);
+    return items;
+  } catch {
+    return getCachedEvenStale<SupplierPayment[]>(cacheKey) || [];
+  }
 };

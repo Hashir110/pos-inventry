@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2, X } from "lucide-react";
 import CustomerSelect from "./CustomerSelect";
+import { useLanguage } from "../store/useLanguage";
 import type { Customer } from "../types";
 
 interface ChooseCustomerModalProps {
@@ -20,10 +21,11 @@ export default function ChooseCustomerModal({
   customers,
   title,
   message,
-  confirmLabel = "Confirm",
+  confirmLabel,
   onClose,
   onPick,
 }: ChooseCustomerModalProps) {
+  const { t } = useLanguage();
   const [selectedId, setSelectedId] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -69,10 +71,10 @@ export default function ChooseCustomerModal({
 
         <div className="mt-5 flex gap-3">
           <button onClick={close} disabled={busy} className="btn-ghost flex-1">
-            Cancel
+            {t("cancel")}
           </button>
           <button onClick={submit} disabled={!selected || busy} className="btn-primary flex-1">
-            {busy ? <Loader2 className="animate-spin" size={18} /> : confirmLabel}
+            {busy ? <Loader2 className="animate-spin" size={18} /> : (confirmLabel ?? t("chooseParty_confirm"))}
           </button>
         </div>
       </div>

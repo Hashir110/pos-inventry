@@ -24,7 +24,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         const found = await getProduct(productId);
         if (cancelled) return;
         if (!found) {
-          toast.error("Product not found!");
+          toast.error(t("inv_notFound"));
           router.push("/dashboard/inventry");
           return;
         }
@@ -38,7 +38,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         });
       } catch (error) {
         console.error("Fetch Error:", error);
-        toast.error("Product load nahi hua");
+        toast.error(t("inv_loadProductFailed"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -46,16 +46,16 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     return () => {
       cancelled = true;
     };
-  }, [productId, router]);
+  }, [productId, router, t]);
 
   const handleSubmit = async (values: ProductInput) => {
     try {
       await updateProduct(productId, values);
-      toast.success("Product Updated Successfully!");
+      toast.success(t("inv_updated"));
       router.push("/dashboard/inventry");
     } catch (error) {
       console.error(error);
-      toast.error("Error: " + (error instanceof Error ? error.message : "update failed"));
+      toast.error(t("inv_errorPrefix", { message: error instanceof Error ? error.message : t("inv_updateFailed") }));
     }
   };
 

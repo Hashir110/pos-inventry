@@ -9,7 +9,6 @@ const subscribe = (callback: () => void) => {
   };
 };
 
-/** Browser online hai ya offline. Server render par hamesha true. */
 export const useOnlineStatus = (): boolean =>
   useSyncExternalStore(
     subscribe,

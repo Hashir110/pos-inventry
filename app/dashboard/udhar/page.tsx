@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { History, Plus, Search, Users, Wallet, Loader2 } from "lucide-react";
+
+import { History, Plus, RefreshCw, Search, Users, Wallet, Loader2 } from "lucide-react";
 import { toast } from "react-toastify";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
@@ -14,12 +15,12 @@ import { formatMoney } from "../../lib/format";
 import { addCustomer, listCustomers } from "../../lib/services/customers";
 import type { Customer } from "../../types";
 
-
 export default function UdharPage() {
   const { currentUser } = useStore();
   const { t } = useLanguage();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
 
   const [newName, setNewName] = useState("");
@@ -28,22 +29,26 @@ export default function UdharPage() {
 
   const [payFor, setPayFor] = useState<Customer | null>(null);
 
-  const fetchCustomers = useCallback(async () => {
+  const fetchCustomers = useCallback(async (force = false) => {
     if (!currentUser) return;
-    setLoading(true);
+    if (force) setRefreshing(true);
     try {
-      setCustomers(await listCustomers(currentUser.uid));
+      setCustomers(await listCustomers(currentUser.uid, force));
+      if (force) toast.success("Customers updated");
+
     } catch (error) {
       console.error(error);
-      toast.error("Customers load nahi hue");
+      toast.error(t("credit_loadFailed"));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [currentUser]);
+  }, [currentUser, t]);
 
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
+
 
   const totalOutstanding = useMemo(
     () => customers.reduce((sum, c) => sum + (c.balance || 0), 0),
@@ -66,11 +71,11 @@ export default function UdharPage() {
       await addCustomer(currentUser.uid, { name: newName, phone: newPhone });
       setNewName("");
       setNewPhone("");
-      toast.success("Customer add ho gaya");
+      toast.success(t("credit_addSuccess"));
       fetchCustomers();
     } catch (error) {
       console.error(error);
-      toast.error("Customer add nahi hua (internet check karein)");
+      toast.error(t("credit_addFailed"));
     } finally {
       setAdding(false);
     }
@@ -83,11 +88,21 @@ export default function UdharPage() {
         title={t("creditLedger")}
         subtitle={t("manageCustomerBalances")}
         actions={
-          <>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchCustomers(true)}
+              disabled={refreshing}
+              className="btn-secondary flex items-center gap-1.5"
+              title="Refresh from server"
+            >
+              <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
             <SummaryBox label={t("totalReceivable")} value={formatMoney(totalOutstanding)} tone="amber" />
             <SummaryBox label={t("customersCount")} value={debtors} />
-          </>
+          </div>
         }
+
       />
       <form
         onSubmit={handleAdd}
@@ -99,7 +114,7 @@ export default function UdharPage() {
             required
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Party ka naam"
+            placeholder={t("credit_partyNamePlaceholder")}
             className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
           />
         </div>
@@ -133,7 +148,7 @@ export default function UdharPage() {
         data={filtered}
         rowKey={(c) => c.id}
         loading={loading}
-        emptyText="Koi customer nahi mila."
+        emptyText={t("credit_noCustomers")}
         toolbarLeft={
           <h3 className="font-bold text-stone-700 flex items-center gap-2">
             <Users size={18} /> {t("customersCount")} ({customers.length})
@@ -186,7 +201,7 @@ export default function UdharPage() {
                   disabled={c.balance <= 0}
                   className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-md hover:bg-emerald-200 text-xs font-bold flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <Wallet size={14} /> Wasool
+                  <Wallet size={14} /> {t("credit_collect")}
                 </button>
               </div>
             ),

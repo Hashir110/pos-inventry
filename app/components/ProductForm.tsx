@@ -5,6 +5,7 @@ import { ChevronDown, Save, Loader2 } from "lucide-react";
 import type { ProductInput } from "../lib/services/products";
 import type { UnitType } from "../types";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "../store/useLanguage";
 
 interface FormValues {
   name: string;
@@ -24,6 +25,7 @@ interface ProductFormProps {
 export default function ProductForm({ initial, mode, onSubmit }: ProductFormProps) {
   const isEdit = mode === "edit";
   const router = useRouter();
+  const { t } = useLanguage();
   const [submitting, setSubmitting] = useState(false);
 
   const [form, setForm] = useState<FormValues>({
@@ -69,7 +71,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
             <span className="flex h-5 w-5 items-center justify-center rounded-full border border-orange-500 text-orange-500 text-xs font-bold">
               i
             </span>
-            <span>Product Information</span>
+            <span>{t("productForm_info")}</span>
           </h5>
           <ChevronDown size={18} className="text-stone-400" />
         </div>
@@ -78,12 +80,12 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
-                Product Name <span className="text-red-500">*</span>
+                {t("productForm_name")} <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 required
-                placeholder="Item ka naam"
+                placeholder={t("productForm_namePlaceholder")}
                 value={form.name}
                 onChange={(e) => set("name", e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-stone-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -92,11 +94,11 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
 
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
-                Category
+                {t("category")}
               </label>
               <input
                 type="text"
-                placeholder="Category (optional)"
+                placeholder={t("productForm_categoryPlaceholder")}
                 value={form.category}
                 onChange={(e) => set("category", e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-stone-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
@@ -105,15 +107,15 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
 
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
-                Unit / Selling Type <span className="text-red-500">*</span>
+                {t("productForm_unitType")} <span className="text-red-500">*</span>
               </label>
               <select
                 value={form.unitType}
                 onChange={(e) => set("unitType", e.target.value as UnitType)}
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-stone-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
               >
-                <option value="weight">By Weight (25kg Bags / Katte)</option>
-                <option value="count">By Count (Pieces / Items)</option>
+                <option value="weight">{t("productForm_byWeight")}</option>
+                <option value="count">{t("productForm_byCount")}</option>
               </select>
             </div>
           </div>
@@ -126,7 +128,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
             <span className="flex h-5 w-5 items-center justify-center rounded-full border border-orange-500 text-orange-500 text-xs font-bold">
               i
             </span>
-            <span>Pricing & Stocks</span>
+            <span>{t("productForm_pricingStock")}</span>
           </h5>
           <ChevronDown size={18} className="text-stone-400" />
         </div>
@@ -135,7 +137,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
-                Selling Price ({form.unitType === "weight" ? "Sale Rate / KG" : "Sale Rate / Pc"}) <span className="text-red-500">*</span>
+                {form.unitType === "weight" ? t("productForm_sellPriceKg") : t("productForm_sellPricePc")} <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -151,7 +153,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
 
             <div>
               <label className="block text-xs font-bold text-purple-900 mb-1">
-                Gudam (Warehouse) Stock ({form.unitType === "weight" ? "Bags / Katte" : "Pieces"}) <span className="text-red-500">*</span>
+                {t("productForm_warehouseStock", { unit: form.unitType === "weight" ? t("productForm_unitBags") : t("productForm_unitPieces") })} <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -167,7 +169,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
 
             <div>
               <label className="block text-xs font-bold text-blue-900 mb-1">
-                Dukan (Shop) Stock ({form.unitType === "weight" ? "Bags / Katte" : "Pieces"}) <span className="text-red-500">*</span>
+                {t("productForm_shopStock", { unit: form.unitType === "weight" ? t("productForm_unitBags") : t("productForm_unitPieces") })} <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -182,8 +184,8 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
             </div>
           </div>
           <p className="text-[11px] text-stone-500 mt-4 bg-stone-50 p-2.5 rounded-lg border border-stone-200 flex items-center gap-1.5">
-            <span className="font-bold text-brand-700">Note:</span>
-            <span>Kharedari rate (Buying Price) yahan enter karne ki zaroorat nahi hai. Ye Supplier se maal uthate waqt purchase bill se automatically update ho jata hai.</span>
+            <span className="font-bold text-brand-700">{t("productForm_note")}</span>
+            <span>{t("productForm_noteText")}</span>
           </p>
         </div>
       </div>
@@ -194,7 +196,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
           onClick={() => router.back()}
           className="px-5 py-2.5 bg-stone-200 hover:bg-stone-300 text-stone-700 rounded-lg text-xs font-bold transition"
         >
-          Cancel
+          {t("cancel")}
         </button>
         <button
           type="submit"
@@ -206,7 +208,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
           ) : (
             <>
               <Save size={16} />
-              <span>{isEdit ? "Update Product" : "Save Product"}</span>
+              <span>{isEdit ? t("productForm_update") : t("productForm_save")}</span>
             </>
           )}
         </button>

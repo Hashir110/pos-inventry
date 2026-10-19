@@ -23,6 +23,7 @@ import {
     Calendar,
     Filter,
     Loader2,
+    RefreshCw,
     Wallet,
     Banknote,
     CreditCard,
@@ -31,6 +32,7 @@ import {
     Truck,
     PiggyBank
 } from "lucide-react";
+
 
 interface ClosingDay {
     day: string;
@@ -47,11 +49,9 @@ export default function DashboardHome() {
     const { t } = useLanguage();
     const [loading, setLoading] = useState(true);
 
-    // Date Filters
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
 
-    // Stats Data
     const [stats, setStats] = useState({
         totalSales: 0,
         totalInvoices: 0,
@@ -67,39 +67,36 @@ export default function DashboardHome() {
     const [closingTotal, setClosingTotal] = useState(0);
     const [jamadRange, setJamadRange] = useState(0);
 
-    // Invoices List
     const [invoices, setInvoices] = useState<Sale[]>([]);
     const [searchInvoice, setSearchInvoice] = useState("");
 
-    // 1. Fetch Dashboard Data
-    const fetchDashboardData = async (isFilter = false) => {
+    const [refreshing, setRefreshing] = useState(false);
+
+    const fetchDashboardData = async (isFilter = false, forceRefresh = false) => {
         if (!currentUser) return;
         setLoading(true);
+        if (forceRefresh) setRefreshing(true);
 
         try {
-            // --- 1. DATE LOGIC SETTING ---
             let startIso, endIso;
 
             if (isFilter && startDate && endDate) {
-                // User ne Date Select ki hai
                 const s = new Date(startDate); s.setHours(0, 0, 0, 0);
                 const e = new Date(endDate); e.setHours(23, 59, 59, 999);
                 startIso = s.toISOString();
                 endIso = e.toISOString();
             } else {
-                // Default: Sirf is mahine ka data (1st Date to Now)
                 const now = new Date();
-                const s = new Date(now.getFullYear(), now.getMonth(), 1); // 1st of month
+                const s = new Date(now.getFullYear(), now.getMonth(), 1);
                 startIso = s.toISOString();
-                endIso = new Date().toISOString(); // Abhi tak
+                endIso = new Date().toISOString();
             }
 
             const [allSales, allExpenses] = await Promise.all([
-                listSalesInRange(currentUser.uid, startIso, isFilter ? endIso : undefined),
-                listExpensesInRange(currentUser.uid, startIso, isFilter ? endIso : undefined),
+                listSalesInRange(currentUser.uid, startIso, isFilter ? endIso : undefined, forceRefresh),
+                listExpensesInRange(currentUser.uid, startIso, isFilter ? endIso : undefined, forceRefresh),
             ]);
 
-            // --- CALCULATIONS ---
             let totalRevenue = 0;
             let cashSum = 0;
             let bankSum = 0;
@@ -109,7 +106,6 @@ export default function DashboardHome() {
                 const netSaleAmount = saleNetAmount(sale);
                 totalRevenue += netSaleAmount;
 
-                // trim: extra space ka masla na ho. Unknown method ko Cash mein ginte hain.
                 const method = sale.paymentMethod ? sale.paymentMethod.trim() : "Cash";
                 if (method === "Bank Account") bankSum += netSaleAmount;
                 else if (method === "Udhar") udharSum += netSaleAmount;
@@ -118,7 +114,6 @@ export default function DashboardHome() {
 
             const totalExpenseSum = allExpenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
 
-            // Low stock fail ho (index na ho) to baaki data phir bhi dikhe
             let lowStock = 0;
             try {
                 lowStock = await countLowStock(currentUser.uid, 5);
@@ -139,11 +134,12 @@ export default function DashboardHome() {
 
                try {
             const [closings, supplierPays] = await Promise.all([
-                listDayClosings(currentUser.uid),
-                listSupplierPayments(currentUser.uid),
+                listDayClosings(currentUser.uid, forceRefresh),
+                listSupplierPayments(currentUser.uid, forceRefresh),
             ]);
             const fromKey = dayKey(startIso);
             const toKey = isFilter ? dayKey(endIso) : "9999-12-31";
+
 
             let running = 0;
             const all = [...closings]
@@ -162,26 +158,24 @@ export default function DashboardHome() {
             );
         } catch (e) {
             console.error("Closing summary failed:", e);
-            toast.error("Closing hisaab load nahi hua (Firestore rules deploy karein)");
+            toast.error(t("dashboard_closingLoadFailed"));
         }
 
     } catch (error) {
         console.error("Dashboard Fetch Error:", error);
     } finally {
         setLoading(false);
+        setRefreshing(false);
     }
 };
-    // Initial Load
     useEffect(() => {
         fetchDashboardData();
     }, [currentUser]);
 
-    // Filter Handler
     const applyFilter = () => {
         fetchDashboardData(true);
     };
 
-    // Helper for Date Formatting
     const formatDate = (isoString?: string) => {
         if (!isoString) return "-";
         return new Date(isoString).toLocaleDateString('en-US', {
@@ -189,7 +183,6 @@ export default function DashboardHome() {
         });
     };
 
-    // Filtered Invoices for Search
     const filteredInvoicesList = invoices.filter(inv =>
         inv.invoiceNo?.toLowerCase().includes(searchInvoice.toLowerCase()));
 
@@ -199,9 +192,9 @@ export default function DashboardHome() {
     const pct = (n: number) => (paymentTotal > 0 ? Math.max(0, Math.min(100, ((n || 0) / paymentTotal) * 100)) : 0);
 
     const paymentRows = [
-        { label: "Cash", value: stats.cashSales, icon: Banknote, bar: "bg-emerald-500", chip: "bg-emerald-100 text-emerald-700" },
-        { label: "Bank / Online", value: stats.bankSales, icon: CreditCard, bar: "bg-sky-500", chip: "bg-sky-100 text-sky-700" },
-        { label: "Udhar", value: stats.udharSales, icon: History, bar: "bg-amber-500", chip: "bg-amber-100 text-amber-700" },
+        { label: t("cash"), value: stats.cashSales, icon: Banknote, bar: "bg-emerald-500", chip: "bg-emerald-100 text-emerald-700" },
+        { label: t("bankOnline"), value: stats.bankSales, icon: CreditCard, bar: "bg-sky-500", chip: "bg-sky-100 text-sky-700" },
+        { label: t("dashboard_credit"), value: stats.udharSales, icon: History, bar: "bg-amber-500", chip: "bg-amber-100 text-amber-700" },
     ];
 
     const methodBadge = (method?: string) => {
@@ -227,9 +220,18 @@ export default function DashboardHome() {
 
             <PageHeader
                 title={t("navDashboard")}
-                subtitle={t("dashboardOverview", { shop: currentShop?.shopName || "Your shop", period: startDate && endDate ? t("selectedPeriod") : t("thisMonth") })}
+                subtitle={t("dashboardOverview", { shop: currentShop?.shopName || t("dashboard_yourShop"), period: startDate && endDate ? t("selectedPeriod") : t("thisMonth") })}
                 actions={
-                    <>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            onClick={() => fetchDashboardData(false, true)}
+                            disabled={refreshing}
+                            className="btn-secondary flex items-center gap-1.5 !py-2"
+                            title="Refresh from server"
+                        >
+                            <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
+                            <span className="hidden sm:inline">Refresh</span>
+                        </button>
                         <div className="flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-1.5 shadow-card">
                             <Calendar className="h-4 w-4 text-stone-400" />
                             <input
@@ -249,11 +251,11 @@ export default function DashboardHome() {
                         <button onClick={applyFilter} className="btn-dark !py-2.5">
                             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Filter size={15} />} {t("apply")}
                         </button>
-                    </>
+                    </div>
                 }
             />
 
-            {/* Main numbers */}
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard
                     title={t("totalSales")}
@@ -283,25 +285,25 @@ export default function DashboardHome() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <StatCard
-                    title="Supplier ko diye"
+                    title={t("dashboard_paidToSuppliers")}
                     value={money(jamadRange)}
-                    subtitle="Jamad (supplier payments)"
+                    subtitle={t("dashboard_paidOutSubtitle")}
                     icon={Truck}
                     theme="red"
                     loading={loading}
                 />
                 <StatCard
-                    title="Baqi"
+                    title={t("dashboard_balance")}
                     value={signedMoney(stats.totalSales - jamadRange)}
-                    subtitle="Sales − Supplier payment"
+                    subtitle={t("dashboard_balanceSubtitle")}
                     icon={Wallet}
                     theme="green"
                     loading={loading}
                 />
                 <StatCard
-                    title="Total Jama"
+                    title={t("dashboard_cumulativeBalance")}
                     value={signedMoney(closingTotal)}
-                    subtitle="Sab dinon ka Baqi (ab tak)"
+                    subtitle={t("dashboard_cumulativeSubtitle")}
                     icon={PiggyBank}
                     theme="purple"
                     loading={loading}
@@ -312,27 +314,26 @@ export default function DashboardHome() {
                 data={closingDays}
                 rowKey={(d) => d.day}
                 loading={loading}
-                emptyText="Is period mein koi closing nahi."
+                emptyText={t("dashboard_noClosings")}
                 toolbarLeft={
                     <h3 className="flex items-center gap-2 text-base font-bold text-stone-900">
                         <ClipboardCheck className="h-4 w-4 text-stone-400" />
-                        Din-ba-Din Closing Hisaab
+                        {t("dashboard_dayByDay")}
                     </h3>
                 }
                 columns={[
                     { key: "day", header: t("date"), className: "whitespace-nowrap", cell: (d) => <span className="font-semibold text-stone-800">{formatDate(d.day)}</span> },
-                    { key: "sale", header: "Sale", align: "right", cell: (d) => <span className="tabular font-bold">{money(d.sale)}</span> },
-                    { key: "jamad", header: "Jamad", align: "right", cell: (d) => <span className="tabular font-bold text-red-600">{`− ${money(d.jamad)}`}</span> },
-                    { key: "baqi", header: "Baqi", align: "right", cell: (d) => <span className={`tabular font-extrabold ${d.baqi < 0 ? "text-red-600" : "text-emerald-600"}`}>{signedMoney(d.baqi)}</span> },
-                    { key: "total", header: "Total (ab tak)", align: "right", cell: (d) => <span className="tabular font-extrabold text-stone-900">{signedMoney(d.total)}</span> },
+                    { key: "sale", header: t("dashboard_colSale"), align: "right", cell: (d) => <span className="tabular font-bold">{money(d.sale)}</span> },
+                    { key: "jamad", header: t("dashboard_colPaidOut"), align: "right", cell: (d) => <span className="tabular font-bold text-red-600">{`− ${money(d.jamad)}`}</span> },
+                    { key: "baqi", header: t("dashboard_colBalance"), align: "right", cell: (d) => <span className={`tabular font-extrabold ${d.baqi < 0 ? "text-red-600" : "text-emerald-600"}`}>{signedMoney(d.baqi)}</span> },
+                    { key: "total", header: t("dashboard_colCumulative"), align: "right", cell: (d) => <span className="tabular font-extrabold text-stone-900">{signedMoney(d.total)}</span> },
                 ]}
             />
 
-            {/* Interactive Canvas Diagram Chart matching Reference Image Design */}
             <DualSeriesCanvasChart
-                title="Sales & Expenses"
-                series1Label="Sales Volume"
-                series2Label="Expenses"
+                title={t("dashboard_chartTitle")}
+                series1Label={t("dashboard_salesVolume")}
+                series2Label={t("expenses")}
                 series1Color="#fe9f43"
                 series2Color="#ef4444"
                 data={
@@ -355,8 +356,7 @@ export default function DashboardHome() {
                             });
                             return days.map((day) => ({
                                 label: day,
-                                val1: Math.round((map1[day] || 0) / 1000), // Scale in thousands for clean Y-axis
-                                val2: Math.round((map2[day] || 0) / 1000),
+                                val1: Math.round((map1[day] || 0) / 1000),                                 val2: Math.round((map2[day] || 0) / 1000),
                             }));
                         })()
                         : [
@@ -372,7 +372,6 @@ export default function DashboardHome() {
                 height={220}
             />
 
-            {/* Payment split + low stock */}
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <div className="card p-5 lg:col-span-2">
                     <div className="mb-4 flex items-center justify-between">
@@ -380,7 +379,6 @@ export default function DashboardHome() {
                         <span className="tabular text-sm font-bold text-stone-500">{money(paymentTotal)}</span>
                     </div>
 
-                    {/* Stacked bar */}
                     <div className="mb-5 flex h-3 w-full overflow-hidden rounded-full bg-stone-100">
                         {paymentRows.map((row) => (
                             <div key={row.label} className={row.bar} style={{ width: `${pct(row.value)}%` }} />
@@ -425,7 +423,6 @@ export default function DashboardHome() {
                 </div>
             </div>
 
-            {/* Recent invoices */}
             <DataTable
                 data={filteredInvoicesList.slice(0, 6)}
                 rowKey={(inv) => inv.id}
@@ -478,7 +475,13 @@ export default function DashboardHome() {
                         header: t("paymentBreakdown"),
                         cell: (inv) => (
                             <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${methodBadge(inv.paymentMethod)}`}>
-                                {inv.paymentMethod === "Bank Account" ? "Bank" : inv.paymentMethod || "Cash"}
+                                {inv.paymentMethod === "Bank Account"
+                                    ? t("dashboard_bank")
+                                    : inv.paymentMethod === "Udhar"
+                                        ? t("dashboard_credit")
+                                        : inv.paymentMethod && inv.paymentMethod !== "Cash"
+                                            ? inv.paymentMethod
+                                            : t("cash")}
                             </span>
                         ),
                     },

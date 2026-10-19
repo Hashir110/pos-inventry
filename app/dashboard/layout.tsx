@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store/useStore";
 import { auth } from "../lib/firebase";
-import { getPendingSales, syncPendingSales } from "../lib/services/sales";
+import { syncPendingSales } from "../lib/services/sales";
+import { syncPendingGatePasses } from "../lib/services/gatePasses";
+import { syncPendingDayClosings } from "../lib/services/dailyClosing";
+import { getTotalPendingCount } from "../lib/services/offlineStorage";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
 import { getUserShopProfile } from "../lib/authService";
 import { useRouter, usePathname } from "next/navigation";
@@ -52,57 +55,53 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const syncingRef = useRef(false);
     const autoSyncTried = useRef(false);
 
-    const [licenseStatus, setLicenseStatus] = useState("active"); // 'active', 'warning', 'expired'
+    const [licenseStatus, setLicenseStatus] = useState("active");
     const [daysOverdue, setDaysOverdue] = useState(0);
 
     const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-    // 1. Session Restore Logic (Agar refresh karein toh data na urr jaye)
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged(async (user) => {
             if (!user) {
-                router.push("/"); // Login nahi hai toh bhaga do
+                router.push("/");
                 return;
             }
 
-            // Hamesha DB se taza profile lo taake license renew hone par naya expiry mile
-            // (store mein purani cached value se renew nazar nahi aata)
-            let shopData: Shop | null;
+            let shopData: Shop | null = null;
             try {
                 shopData = await getUserShopProfile(user.uid);
             } catch (error) {
-                // Offline + cache khali, ya permission error: /setup par mat bhejo
                 console.error("Shop profile load failed:", error);
-                setLoadError(true);
-                return;
+                if (navigator.onLine) {
+                    setLoadError(true);
+                    return;
+                }
             }
             if (!shopData) {
-                router.push("/setup");
-                return;
+                if (navigator.onLine) {
+                    router.push("/setup");
+                    return;
+                }
             }
             setLoadError(false);
             setCurrentUser(user);
-            setCurrentShop(shopData);
+            if (shopData) {
+                setCurrentShop(shopData);
+                checkLicense(shopData);
+            }
             setLoading(false);
-            checkLicense(shopData);
         });
 
         return () => unsubscribe();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // --- FUNCTION: Check License Validity ---
-    // diffDays = aaj - expiry (din). Negative = expiry abhi aani hai.
-    //   diffDays < -3        -> active
-    //   -3 <= diffDays <= 1  -> warning banner (expiry qareeb ya grace period)
-    //   diffDays >= 2        -> BLOCK (/license-expired)
     const checkLicense = (shop: Shop | null) => {
         if (!shop?.licenseExpiry) return;
 
         const expiryDate = new Date(shop.licenseExpiry);
         const today = new Date();
 
-        // Time reset: sirf tareekh compare ho
         expiryDate.setHours(0, 0, 0, 0);
         today.setHours(0, 0, 0, 0);
 
@@ -120,55 +119,59 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     useEffect(() => {
         const checkPending = () => {
-            setPendingCount(getPendingSales().length);
+            setPendingCount(getTotalPendingCount());
         };
-        checkPending(); // First run
-        const interval = setInterval(checkPending, 2000); // Poll every 2 sec
+        checkPending();
+        const interval = setInterval(checkPending, 2000);
         return () => clearInterval(interval);
     }, []);
 
     useEffect(() => {
         const handleResize = () => {
-            // Agar screen choti (mobile/tablet) hai toh default menu BAND (false) rakho
             if (window.innerWidth < 768) {
                 setSidebarOpen(false);
-            }
-            // Agar screen bari (desktop/laptop) hai toh default menu KHULA (true) rakho
-            else {
+            } else {
                 setSidebarOpen(true);
             }
         };
 
-        // 1. Page load hotay hi check karo
         handleResize();
 
-        // 2. Jab bhi user inspect kare ya screen choti/bari kare, automatically adjust karo
         window.addEventListener('resize', handleResize);
 
-        // Cleanup function
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // 3. SYNC FUNCTION (Upload Offline Data)
     const handleSync = async () => {
-        if (syncingRef.current || getPendingSales().length === 0) return;
+        if (syncingRef.current || getTotalPendingCount() === 0) return;
         syncingRef.current = true;
         setIsSyncing(true);
 
         try {
-            const uploaded = await syncPendingSales((remaining) => setPendingCount(remaining));
-            if (uploaded > 0) toast.success(`${uploaded} offline sale(s) synced!`);
+            let totalUploaded = 0;
+            const uploadedSales = await syncPendingSales(() => setPendingCount(getTotalPendingCount()));
+            totalUploaded += uploadedSales;
+
+            const uploadedGatePasses = await syncPendingGatePasses(() => setPendingCount(getTotalPendingCount()));
+            totalUploaded += uploadedGatePasses;
+
+            const uploadedClosings = await syncPendingDayClosings(() => setPendingCount(getTotalPendingCount()));
+            totalUploaded += uploadedClosings;
+
+            if (totalUploaded > 0) {
+                toast.success(t("shell_offlineSynced", { count: totalUploaded }));
+            }
         } catch (error) {
             console.error("Sync Error:", error);
-            toast.error("Sync Failed: " + (error instanceof Error ? error.message : String(error)));
+            toast.error(t("shell_syncFailed", { error: error instanceof Error ? error.message : String(error) }));
         } finally {
+            setPendingCount(getTotalPendingCount());
             syncingRef.current = false;
             setIsSyncing(false);
         }
     };
 
-    // Internet wapis aate hi khud sync (har offline->online transition par sirf ek koshish;
-    // fail ho to sidebar ka Sync button se dobara try kar sakte hain)
+
     useEffect(() => {
         if (!isOnline) {
             autoSyncTried.current = false;
@@ -179,7 +182,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         handleSync();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOnline, loading]);
-    // Logout Function
     const handleLogout = async () => {
         await auth.signOut();
         router.push("/");
@@ -211,10 +213,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             items: [
                 { name: t("navPos"), href: "/dashboard/pos", icon: ShoppingCart },
                 { name: t("navSalesHistory"), href: "/dashboard/sales", icon: Receipt },
-                { name: "Gate Pass", href: "/dashboard/gate-pass", icon: FileText },
-                { name: "Daily Closing", href: "/dashboard/daily-closing", icon: ClipboardCheck },
+                { name: t("shell_navGatePass"), href: "/dashboard/gate-pass", icon: FileText },
+                { name: t("shell_navDailyClosing"), href: "/dashboard/daily-closing", icon: ClipboardCheck },
                 { name: t("navReturns"), href: "/dashboard/returns", icon: RotateCcw },
-                { name: t("navUdhar") + " / Wasooli", href: "/dashboard/udhar", icon: HandCoins },
+                { name: t("navUdhar"), href: "/dashboard/udhar", icon: HandCoins },
             ],
         },
         {
@@ -225,9 +227,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             ],
         },
         {
-            title: "Traders & Accounts",
+            title: t("shell_sectionAccounts"),
             items: [
-                { name: "Suppliers", href: "/dashboard/suppliers", icon: Truck },
+                { name: t("shell_navSuppliers"), href: "/dashboard/suppliers", icon: Truck },
                 { name: t("navExpenses"), href: "/dashboard/expenses", icon: Wallet },
                 { name: t("navDashboard"), href: "/dashboard", icon: LayoutDashboard },
                 { name: t("navSettings"), href: "/dashboard/settings", icon: Settings },
@@ -244,7 +246,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return (
         <div className="flex h-screen bg-canvas">
 
-            {/* --- MOBILE OVERLAY --- */}
             {isSidebarOpen && (
                 <div
                     className="fixed inset-0 bg-black/40 z-20 md:hidden"
@@ -252,7 +253,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 />
             )}
 
-            {/* --- SIDEBAR (light) --- */}
             <aside
                 className={`
                     ${isSidebarOpen ? "translate-x-0 w-64" : "-translate-x-full w-64 md:translate-x-0 md:w-[76px]"}
@@ -260,7 +260,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     fixed md:relative z-30 h-full shrink-0
                 `}
             >
-                {/* Brand */}
                 <div className="h-16 flex items-center justify-between px-4 border-b border-stone-200 shrink-0">
                     <Link href="/dashboard" className="flex items-center gap-2 overflow-hidden py-1">
                         <img
@@ -277,7 +276,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </button>
                 </div>
 
-                {/* Navigation */}
                 <nav className="flex-1 px-3 py-4 overflow-y-auto">
                     {navSections.map((section) => (
                         <div key={section.title} className="mb-5">
@@ -316,7 +314,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     ))}
                 </nav>
 
-                {/* Footer: shop + logout */}
                 <div className="p-3 border-t border-stone-200 shrink-0">
                     <div className={`flex items-center gap-3 rounded-xl bg-stone-50 p-2.5 ${isSidebarOpen ? "" : "justify-center"}`}>
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">
@@ -325,12 +322,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         {isSidebarOpen && (
                             <>
                                 <div className="min-w-0 flex-1">
-                                    <p onClick={() => router.push("/dashboard/admin")} className="truncate text-sm font-bold text-stone-900">{currentShop?.shopName || "Shop"}</p>
-                                    <p className="truncate text-[11px] text-stone-500">{currentShop?.email || "Owner"}</p>
+                                    <p onClick={() => router.push("/dashboard/admin")} className="truncate text-sm font-bold text-stone-900">{currentShop?.shopName || t("shell_shop")}</p>
+                                    <p className="truncate text-[11px] text-stone-500">{currentShop?.email || t("shell_owner")}</p>
                                 </div>
                                 <button
                                     onClick={handleLogout}
-                                    title="Sign Out"
+                                    title={t("shell_signOut")}
                                     className="shrink-0 rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                                 >
                                     <LogOut size={18} />
@@ -341,7 +338,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     {!isSidebarOpen && (
                         <button
                             onClick={handleLogout}
-                            title="Sign Out"
+                            title={t("shell_signOut")}
                             className="mt-2 flex w-full justify-center rounded-lg p-2 text-stone-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                         >
                             <LogOut size={18} />
@@ -350,37 +347,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
             </aside>
 
-            {/* --- MAIN --- */}
             <div className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0">
 
-                {/* License banner */}
                 {licenseStatus === "warning" && (
                     <div className={`${licenseExpired ? "bg-red-50 text-red-800 border-red-200" : "bg-amber-50 text-amber-900 border-amber-200"} border-b px-4 py-2.5 flex items-center justify-between gap-3 shrink-0`}>
                         <div className="flex items-center gap-3 min-w-0">
                             <AlertTriangle className={`h-5 w-5 shrink-0 ${licenseExpired ? "text-red-600" : "text-amber-600"}`} />
                             <p className="text-sm">
-                                <b>{licenseExpired ? "License expire ho chuka hai. " : "License jald expire hoga. "}</b>
-                                {daysOverdue < 0 && <span>{Math.abs(daysOverdue)} din baqi hain, recharge karein.</span>}
-                                {daysOverdue === 0 && <span>Aaj aakhri din hai, payment kar dein.</span>}
-                                {daysOverdue > 0 && <span>System {2 - daysOverdue} din mein BLOCK ho jayega.</span>}
+                                <b>{licenseExpired ? t("shell_licenseExpired") : t("shell_licenseExpiring")}</b>
+                                {daysOverdue < 0 && <span>{t("shell_licenseDaysLeft", { days: Math.abs(daysOverdue) })}</span>}
+                                {daysOverdue === 0 && <span>{t("shell_licenseLastDay")}</span>}
+                                {daysOverdue > 0 && <span>{t("shell_licenseBlocked", { days: 2 - daysOverdue })}</span>}
                             </p>
                         </div>
                         <button
                             onClick={() => setShowPaymentModal(true)}
                             className="shrink-0 rounded-lg bg-white px-3.5 py-1.5 text-xs font-bold text-stone-800 border border-stone-300 hover:bg-stone-50"
                         >
-                            Pay Now / Contact
+                            {t("shell_payNow")}
                         </button>
                     </div>
                 )}
 
-                {/* Top bar */}
                 <header className="h-16 bg-white border-b border-stone-200 px-4 md:px-6 flex items-center justify-between gap-3 shrink-0 z-10">
                     <div className="flex items-center gap-3 min-w-0">
                         <button
                             onClick={() => setSidebarOpen((open) => !open)}
                             className="rounded-lg p-2 text-stone-600 hover:bg-stone-100 transition"
-                            title="Menu"
+                            title={t("shell_menu")}
                         >
                             <Menu size={20} />
                         </button>
@@ -388,10 +382,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
 
                     <div className="flex items-center gap-2 md:gap-3">
-                        {/* Language Switcher */}
                         <LanguageSwitcher />
 
-                        {/* Sync (offline sales) */}
                         {pendingCount > 0 && (
                             <button
                                 onClick={handleSync}
@@ -404,7 +396,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             </button>
                         )}
 
-                        {/* Online status */}
                         <div className={`hidden sm:flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${isOnline ? "bg-emerald-50 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
                             <span className={`h-2 w-2 rounded-full ${isOnline ? "bg-emerald-500" : "bg-amber-500"}`} />
                             {isOnline ? t("online") : t("offline")}
@@ -413,7 +404,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
                 </header>
 
-                {/* Page content */}
                 <main className="flex-1 overflow-auto p-4 md:p-6">
                     {children}
                 </main>
@@ -424,8 +414,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <div className="bg-white rounded-2xl shadow-pop w-full max-w-md overflow-hidden">
                         <div className="p-5 border-b border-stone-200 flex justify-between items-start">
                             <div>
-                                <h2 className="text-lg font-extrabold text-stone-900">Subscription Payment</h2>
-                                <p className="text-sm text-stone-500 mt-0.5">License renew karne ke liye admin se rabta karein</p>
+                                <h2 className="text-lg font-extrabold text-stone-900">{t("shell_subscriptionPayment")}</h2>
+                                <p className="text-sm text-stone-500 mt-0.5">{t("shell_contactAdmin")}</p>
                             </div>
                             <button onClick={() => setShowPaymentModal(false)} className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"><X size={20} /></button>
                         </div>
@@ -438,29 +428,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 <div>
                                     <p className="text-[11px] text-stone-500 uppercase font-bold tracking-wider">Easypaisa</p>
                                     <p className="text-lg font-extrabold text-stone-900">0309-0391673</p>
-                                    <p className="text-xs text-stone-500">Title: Rizwan Ahmed</p>
+                                    <p className="text-xs text-stone-500">{t("shell_accountTitle", { name: "Rizwan Ahmed" })}</p>
                                 </div>
                             </div>
 
                             <div>
-                                <p className="text-sm text-stone-500 mb-3 text-center">Payment karne ke baad screenshot WhatsApp karein.</p>
+                                <p className="text-sm text-stone-500 mb-3 text-center">{t("shell_sendScreenshot")}</p>
                                 <div className="flex gap-3">
                                     <a
                                         href="https://wa.me/923001234567"
                                         target="_blank"
                                         className="btn-primary flex-1 !py-3"
                                     >
-                                        <MessageCircle size={18} /> WhatsApp
+                                        <MessageCircle size={18} /> {t("whatsappSupport")}
                                     </a>
                                     <a href="tel:03001234567" className="btn-ghost flex-1 !py-3">
-                                        <Phone size={18} /> Call Now
+                                        <Phone size={18} /> {t("callNow")}
                                     </a>
                                 </div>
                             </div>
                         </div>
 
                         <div className="bg-stone-50 px-5 py-3 text-center border-t border-stone-200">
-                            <p className="text-xs text-stone-400">Support ID: {currentShop?.uid}</p>
+                            <p className="text-xs text-stone-400">{t("shell_supportId", { id: currentShop?.uid ?? "" })}</p>
                         </div>
                     </div>
                 </div>
