@@ -41,7 +41,9 @@ export const createShopProfile = async (user: User, details: NewShopDetails): Pr
     businessType: details.businessType,
     currency: "PKR",
     createdAt: details.createdAt || new Date().toISOString(),
-    licenseExpiry: details.licenseExpiry,
+    ...(details.licenseExpiry ? { licenseExpiry: details.licenseExpiry } : {}),
+    ...(details.contact ? { contact: details.contact } : {}),
+    ...(details.address ? { address: details.address } : {}),
   };
 
   try {

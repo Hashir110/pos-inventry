@@ -8,7 +8,7 @@ export interface Shop {
   businessType: string;
   currency: string;
   createdAt: string;
-  licenseExpiry: string;
+  licenseExpiry?: string;
   contact?: string;
   address?: string;
   receiptMessage?: string;
@@ -19,7 +19,9 @@ export interface NewShopDetails {
   shopName: string;
   businessType: string;
   createdAt?: string;
-  licenseExpiry: string;
+  licenseExpiry?: string;
+  contact?: string;
+  address?: string;
 }
 
 export interface Product {
