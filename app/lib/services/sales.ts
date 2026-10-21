@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { tr } from "../i18n/translate";
-import type { Customer, PaymentMethod, PendingSale, Product, Sale, SaleItem } from "../../types";
+import type { Customer, PaymentMethod, PendingSale, Product, Sale, SaleItem, UnitType } from "../../types";
 import {
   cacheKeys,
   getCached,
@@ -653,8 +653,22 @@ export const clearCollection = async (ownerId: string, name: "products" | "sales
   }
 };
 
+export interface FullSaleItemInput {
+  id?: string;
+  productId?: string;
+  name?: string;
+  qty: number;
+  price: number;
+  buyingPrice?: number;
+  sellingPrice?: number;
+  type?: UnitType;
+  totalWeight?: number;
+  weightPerBag?: number;
+  isManualWeight?: boolean;
+}
+
 export interface FullSaleEditData {
-  items: SaleItemEdit[];
+  items: FullSaleItemInput[];
   customerName?: string;
   customerId?: string;
   paymentMethod?: PaymentMethod;
@@ -680,26 +694,34 @@ export const updateSaleFull = async (
     if ((sale.refundedAmount || 0) > 0 || sale.items.some((i) => (i.returnedQty || 0) > 0)) {
       throw new Error(tr("sales_editBlocked"));
     }
-    if (updates.items.length !== sale.items.length) {
-      throw new Error(tr("sales_errItemsChanged"));
+    if (!updates.items || updates.items.length === 0) {
+      throw new Error(tr("sales_errAtLeastOneItem"));
     }
 
-    const newItems: SaleItem[] = sale.items.map((item, i) => {
-      const e = updates.items[i];
-      if (!(e.qty > 0)) throw new Error(tr("sales_errQtyInvalid", { name: item.name }));
-      if (!(e.price >= 0)) throw new Error(tr("sales_errRateInvalid", { name: item.name }));
+    const newItems: SaleItem[] = updates.items.map((e, i) => {
+      const fallbackName = sale.items[i]?.name || `Item ${i + 1}`;
+      const name = e.name || fallbackName;
+      if (!(e.qty > 0)) throw new Error(tr("sales_errQtyInvalid", { name }));
+      if (!(e.price >= 0)) throw new Error(tr("sales_errRateInvalid", { name }));
 
-      const isWeight = item.type === "weight";
-      const perBag = item.weightPerBag || 25;
+      const isWeight = (e.type ?? sale.items[i]?.type) === "weight";
+      const perBag = e.weightPerBag ?? sale.items[i]?.weightPerBag ?? 25;
       const weight = isWeight ? e.totalWeight ?? e.qty * perBag : undefined;
-      if (isWeight && !((weight ?? 0) > 0)) throw new Error(tr("sales_errWeightInvalid", { name: item.name }));
+      if (isWeight && !((weight ?? 0) > 0)) throw new Error(tr("sales_errWeightInvalid", { name }));
+
+      const prodId = e.productId || e.id || sale.items[i]?.productId || sale.items[i]?.id || "";
+      const buyingPrice = e.buyingPrice ?? sale.items[i]?.buyingPrice ?? 0;
 
       return {
-        ...item,
+        id: prodId || `item_${i}`,
+        productId: prodId,
+        name,
         qty: e.qty,
         price: e.price,
         sellingPrice: e.price,
-        ...(isWeight ? { totalWeight: weight, isManualWeight: weight !== e.qty * perBag } : {}),
+        buyingPrice,
+        type: isWeight ? "weight" : "count",
+        ...(isWeight ? { totalWeight: weight, weightPerBag: perBag, isManualWeight: Boolean(e.isManualWeight) } : {}),
         total: roundMoney((isWeight ? (weight ?? 0) : e.qty) * e.price),
       };
     });
@@ -708,12 +730,34 @@ export const updateSaleFull = async (
     const newTotal = roundMoney(newItems.reduce((sum, it) => sum + it.total, 0) + extra);
     const oldTotal = sale.totalAmount || 0;
 
-    // Adjust product stock
-    for (let i = 0; i < newItems.length; i++) {
-      const diff = deductedUnits(newItems[i]) - deductedUnits(sale.items[i]);
+    // Adjust product stock for all affected products
+    const oldDeductedMap: Record<string, number> = {};
+    for (const it of sale.items) {
+      const pid = it.productId || it.id;
+      if (pid) {
+        oldDeductedMap[pid] = (oldDeductedMap[pid] || 0) + deductedUnits(it);
+      }
+    }
+
+    const newDeductedMap: Record<string, number> = {};
+    for (const it of newItems) {
+      const pid = it.productId || it.id;
+      if (pid) {
+        newDeductedMap[pid] = (newDeductedMap[pid] || 0) + deductedUnits(it);
+      }
+    }
+
+    const allProductIds = Array.from(new Set([
+      ...Object.keys(oldDeductedMap),
+      ...Object.keys(newDeductedMap),
+    ]));
+
+    for (const prodId of allProductIds) {
+      const oldUnits = oldDeductedMap[prodId] || 0;
+      const newUnits = newDeductedMap[prodId] || 0;
+      const diff = newUnits - oldUnits; // diff > 0: deduct more stock, diff < 0: return stock
       if (diff === 0) continue;
-      const prodId = newItems[i].productId || newItems[i].id;
-      if (!prodId) continue;
+
       const ref = doc(db, "products", prodId);
       const snap = await transaction.get(ref);
       if (snap.exists()) {
@@ -724,7 +768,10 @@ export const updateSaleFull = async (
         let newGudam = gudam;
 
         if (diff > 0) {
-          if (prod.stock < diff) throw new Error(tr("sales_errStockLow", { name: newItems[i].name, stock: prod.stock }));
+          if (prod.stock < diff) {
+            const prodName = newItems.find((it) => (it.productId || it.id) === prodId)?.name || prod.name;
+            throw new Error(tr("sales_errStockLow", { name: prodName, stock: prod.stock }));
+          }
           if (shop >= diff) {
             newShop = shop - diff;
           } else {

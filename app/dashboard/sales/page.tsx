@@ -24,6 +24,8 @@ import {
   deleteSale,
 } from "../../lib/services/sales";
 import { listCustomers } from "../../lib/services/customers";
+import { listProducts } from "../../lib/services/products";
+import ProductSelect from "../../components/ProductSelect";
 import SaleReceipt from "../../components/SaleReceipt";
 import { saleNetAmount } from "../../lib/calc";
 import { customerLabel, isCounterSale } from "../../lib/format";
@@ -32,10 +34,16 @@ import PageHeader from "../../components/PageHeader";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
 import type { TranslationKey } from "../../lib/i18n/translations";
-import type { Customer, PaymentMethod, Sale } from "../../types";
+import type { Customer, PaymentMethod, Product, Sale, UnitType } from "../../types";
 
 type SaleRow = Sale;
 interface ItemDraft {
+  id: string;
+  productId: string;
+  name: string;
+  type: UnitType;
+  weightPerBag?: number;
+  buyingPrice: number;
   qty: string;
   weight: string;
   manual: boolean;
@@ -120,11 +128,16 @@ export default function SalesHistoryPage() {
 
   const [receiptSale, setReceiptSale] = useState<SaleRow | null>(null);
 
-  // Load customers for selection during edit
+  const [products, setProducts] = useState<Product[]>([]);
+
+  // Load customers & products for selection during edit
   useEffect(() => {
     if (currentUser?.uid) {
       listCustomers(currentUser.uid)
         .then(setCustomers)
+        .catch(() => {});
+      listProducts(currentUser.uid)
+        .then(setProducts)
         .catch(() => {});
     }
   }, [currentUser]);
@@ -142,7 +155,13 @@ export default function SalesHistoryPage() {
     setDraftDescription(sale.description || "");
     setDraftExtra(sale.extraCharges ? String(sale.extraCharges) : "");
     setDraft(
-      sale.items.map((i) => ({
+      sale.items.map((i, idx) => ({
+        id: i.id || `item_${idx}_${Date.now()}`,
+        productId: i.productId || i.id || "",
+        name: i.name,
+        type: i.type || "count",
+        weightPerBag: i.weightPerBag || 25,
+        buyingPrice: i.buyingPrice || 0,
         qty: String(i.qty),
         weight:
           i.type === "weight"
@@ -158,8 +177,33 @@ export default function SalesHistoryPage() {
     setDraft(null);
   };
 
+  const changeDraftProduct = (index: number, productId: string) => {
+    const prod = products.find((p) => p.id === productId);
+    if (!prod) return;
+    setDraft((prev) =>
+      prev
+        ? prev.map((d, i) => {
+            if (i !== index) return d;
+            const isWeight = prod.unitType === "weight";
+            const qtyNum = parseFloat(d.qty) || 1;
+            const bagWeight = 25;
+            return {
+              ...d,
+              productId: prod.id,
+              name: prod.name,
+              type: prod.unitType || "count",
+              weightPerBag: bagWeight,
+              buyingPrice: prod.buyingPrice ?? 0,
+              price: String(prod.sellingPrice ?? d.price),
+              weight: isWeight ? String(qtyNum * bagWeight) : "",
+              manual: false,
+            };
+          })
+        : prev
+    );
+  };
+
   const changeDraft = (
-    sale: SaleRow,
     index: number,
     field: "qty" | "weight" | "price",
     value: string
@@ -170,42 +214,97 @@ export default function SalesHistoryPage() {
             if (i !== index) return d;
             if (field === "weight") return { ...d, weight: value, manual: true };
             if (field === "price") return { ...d, price: value };
-            const perBag = sale.items[i].weightPerBag || 25;
+            const perBag = d.weightPerBag || 25;
             const auto = d.manual
               ? d.weight
               : String((parseFloat(value) || 0) * perBag);
             return {
               ...d,
               qty: value,
-              weight: sale.items[i].type === "weight" ? auto : d.weight,
+              weight: d.type === "weight" ? auto : d.weight,
             };
           })
         : prev
     );
   };
 
-  const draftLineTotal = (sale: SaleRow, index: number) => {
-    const d = draft?.[index];
-    if (!d) return sale.items[index].total;
-    const price = parseFloat(d.price) || 0;
+  const addDraftItem = () => {
+    if (products.length === 0) {
+      toast.error("No products available to add");
+      return;
+    }
+    const existingIds = new Set(draft?.map((d) => d.productId) || []);
+    const prod = products.find((p) => !existingIds.has(p.id)) || products[0];
+    const isWeight = prod.unitType === "weight";
+    const bagWeight = 25;
+    const newItem: ItemDraft = {
+      id: `new_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      productId: prod.id,
+      name: prod.name,
+      type: prod.unitType || "count",
+      weightPerBag: bagWeight,
+      buyingPrice: prod.buyingPrice ?? 0,
+      qty: "1",
+      weight: isWeight ? String(bagWeight) : "",
+      manual: false,
+      price: String(prod.sellingPrice || 0),
+    };
+    setDraft((prev) => (prev ? [...prev, newItem] : [newItem]));
+  };
+
+  const removeDraftItem = (index: number) => {
+    setDraft((prev) => {
+      if (!prev || prev.length <= 1) {
+        toast.error(t("sales_errAtLeastOneItem"));
+        return prev;
+      }
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const draftLineTotal = (item: ItemDraft) => {
+    const price = parseFloat(item.price) || 0;
     const units =
-      sale.items[index].type === "weight"
-        ? parseFloat(d.weight) || 0
-        : parseFloat(d.qty) || 0;
+      item.type === "weight"
+        ? parseFloat(item.weight) || 0
+        : parseFloat(item.qty) || 0;
     return units * price;
   };
 
   const saveEdit = async (sale: SaleRow) => {
     if (!draft || !currentUser) return;
+    if (draft.length === 0) {
+      toast.error(t("sales_errAtLeastOneItem"));
+      return;
+    }
+    for (const d of draft) {
+      if (!(parseFloat(d.qty) > 0)) {
+        toast.error(t("sales_errQtyInvalid", { name: d.name }));
+        return;
+      }
+      if (d.type === "weight" && !(parseFloat(d.weight) > 0)) {
+        toast.error(t("sales_errWeightInvalid", { name: d.name }));
+        return;
+      }
+    }
     setSaving(true);
     try {
       const extraNow = Math.max(0, parseFloat(draftExtra) || 0);
       const updated = await updateSaleFull(sale.id, currentUser.uid, {
-        items: draft.map((d, i) => ({
+        items: draft.map((d) => ({
+          id: d.id,
+          productId: d.productId,
+          name: d.name,
+          type: d.type,
+          weightPerBag: d.weightPerBag,
+          buyingPrice: d.buyingPrice,
           qty: Math.max(0.1, parseFloat(d.qty) || 0),
           price: Math.max(0, parseFloat(d.price) || 0),
-          ...(sale.items[i].type === "weight"
-            ? { totalWeight: Math.max(0.1, parseFloat(d.weight) || 0) }
+          ...(d.type === "weight"
+            ? {
+                totalWeight: Math.max(0.1, parseFloat(d.weight) || 0),
+                isManualWeight: d.manual,
+              }
             : {}),
         })),
         customerName: draftCustomerName.trim() || "Counter Sale",
@@ -556,8 +655,8 @@ export default function SalesHistoryPage() {
         const sale = selectedSale;
         const status = saleStatus(sale);
         const isEditing = draft !== null;
-        const subTotal = isEditing
-          ? sale.items.reduce((s, _i, idx) => s + draftLineTotal(sale, idx), 0)
+        const subTotal = isEditing && draft
+          ? draft.reduce((s, it) => s + draftLineTotal(it), 0)
           : sale.items.reduce((s, i) => s + (i.total || i.price * i.qty), 0);
         const refunded = sale.refundedAmount || 0;
         const extraVal = isEditing
@@ -780,7 +879,7 @@ export default function SalesHistoryPage() {
                 <h4 className="mb-3 mt-7 text-sm font-bold text-stone-900">
                   {t("sales_orderSummary")}
                 </h4>
-                <div className="overflow-x-auto rounded-xl border border-stone-200">
+                <div className={`overflow-x-auto rounded-xl border border-stone-200 ${isEditing ? "min-h-[280px] pb-36" : ""}`}>
                   <table className="w-full text-left text-sm">
                     <thead className="bg-stone-50 text-stone-600 text-xs uppercase tracking-wider font-bold">
                       <tr>
@@ -788,104 +887,157 @@ export default function SalesHistoryPage() {
                         <th className="px-4 py-3 text-center">{t("sales_qtyBags")}</th>
                         <th className="px-4 py-3 text-center">{t("sales_totalWeight")}</th>
                         <th className="px-4 py-3 text-right">{t("sales_rate")}</th>
-                        <th className="px-4 py-3 text-center">{t("sales_statusReturned")}</th>
+                        {!isEditing && (
+                          <th className="px-4 py-3 text-center">{t("sales_statusReturned")}</th>
+                        )}
                         <th className="px-4 py-3 text-right">{t("total")}</th>
+                        {isEditing && (
+                          <th className="px-3 py-3 text-center w-10"></th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
-                      {sale.items.map((item, idx) => {
-                        const isWeight = item.type === "weight";
-                        const weightVal =
-                          item.totalWeight ??
-                          (isWeight ? item.qty * (item.weightPerBag || 25) : undefined);
-                        const weightStr =
-                          weightVal !== undefined ? `${weightVal} kg` : "—";
-                        const qtyStr = isWeight
-                          ? t("sales_bagsCount", {
-                              count: String(item.qty).padStart(2, "0"),
-                            })
-                          : t("sales_pcsCount", { count: item.qty });
-
-                        return (
-                          <tr key={idx} className="hover:bg-stone-50/50 transition">
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-3">
-                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-100 font-display text-sm font-bold text-brand-700">
-                                  {item.name.trim().charAt(0).toUpperCase()}
-                                </span>
-                                <span className="font-semibold text-stone-900">
-                                  {item.name}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-center font-semibold text-stone-800 tabular">
-                              {isEditing ? (
+                      {isEditing && draft ? (
+                        draft.map((draftItem, idx) => {
+                          const isWeight = draftItem.type === "weight";
+                          return (
+                            <tr key={draftItem.id || idx} className="hover:bg-stone-50/50 transition">
+                              <td className="px-4 py-2.5">
+                                <ProductSelect
+                                  products={products}
+                                  value={draftItem.productId}
+                                  displayName={draftItem.name}
+                                  onChange={(prod) => changeDraftProduct(idx, prod.id)}
+                                />
+                              </td>
+                              <td className="px-4 py-2.5 text-center font-semibold text-stone-800 tabular">
                                 <input
                                   type="number"
                                   min="0.1"
                                   step="any"
-                                  value={draft[idx]?.qty ?? ""}
+                                  value={draftItem.qty}
                                   onChange={(e) =>
-                                    changeDraft(sale, idx, "qty", e.target.value)
+                                    changeDraft(idx, "qty", e.target.value)
                                   }
                                   className="field !w-20 !py-1 text-center font-bold"
                                 />
-                              ) : (
-                                qtyStr
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-center font-bold text-stone-900 tabular">
-                              {isEditing && isWeight ? (
+                              </td>
+                              <td className="px-4 py-2.5 text-center font-bold text-stone-900 tabular">
+                                {isWeight ? (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    value={draftItem.weight}
+                                    onChange={(e) =>
+                                      changeDraft(idx, "weight", e.target.value)
+                                    }
+                                    className={`field !w-24 !py-1 text-center font-bold ${
+                                      draftItem.manual
+                                        ? "!border-amber-300 !bg-amber-50"
+                                        : ""
+                                    }`}
+                                  />
+                                ) : (
+                                  <span className="text-stone-300">—</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-2.5 text-right text-stone-600 tabular">
                                 <input
                                   type="number"
                                   min="0"
                                   step="any"
-                                  value={draft[idx]?.weight ?? ""}
+                                  value={draftItem.price}
                                   onChange={(e) =>
-                                    changeDraft(sale, idx, "weight", e.target.value)
-                                  }
-                                  className={`field !w-24 !py-1 text-center font-bold ${
-                                    draft[idx]?.manual
-                                      ? "!border-amber-300 !bg-amber-50"
-                                      : ""
-                                  }`}
-                                />
-                              ) : (
-                                weightStr
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-right text-stone-600 tabular">
-                              {isEditing ? (
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="any"
-                                  value={draft[idx]?.price ?? ""}
-                                  onChange={(e) =>
-                                    changeDraft(sale, idx, "price", e.target.value)
+                                    changeDraft(idx, "price", e.target.value)
                                   }
                                   className="field !w-24 !py-1 text-right font-bold"
                                 />
-                              ) : (
-                                <>Rs. {item.price}</>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-center font-semibold text-red-600 tabular">
-                              {(item.returnedQty || 0) > 0
-                                ? isWeight
-                                  ? `${item.returnedQty} kg`
-                                  : item.returnedQty
-                                : "—"}
-                            </td>
-                            <td className="px-4 py-3 text-right font-bold text-stone-900 tabular">
-                              Rs. {Math.round(draftLineTotal(sale, idx)).toLocaleString()}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                              </td>
+                              <td className="px-4 py-2.5 text-right font-bold text-stone-900 tabular">
+                                Rs. {Math.round(draftLineTotal(draftItem)).toLocaleString()}
+                              </td>
+                              <td className="px-3 py-2.5 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => removeDraftItem(idx)}
+                                  disabled={draft.length <= 1}
+                                  title={draft.length <= 1 ? "At least one item required" : "Remove item"}
+                                  className="rounded-lg p-1.5 text-stone-400 hover:bg-red-50 hover:text-red-600 transition disabled:opacity-20"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        sale.items.map((item, idx) => {
+                          const isWeight = item.type === "weight";
+                          const weightVal =
+                            item.totalWeight ??
+                            (isWeight ? item.qty * (item.weightPerBag || 25) : undefined);
+                          const weightStr =
+                            weightVal !== undefined ? `${weightVal} kg` : "—";
+                          const qtyStr = isWeight
+                            ? t("sales_bagsCount", {
+                                count: String(item.qty).padStart(2, "0"),
+                              })
+                            : t("sales_pcsCount", { count: item.qty });
+
+                          return (
+                            <tr key={idx} className="hover:bg-stone-50/50 transition">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-100 font-display text-sm font-bold text-brand-700">
+                                    {item.name.trim().charAt(0).toUpperCase()}
+                                  </span>
+                                  <span className="font-semibold text-stone-900">
+                                    {item.name}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-center font-semibold text-stone-800 tabular">
+                                {qtyStr}
+                              </td>
+                              <td className="px-4 py-3 text-center font-bold text-stone-900 tabular">
+                                {weightStr}
+                              </td>
+                              <td className="px-4 py-3 text-right text-stone-600 tabular">
+                                Rs. {item.price}
+                              </td>
+                              <td className="px-4 py-3 text-center font-semibold text-red-600 tabular">
+                                {(item.returnedQty || 0) > 0
+                                  ? isWeight
+                                    ? `${item.returnedQty} kg`
+                                    : item.returnedQty
+                                  : "—"}
+                              </td>
+                              <td className="px-4 py-3 text-right font-bold text-stone-900 tabular">
+                                Rs. {Math.round(item.total || item.price * item.qty).toLocaleString()}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
+
+                {isEditing && (
+                  <div className="mt-2.5 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={addDraftItem}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-brand-300 bg-brand-50 px-3 py-1.5 text-xs font-bold text-brand-700 transition hover:bg-brand-100 hover:border-brand-400 shadow-sm"
+                    >
+                      <Plus size={16} /> {t("sales_addItem")}
+                    </button>
+                    <span className="text-xs text-stone-400 font-medium">
+                      {draft?.length || 0} {t("items")}
+                    </span>
+                  </div>
+                )}
 
                 {isEditing && (
                   <div className="mt-4 flex items-center justify-end gap-3 bg-amber-50/60 border border-amber-200/60 p-3 rounded-xl">

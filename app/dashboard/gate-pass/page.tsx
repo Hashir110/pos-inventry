@@ -27,6 +27,7 @@ import {
 import { toast } from "react-toastify";
 import PageHeader from "../../components/PageHeader";
 import { useLanguage } from "../../store/useLanguage";
+import AddPartyModal from "../../components/AddPartyModal";
 
 interface PassItem {
   productId: string;
@@ -73,6 +74,7 @@ export default function GatePassPage() {
 
   const [printPass, setPrintPass] = useState<GatePass | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showAddPartyModal, setShowAddPartyModal] = useState(false);
 
   useEffect(() => {
     if (!ownerId) return;
@@ -297,7 +299,8 @@ export default function GatePassPage() {
                       {t("gatePass_partyLabel")} <span className="text-red-500">*</span>
                     </label>
 
-                    <div className="relative w-full" ref={partyDropdownRef}>
+                    <div className="flex gap-2">
+                      <div className="relative min-w-0 flex-1" ref={partyDropdownRef}>
                         <button
                           type="button"
                           onClick={() => setIsPartyOpen((prev) => !prev)}
@@ -364,7 +367,7 @@ export default function GatePassPage() {
                         </button>
 
                         {isPartyOpen && (
-                          <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl border border-stone-200 shadow-xl overflow-hidden">
+                          <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl border border-stone-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
                             <div className="p-2.5 border-b border-stone-100 bg-stone-50/80">
                               <div className="relative">
                                 <Search
@@ -393,8 +396,20 @@ export default function GatePassPage() {
 
                             <div className="max-h-56 overflow-y-auto divide-y divide-stone-50">
                               {filteredCustomers.length === 0 ? (
-                                <div className="p-5 text-center text-stone-400 text-xs">
+                                <div className="p-5 text-center text-stone-400 text-xs space-y-2.5">
                                   <p>{t("gatePass_noParty")} {partySearch ? `"${partySearch}"` : ""}</p>
+                                  {partySearch.trim() && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setIsPartyOpen(false);
+                                        setShowAddPartyModal(true);
+                                      }}
+                                      className="btn-primary !py-1.5 !px-3 text-xs inline-flex items-center gap-1.5 font-bold shadow-sm"
+                                    >
+                                      <Plus size={14} /> Add &quot;{partySearch.trim()}&quot;
+                                    </button>
+                                  )}
                                 </div>
                               ) : (
                                 filteredCustomers.map((c) => {
@@ -443,9 +458,32 @@ export default function GatePassPage() {
                                 })
                               )}
                             </div>
+
+                            <div className="p-2 border-t border-stone-100 bg-stone-50">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsPartyOpen(false);
+                                  setShowAddPartyModal(true);
+                                }}
+                                className="btn-primary w-full !py-2 text-xs flex items-center justify-center gap-1.5 font-bold shadow-sm"
+                              >
+                                <Plus size={14} /> {t("pos_select_new_party") || "Add New Party"}
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowAddPartyModal(true)}
+                        className="flex shrink-0 items-center justify-center rounded-xl border border-brand-500 bg-brand-50 px-3.5 text-brand-700 transition hover:bg-brand-100 shadow-sm"
+                        title={t("pos_select_new_party") || "Add New Party"}
+                      >
+                        <Plus size={18} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="rounded-xl border border-stone-200 bg-stone-50/70 p-4 space-y-4">
@@ -938,6 +976,18 @@ export default function GatePassPage() {
           </div>
         </div>
       )}
+
+      <AddPartyModal
+        open={showAddPartyModal}
+        initialName={partySearch}
+        onClose={() => setShowAddPartyModal(false)}
+        onSaved={(created) => {
+          setCustomerId(created.id);
+          setCustomerName(created.name);
+          setIsPartyOpen(false);
+          setPartySearch("");
+        }}
+      />
     </div>
   );
 }

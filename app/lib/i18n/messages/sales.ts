@@ -58,6 +58,8 @@ const en = {
   sales_editPaymentMethod: "Payment Method",
   sales_editTransport: "Transport / Bilty",
   sales_editNotes: "Notes / Description",
+  sales_addItem: "Add Item",
+  sales_errAtLeastOneItem: "Invoice must contain at least one item",
 };
 
 const ur: Record<keyof typeof en, string> = {
@@ -120,6 +122,8 @@ const ur: Record<keyof typeof en, string> = {
   sales_editPaymentMethod: "ادائیگی کا طریقہ",
   sales_editTransport: "ٹرانسپورٹ / بلٹی",
   sales_editNotes: "تفصیل / نوٹس",
+  sales_addItem: "آئٹم شامل کریں",
+  sales_errAtLeastOneItem: "انوائس میں کم از کم ایک آئٹم ہونا ضروری ہے",
 };
 
 export const sales = { en, ur };

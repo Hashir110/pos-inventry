@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Search, ChevronDown, User, X, Plus, Check, Wallet } from "lucide-react";
 import { useLanguage } from "../store/useLanguage";
+import AddPartyModal from "./AddPartyModal";
 import type { Customer } from "../types";
 
 interface CustomerSelectProps {
@@ -22,6 +23,7 @@ export default function CustomerSelect({
   const router = useRouter();
   const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
+  const [showAddPartyModal, setShowAddPartyModal] = useState(false);
   const [search, setSearch] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -231,7 +233,10 @@ export default function CustomerSelect({
           <div className="p-2 border-t border-stone-100 bg-stone-50">
             <button
               type="button"
-              onClick={handleGoToUdhar}
+              onClick={() => {
+                setIsOpen(false);
+                setShowAddPartyModal(true);
+              }}
               className="btn-primary w-full !py-2 text-xs flex items-center justify-center gap-1.5 font-bold shadow-sm"
             >
               <Plus size={14} /> {t("pos_select_new_party")}
@@ -239,6 +244,17 @@ export default function CustomerSelect({
           </div>
         </div>
       )}
+
+      <AddPartyModal
+        open={showAddPartyModal}
+        initialName={search}
+        onClose={() => setShowAddPartyModal(false)}
+        onSaved={(created) => {
+          onSelectCustomer(created);
+          setIsOpen(false);
+          setSearch("");
+        }}
+      />
     </div>
   );
 }

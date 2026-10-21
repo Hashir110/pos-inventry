@@ -422,7 +422,7 @@ export default function POSPage() {
                 </div>
 
                 <div className="flex items-end gap-3 border-b border-stone-200 px-3.5 py-2">
-                    <div className="w-full max-w-[280px] space-y-1">
+                    <div className="min-w-0 flex-1 space-y-1">
                         <div className="flex justify-between items-center">
                             <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
                                 {paymentMethod === "Udhar" ? t("pos_party_credit_label") : t("customer")}
@@ -442,7 +442,7 @@ export default function POSPage() {
                         />
                     </div>
 
-                    <div className="min-w-0 flex-1 space-y-1">
+                    <div className="w-full max-w-[280px] shrink-0 space-y-1">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{t("pos_transport")}</label>
                         <div className="flex gap-2">
                             <div className="min-w-0 flex-1">
