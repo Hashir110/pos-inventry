@@ -147,7 +147,14 @@ export const createOnlineSale = async (
       if (stock < deductQty) throw new Error(tr("sales_errStockLow", { name: item.name, stock }));
     }
 
-    transaction.update(shopRef, { invoiceCounter: nextInvoice });
+    const shopDefaults = shopSnap.exists() ? {} : {
+      uid: ownerId,
+      shopName: "Eman Traders",
+      businessType: "Wholesale",
+      currency: "PKR",
+      createdAt: new Date().toISOString(),
+    };
+    transaction.set(shopRef, { ...shopDefaults, invoiceCounter: nextInvoice }, { merge: true });
     if (customerRef && customerSnap) {
       const balance = (customerSnap.data() as Customer).balance || 0;
       transaction.update(customerRef, { balance: roundMoney(balance + totalAmount) });
