@@ -48,6 +48,16 @@ const en = {
   sales_errWeightInvalid: "{name}: Weight must be greater than 0",
   sales_errSelectParty: "Select a party for credit",
   sales_errPartyNotFound: "Party not found",
+  sales_deleteBill: "Delete Bill",
+  sales_deleteConfirmTitle: "Delete Bill #{invoice}?",
+  sales_deleteConfirmMsg: "Are you sure you want to delete this bill? Stock will be returned to inventory and customer credit will be reversed.",
+  sales_billDeleted: "Bill deleted successfully",
+  sales_deleteFailed: "Failed to delete bill",
+  sales_deleting: "Deleting...",
+  sales_editCustomer: "Customer Name",
+  sales_editPaymentMethod: "Payment Method",
+  sales_editTransport: "Transport / Bilty",
+  sales_editNotes: "Notes / Description",
 };
 
 const ur: Record<keyof typeof en, string> = {
@@ -100,6 +110,16 @@ const ur: Record<keyof typeof en, string> = {
   sales_errWeightInvalid: "{name}: وزن 0 سے زیادہ ہونا چاہیے",
   sales_errSelectParty: "ادھار کے لیے پارٹی منتخب کریں",
   sales_errPartyNotFound: "پارٹی نہیں ملی",
+  sales_deleteBill: "بل ڈیلیٹ کریں",
+  sales_deleteConfirmTitle: "کیا بل نمبر #{invoice} ڈیلیٹ کرنا چاہتے ہیں؟",
+  sales_deleteConfirmMsg: "کیا آپ واقعی یہ بل ڈیلیٹ کرنا چاہتے ہیں؟ اس کا سامان واپس اسٹاک میں جمع ہو جائے گا اور ادھار ختم ہو جائے گا۔",
+  sales_billDeleted: "بل کامیابی سے ڈیلیٹ ہو گیا اور اسٹاک بحال ہو گیا",
+  sales_deleteFailed: "بل ڈیلیٹ نہیں ہو سکا",
+  sales_deleting: "ڈیلیٹ ہو رہا ہے...",
+  sales_editCustomer: "گاہک کا نام",
+  sales_editPaymentMethod: "ادائیگی کا طریقہ",
+  sales_editTransport: "ٹرانسپورٹ / بلٹی",
+  sales_editNotes: "تفصیل / نوٹس",
 };
 
 export const sales = { en, ur };

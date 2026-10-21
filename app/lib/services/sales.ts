@@ -10,7 +10,7 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { auth, db } from "../firebase";
 import { tr } from "../i18n/translate";
 import type { Customer, PaymentMethod, PendingSale, Product, Sale, SaleItem } from "../../types";
 import {
@@ -118,6 +118,7 @@ export const createOnlineSale = async (
   totalAmount: number,
   meta: SaleMeta
 ): Promise<string> => {
+  const saleRef = doc(collection(db, "sales"));
   let invoiceNo = "";
 
   await runTransaction(db, async (transaction) => {
@@ -149,6 +150,7 @@ export const createOnlineSale = async (
 
     const shopDefaults = shopSnap.exists() ? {} : {
       uid: ownerId,
+      email: auth.currentUser?.email || "",
       shopName: "Eman Traders",
       businessType: "Wholesale",
       currency: "PKR",
@@ -183,7 +185,6 @@ export const createOnlineSale = async (
       });
     }
 
-    const saleRef = doc(collection(db, "sales"));
     const saleData = stripUndefined({
       saleId: saleRef.id,
       ownerId: ownerId || "",
@@ -200,8 +201,8 @@ export const createOnlineSale = async (
   const salesKey = cacheKeys.sales(ownerId);
   const currentSales = getCachedEvenStale<Sale[]>(salesKey) || [];
   const createdSale: Sale = {
-    id: `${ownerId}_${invoiceNo}`,
-    saleId: `${ownerId}_${invoiceNo}`,
+    id: saleRef.id,
+    saleId: saleRef.id,
     ownerId,
     items: cart.map(cleanSaleItem),
     totalAmount: roundMoney(totalAmount || 0),
@@ -450,12 +451,63 @@ export interface SaleItemEdit {
 const deductedUnits = (item: Pick<SaleItem, "type" | "totalWeight" | "qty">): number =>
   item.type === "weight" && item.totalWeight ? item.totalWeight : item.qty;
 
+export const resolveSaleRef = async (saleId: string, ownerId?: string) => {
+  // 1. Direct doc lookup
+  try {
+    const directRef = doc(db, "sales", saleId);
+    const directSnap = await getDoc(directRef);
+    if (directSnap.exists()) return directRef;
+  } catch {}
+
+  // 2. Query by ownerId & invoiceNo if available
+  const cleanInvoice = saleId.replace(/^local_/, "").split("_").pop();
+  if (cleanInvoice && ownerId) {
+    try {
+      const q1 = query(
+        collection(db, "sales"),
+        where("ownerId", "==", ownerId),
+        where("invoiceNo", "==", cleanInvoice),
+        limit(1)
+      );
+      const snap1 = await getDocs(q1);
+      if (!snap1.empty) return snap1.docs[0].ref;
+    } catch {}
+  }
+
+  // 3. Fallback query by invoiceNo alone
+  if (cleanInvoice) {
+    try {
+      const q2 = query(
+        collection(db, "sales"),
+        where("invoiceNo", "==", cleanInvoice),
+        limit(1)
+      );
+      const snap2 = await getDocs(q2);
+      if (!snap2.empty) return snap2.docs[0].ref;
+    } catch {}
+  }
+
+  // 4. Try saleId field match
+  try {
+    const q3 = query(
+      collection(db, "sales"),
+      where("saleId", "==", saleId),
+      limit(1)
+    );
+    const snap3 = await getDocs(q3);
+    if (!snap3.empty) return snap3.docs[0].ref;
+  } catch {}
+
+  return doc(db, "sales", saleId);
+};
+
 export const updateSaleItems = async (
   saleId: string,
   edits: SaleItemEdit[],
-  extraCharges?: number
+  extraCharges?: number,
+  ownerId?: string
 ): Promise<{ items: SaleItem[]; totalAmount: number; extraCharges: number }> => {
-  const saleRef = doc(db, "sales", saleId);
+  const saleRef = await resolveSaleRef(saleId, ownerId);
   let result: { items: SaleItem[]; totalAmount: number; extraCharges: number } = { items: [], totalAmount: 0, extraCharges: 0 };
 
   await runTransaction(db, async (transaction) => {
@@ -599,4 +651,279 @@ export const clearCollection = async (ownerId: string, name: "products" | "sales
     snap.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
     await batch.commit();
   }
+};
+
+export interface FullSaleEditData {
+  items: SaleItemEdit[];
+  customerName?: string;
+  customerId?: string;
+  paymentMethod?: PaymentMethod;
+  transport?: string;
+  extraCharges?: number;
+  description?: string;
+}
+
+export const updateSaleFull = async (
+  saleId: string,
+  ownerId: string,
+  updates: FullSaleEditData
+): Promise<Sale> => {
+  const saleRef = await resolveSaleRef(saleId, ownerId);
+  let updatedSale: Sale | null = null;
+  const stockChanges: { prodId: string; diff: number }[] = [];
+
+  await runTransaction(db, async (transaction) => {
+    const saleSnap = await transaction.get(saleRef);
+    if (!saleSnap.exists()) throw new Error(tr("sales_errBillNotFound"));
+    const sale = saleSnap.data() as Omit<Sale, "id">;
+
+    if ((sale.refundedAmount || 0) > 0 || sale.items.some((i) => (i.returnedQty || 0) > 0)) {
+      throw new Error(tr("sales_editBlocked"));
+    }
+    if (updates.items.length !== sale.items.length) {
+      throw new Error(tr("sales_errItemsChanged"));
+    }
+
+    const newItems: SaleItem[] = sale.items.map((item, i) => {
+      const e = updates.items[i];
+      if (!(e.qty > 0)) throw new Error(tr("sales_errQtyInvalid", { name: item.name }));
+      if (!(e.price >= 0)) throw new Error(tr("sales_errRateInvalid", { name: item.name }));
+
+      const isWeight = item.type === "weight";
+      const perBag = item.weightPerBag || 25;
+      const weight = isWeight ? e.totalWeight ?? e.qty * perBag : undefined;
+      if (isWeight && !((weight ?? 0) > 0)) throw new Error(tr("sales_errWeightInvalid", { name: item.name }));
+
+      return {
+        ...item,
+        qty: e.qty,
+        price: e.price,
+        sellingPrice: e.price,
+        ...(isWeight ? { totalWeight: weight, isManualWeight: weight !== e.qty * perBag } : {}),
+        total: roundMoney((isWeight ? (weight ?? 0) : e.qty) * e.price),
+      };
+    });
+
+    const extra = Math.max(0, roundMoney(updates.extraCharges ?? sale.extraCharges ?? 0));
+    const newTotal = roundMoney(newItems.reduce((sum, it) => sum + it.total, 0) + extra);
+    const oldTotal = sale.totalAmount || 0;
+
+    // Adjust product stock
+    for (let i = 0; i < newItems.length; i++) {
+      const diff = deductedUnits(newItems[i]) - deductedUnits(sale.items[i]);
+      if (diff === 0) continue;
+      const prodId = newItems[i].productId || newItems[i].id;
+      if (!prodId) continue;
+      const ref = doc(db, "products", prodId);
+      const snap = await transaction.get(ref);
+      if (snap.exists()) {
+        const prod = snap.data() as Product;
+        const shop = prod.shopStock ?? 0;
+        const gudam = prod.gudamStock ?? 0;
+        let newShop = shop;
+        let newGudam = gudam;
+
+        if (diff > 0) {
+          if (prod.stock < diff) throw new Error(tr("sales_errStockLow", { name: newItems[i].name, stock: prod.stock }));
+          if (shop >= diff) {
+            newShop = shop - diff;
+          } else {
+            newGudam = Math.max(0, gudam - (diff - shop));
+            newShop = 0;
+          }
+        } else {
+          newShop = shop - diff;
+        }
+        transaction.update(ref, { stock: newShop + newGudam, shopStock: newShop, gudamStock: newGudam });
+        stockChanges.push({ prodId, diff });
+      }
+    }
+
+    // Customer balance adjustment
+    const oldMethod = sale.paymentMethod || "Cash";
+    const newMethod = updates.paymentMethod || oldMethod;
+    const oldCustId = sale.customerId;
+    const newCustId = updates.customerId ?? oldCustId;
+
+    if (oldMethod === "Udhar" && newMethod !== "Udhar" && oldCustId) {
+      const oldCustRef = doc(db, "customers", oldCustId);
+      const oldCustSnap = await transaction.get(oldCustRef);
+      if (oldCustSnap.exists()) {
+        const bal = (oldCustSnap.data() as Customer).balance || 0;
+        transaction.update(oldCustRef, { balance: Math.max(0, roundMoney(bal - oldTotal)) });
+      }
+    } else if (oldMethod !== "Udhar" && newMethod === "Udhar" && newCustId) {
+      const newCustRef = doc(db, "customers", newCustId);
+      const newCustSnap = await transaction.get(newCustRef);
+      if (newCustSnap.exists()) {
+        const bal = (newCustSnap.data() as Customer).balance || 0;
+        transaction.update(newCustRef, { balance: roundMoney(bal + newTotal) });
+      }
+    } else if (oldMethod === "Udhar" && newMethod === "Udhar") {
+      if (oldCustId === newCustId && oldCustId && newTotal !== oldTotal) {
+        const custRef = doc(db, "customers", oldCustId);
+        const custSnap = await transaction.get(custRef);
+        if (custSnap.exists()) {
+          const bal = (custSnap.data() as Customer).balance || 0;
+          transaction.update(custRef, { balance: Math.max(0, roundMoney(bal + newTotal - oldTotal)) });
+        }
+      } else if (oldCustId !== newCustId) {
+        if (oldCustId) {
+          const oldRef = doc(db, "customers", oldCustId);
+          const oldSnap = await transaction.get(oldRef);
+          if (oldSnap.exists()) {
+            const bal = (oldSnap.data() as Customer).balance || 0;
+            transaction.update(oldRef, { balance: Math.max(0, roundMoney(bal - oldTotal)) });
+          }
+        }
+        if (newCustId) {
+          const newRef = doc(db, "customers", newCustId);
+          const newSnap = await transaction.get(newRef);
+          if (newSnap.exists()) {
+            const bal = (newSnap.data() as Customer).balance || 0;
+            transaction.update(newRef, { balance: roundMoney(bal + newTotal) });
+          }
+        }
+      }
+    }
+
+    const payload = stripUndefined({
+      items: newItems.map(cleanSaleItem),
+      totalAmount: newTotal,
+      extraCharges: extra,
+      customerName: updates.customerName?.trim() || sale.customerName || "Counter Sale",
+      customerId: newMethod === "Udhar" ? newCustId : undefined,
+      paymentMethod: newMethod,
+      transport: updates.transport !== undefined ? updates.transport.trim() : sale.transport,
+      description: updates.description !== undefined ? updates.description.trim() : sale.description,
+      editedAt: new Date().toISOString(),
+    });
+
+    transaction.update(saleRef, payload);
+    updatedSale = { id: saleRef.id, ...sale, ...payload };
+  });
+
+  if (!updatedSale) throw new Error("Update failed");
+
+  // Optimistically update local cache
+  const salesKey = cacheKeys.sales(ownerId);
+  const cachedSales = getCachedEvenStale<Sale[]>(salesKey);
+  if (cachedSales) {
+    setCached(
+      salesKey,
+      cachedSales.map((s) =>
+        s.id === saleId || s.id === saleRef.id || s.invoiceNo === updatedSale!.invoiceNo
+          ? updatedSale!
+          : s
+      )
+    );
+  }
+
+  // Update products cache
+  if (stockChanges.length > 0) {
+    const prodsKey = cacheKeys.products(ownerId);
+    const cachedProds = getCachedEvenStale<Product[]>(prodsKey);
+    if (cachedProds) {
+      setCached(
+        prodsKey,
+        cachedProds.map((p) => {
+          const ch = stockChanges.find((c) => c.prodId === p.id);
+          if (!ch) return p;
+          const newStock = Math.max(0, (p.stock || 0) - ch.diff);
+          const newShop = Math.max(0, (p.shopStock ?? p.stock ?? 0) - ch.diff);
+          return { ...p, stock: newStock, shopStock: newShop };
+        })
+      );
+    }
+  }
+
+  return updatedSale;
+};
+
+export const deleteSale = async (saleId: string, ownerId: string): Promise<void> => {
+  const saleRef = await resolveSaleRef(saleId, ownerId);
+  const stockRestores: { prodId: string; qty: number }[] = [];
+  let deletedInvoiceNo: string | undefined;
+
+  await runTransaction(db, async (transaction) => {
+    const saleSnap = await transaction.get(saleRef);
+    if (!saleSnap.exists()) return;
+    const sale = saleSnap.data() as Omit<Sale, "id">;
+    deletedInvoiceNo = sale.invoiceNo;
+
+    // 1. Restore product stock
+    for (const item of sale.items || []) {
+      const prodId = item.productId || item.id;
+      if (!prodId) continue;
+      const ref = doc(db, "products", prodId);
+      const snap = await transaction.get(ref);
+      if (snap.exists()) {
+        const prod = snap.data() as Product;
+        const addQty = item.qty || 0;
+        const shop = prod.shopStock ?? 0;
+        const gudam = prod.gudamStock ?? 0;
+        const newShop = shop + addQty;
+        const newStock = newShop + gudam;
+        transaction.update(ref, {
+          stock: newStock,
+          shopStock: newShop,
+          gudamStock: gudam,
+        });
+        stockRestores.push({ prodId, qty: addQty });
+      }
+    }
+
+    // 2. Reverse customer balance if Udhar
+    if (sale.paymentMethod === "Udhar" && sale.customerId) {
+      const custRef = doc(db, "customers", sale.customerId);
+      const custSnap = await transaction.get(custRef);
+      if (custSnap.exists()) {
+        const bal = (custSnap.data() as Customer).balance || 0;
+        const net = roundMoney((sale.totalAmount || 0) - (sale.refundedAmount || 0));
+        transaction.update(custRef, { balance: Math.max(0, roundMoney(bal - net)) });
+      }
+    }
+
+    // 3. Delete sale doc
+    transaction.delete(saleRef);
+  });
+
+  // 4. Update local caches
+  const salesKey = cacheKeys.sales(ownerId);
+  const cachedSales = getCachedEvenStale<Sale[]>(salesKey);
+  if (cachedSales) {
+    setCached(
+      salesKey,
+      cachedSales.filter(
+        (s) =>
+          s.id !== saleId &&
+          s.id !== saleRef.id &&
+          (!deletedInvoiceNo || s.invoiceNo !== deletedInvoiceNo)
+      )
+    );
+  }
+
+  // Restore product cache
+  if (stockRestores.length > 0) {
+    const prodsKey = cacheKeys.products(ownerId);
+    const cachedProds = getCachedEvenStale<Product[]>(prodsKey);
+    if (cachedProds) {
+      setCached(
+        prodsKey,
+        cachedProds.map((p) => {
+          const res = stockRestores.find((r) => r.prodId === p.id);
+          if (!res) return p;
+          return {
+            ...p,
+            stock: (p.stock || 0) + res.qty,
+            shopStock: (p.shopStock ?? p.stock ?? 0) + res.qty,
+          };
+        })
+      );
+    }
+  }
+
+  // Remove from pending offline if needed
+  const pending = getPendingSales().filter((p) => p.invoiceNo !== saleId && `local_${p.invoiceNo}` !== saleId);
+  savePendingSales(pending);
 };
