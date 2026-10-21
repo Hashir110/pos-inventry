@@ -52,6 +52,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const autoSyncTried = useRef(false);
 
     useEffect(() => {
+        if (typeof window !== "undefined") {
+            const unlocked = sessionStorage.getItem("eman_access_granted");
+            if (!unlocked) {
+                router.replace("/");
+                return;
+            }
+        }
+
         const unsubscribe = auth.onAuthStateChanged(async (user) => {
             if (!user) {
                 router.push("/");
@@ -63,28 +71,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 shopData = await getUserShopProfile(user.uid);
             } catch (error) {
                 console.error("Shop profile load failed:", error);
-                if (navigator.onLine) {
-                    setLoadError(true);
-                    return;
-                }
             }
+
             if (!shopData) {
-                if (navigator.onLine) {
-                    router.push("/setup");
-                    return;
-                }
+                shopData = {
+                    uid: user.uid,
+                    email: user.email,
+                    shopName: "Eman Traders",
+                    businessType: "Wholesale",
+                    currency: "PKR",
+                    createdAt: new Date().toISOString(),
+                };
             }
+
             setLoadError(false);
             setCurrentUser(user);
-            if (shopData) {
-                setCurrentShop(shopData);
-            }
+            setCurrentShop(shopData);
             setLoading(false);
         });
 
         return () => unsubscribe();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [router]);
 
     useEffect(() => {
         const checkPending = () => {
@@ -152,6 +160,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOnline, loading]);
     const handleLogout = async () => {
+        if (typeof window !== "undefined") {
+            sessionStorage.removeItem("eman_access_granted");
+        }
         await auth.signOut();
         router.push("/");
     };
