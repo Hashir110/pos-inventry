@@ -28,6 +28,11 @@ const en = {
   pos_pay_cash: "Cash",
   pos_pay_bank: "Bank / Online",
   pos_pay_credit: "Credit",
+  pos_pay_split: "Split / Cash+Bank",
+  pos_cash_part: "Cash Paid",
+  pos_bank_part: "Bank Paid",
+  pos_select_bank: "Select Bank",
+  pos_split_remainder_warning: "Remaining Rs. {amount} will be added to party credit",
 
   pos_receipt_slip_not_found: "Slip not found",
   pos_receipt_slip_image_failed: "Could not create the slip image",
@@ -122,6 +127,11 @@ const ur: Record<keyof typeof en, string> = {
   pos_pay_cash: "نقد",
   pos_pay_bank: "بینک / آن لائن",
   pos_pay_credit: "ادھار",
+  pos_pay_split: "مکس (نقد + بینک)",
+  pos_cash_part: "نقد ادائیگی",
+  pos_bank_part: "بینک میں ٹرانسفر",
+  pos_select_bank: "بینک منتخب کریں",
+  pos_split_remainder_warning: "بقیہ Rs. {amount} پارٹی کے ادھار کھاتے میں درج ہو گا",
 
   pos_receipt_slip_not_found: "پرچی نہیں ملی",
   pos_receipt_slip_image_failed: "پرچی کی تصویر نہیں بن سکی",

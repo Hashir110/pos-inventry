@@ -13,12 +13,28 @@ interface InvoiceSheetProps {
   items: SaleItem[];
   total: number;
   paymentMethod: PaymentMethod;
+  cashAmount?: number;
+  bankAmount?: number;
+  bankName?: string;
 }
 
 const num = (n: number) => Math.round(n).toLocaleString();
 
 const InvoiceSheet = forwardRef<HTMLDivElement, InvoiceSheetProps>(function InvoiceSheet(
-  { shop, invoiceNo, date, customerName, transport, extraCharges, items, total, paymentMethod },
+  {
+    shop,
+    invoiceNo,
+    date,
+    customerName,
+    transport,
+    extraCharges,
+    items,
+    total,
+    paymentMethod,
+    cashAmount,
+    bankAmount,
+    bankName,
+  },
   ref
 ) {
   const { t } = useLanguage();
@@ -26,26 +42,42 @@ const InvoiceSheet = forwardRef<HTMLDivElement, InvoiceSheetProps>(function Invo
     Cash: t("pos_pay_cash"),
     "Bank Account": t("pos_pay_bank"),
     Udhar: t("pos_pay_credit"),
+    Split: "Cash + Bank",
   };
   const gross = items.reduce((sum, item) => sum + item.total, 0);
   const extra = extraCharges && extraCharges > 0 ? extraCharges : 0;
-  const when = new Date(date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const when = new Date(date).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 
-  const box = "rounded-md border border-stone-500 px-3 py-1.5 text-[19px] font-bold text-black min-h-[40px]";
+  const box =
+    "rounded-md border border-stone-500 px-3 py-1.5 text-[18px] font-bold text-black min-h-[40px] flex items-center";
   const label = "w-[110px] shrink-0 text-right text-[18px] font-bold text-stone-700";
 
   return (
     <div ref={ref} style={{ width: 900 }} className="bg-white p-8 text-black">
       <div className="mb-5 flex items-start justify-between gap-6">
         <div className="min-w-0">
-          <h1 className="text-[38px] font-black uppercase leading-tight">{shop?.shopName || t("pos_receipt_default_shop")}</h1>
-          {shop?.address && <p className="mt-1 text-[18px] font-semibold text-stone-800">{shop.address}</p>}
-          {shop?.contact && <p className="text-[18px] font-semibold text-stone-800">{t("pos_receipt_phone_hash", { phone: shop.contact })}</p>}
+          <h1 className="text-[38px] font-black uppercase leading-tight">
+            {shop?.shopName || t("pos_receipt_default_shop")}
+          </h1>
+          {shop?.address && (
+            <p className="mt-1 text-[18px] font-semibold text-stone-800">{shop.address}</p>
+          )}
+          {shop?.contact && (
+            <p className="text-[18px] font-semibold text-stone-800">
+              {t("pos_receipt_phone_hash", { phone: shop.contact })}
+            </p>
+          )}
         </div>
-        <h2 className="shrink-0 pt-2 font-serif text-[44px] font-bold italic">{t("pos_receipt_sale_invoice")}</h2>
+        <h2 className="shrink-0 pt-2 font-serif text-[44px] font-bold italic">
+          {t("pos_receipt_sale_invoice")}
+        </h2>
       </div>
 
-      <div className="mb-5 grid grid-cols-[1fr_300px] gap-x-8 gap-y-3">
+      <div className="mb-5 grid grid-cols-[1fr_320px] gap-x-8 gap-y-3">
         <div className="space-y-3">
           <div className="flex items-center gap-3">
             <span className={label}>{t("pos_receipt_inv_label")}</span>
@@ -57,7 +89,9 @@ const InvoiceSheet = forwardRef<HTMLDivElement, InvoiceSheetProps>(function Invo
           </div>
           <div className="flex items-center gap-3">
             <span className={label}>{t("pos_receipt_name_label")}</span>
-            <div className={`${box} flex-1 uppercase`}>{isCounterSale(customerName) ? t("pos_select_counter_sale") : customerName}</div>
+            <div className={`${box} flex-1 uppercase`}>
+              {isCounterSale(customerName) ? t("pos_select_counter_sale") : customerName}
+            </div>
           </div>
         </div>
         <div className="space-y-3">
@@ -67,7 +101,19 @@ const InvoiceSheet = forwardRef<HTMLDivElement, InvoiceSheetProps>(function Invo
           </div>
           <div>
             <p className="mb-1 text-[16px] font-bold text-stone-700">{t("pos_receipt_payment")}</p>
-            <div className={`${box} uppercase`}>{paymentLabels[paymentMethod] ?? paymentMethod}</div>
+            <div className={`${box} uppercase`}>
+              {paymentMethod === "Split" ? (
+                <div className="text-[14px] leading-tight">
+                  <span>Cash: Rs. {num(cashAmount || 0)}</span>
+                  <br />
+                  <span>Bank: {bankName || "Online"} (Rs. {num(bankAmount || 0)})</span>
+                </div>
+              ) : paymentMethod === "Bank Account" && bankName ? (
+                `Bank (${bankName})`
+              ) : (
+                paymentLabels[paymentMethod] ?? paymentMethod
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -102,7 +148,7 @@ const InvoiceSheet = forwardRef<HTMLDivElement, InvoiceSheetProps>(function Invo
       </table>
 
       <div className="mt-5 flex justify-end">
-        <div className="w-[340px] space-y-1.5 text-[20px]">
+        <div className="w-[360px] space-y-1.5 text-[20px]">
           {extra > 0 && (
             <>
               <div className="flex justify-between font-semibold text-stone-700">
@@ -119,8 +165,30 @@ const InvoiceSheet = forwardRef<HTMLDivElement, InvoiceSheetProps>(function Invo
             <span>{t("pos_receipt_total")}</span>
             <span>{num(total)}</span>
           </div>
+
+          {paymentMethod === "Split" && (
+            <div className="space-y-0.5 border-t border-stone-300 pt-1 text-[16px] font-semibold text-stone-700">
+              <div className="flex justify-between">
+                <span>Cash Paid:</span>
+                <span className="font-bold text-black">Rs. {num(cashAmount || 0)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Bank ({bankName || "Online"}):</span>
+                <span className="font-bold text-black">Rs. {num(bankAmount || 0)}</span>
+              </div>
+              {total - (cashAmount || 0) - (bankAmount || 0) > 0 && (
+                <div className="flex justify-between text-red-600 font-bold">
+                  <span>Udhar (Remaining Due):</span>
+                  <span>Rs. {num(total - (cashAmount || 0) - (bankAmount || 0))}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {paymentMethod === "Udhar" && customerName && (
-            <p className="pt-1 text-right text-[15px] font-semibold text-stone-600">{t("pos_receipt_in_ledger", { name: customerName })}</p>
+            <p className="pt-1 text-right text-[15px] font-semibold text-stone-600">
+              {t("pos_receipt_in_ledger", { name: customerName })}
+            </p>
           )}
         </div>
       </div>

@@ -19,6 +19,9 @@ interface SaleReceiptProps {
   items: SaleItem[];
   total: number;
   paymentMethod: PaymentMethod;
+  cashAmount?: number;
+  bankAmount?: number;
+  bankName?: string;
   printLabel: string;
   closeLabel: string;
   onClose: () => void;
@@ -34,6 +37,9 @@ export default function SaleReceipt({
   items,
   total,
   paymentMethod,
+  cashAmount,
+  bankAmount,
+  bankName,
   printLabel,
   closeLabel,
   onClose,
@@ -47,6 +53,7 @@ export default function SaleReceipt({
     Cash: t("pos_pay_cash"),
     "Bank Account": t("pos_pay_bank"),
     Udhar: t("pos_pay_credit"),
+    Split: "Cash + Bank",
   };
 
   const makeSlipBlob = async (): Promise<Blob> => {
@@ -120,6 +127,9 @@ export default function SaleReceipt({
           items={items}
           total={total}
           paymentMethod={paymentMethod}
+          cashAmount={cashAmount}
+          bankAmount={bankAmount}
+          bankName={bankName}
         />
       </div>      <div id="printable-receipt" className="bg-white p-4 rounded-xl w-full max-w-[340px] max-h-[95vh] overflow-y-auto shadow-2xl relative text-black">
         <button onClick={onClose} className="absolute top-2 right-2 p-1 text-stone-400 no-print hover:text-stone-700">
@@ -195,8 +205,30 @@ export default function SaleReceipt({
             <div className="border-t border-dotted border-stone-400 pt-1.5 mt-2 text-[10px] space-y-0.5">
               <div className="flex justify-between font-semibold text-stone-800">
                 <span>{t("pos_receipt_payment_mode")}</span>
-                <span className="font-bold uppercase text-black">{paymentLabels[paymentMethod] ?? paymentMethod}</span>
+                <span className="font-bold uppercase text-black">
+                  {paymentMethod === "Bank Account" && bankName
+                    ? `Bank (${bankName})`
+                    : paymentLabels[paymentMethod] ?? paymentMethod}
+                </span>
               </div>
+              {paymentMethod === "Split" && (
+                <div className="bg-stone-50 border border-stone-200 p-1.5 rounded mt-1 space-y-0.5 text-[10px]">
+                  <div className="flex justify-between font-bold text-stone-800">
+                    <span>Cash Received:</span>
+                    <span>Rs. {Math.round(cashAmount || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-brand-700">
+                    <span>Bank ({bankName || "Online"}):</span>
+                    <span>Rs. {Math.round(bankAmount || 0).toLocaleString()}</span>
+                  </div>
+                  {total - (cashAmount || 0) - (bankAmount || 0) > 0 && (
+                    <div className="flex justify-between font-bold text-red-600">
+                      <span>Udhar (Remaining):</span>
+                      <span>Rs. {Math.round(total - (cashAmount || 0) - (bankAmount || 0)).toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               {paymentMethod === "Udhar" && customerName && (
                 <div className="bg-stone-100 border border-stone-300 p-1 rounded mt-1">
                   <div className="flex justify-between font-bold text-black">

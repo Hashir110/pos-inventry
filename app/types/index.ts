@@ -1,5 +1,35 @@
 export type UnitType = "weight" | "count";
-export type PaymentMethod = "Cash" | "Bank Account" | "Udhar";
+export type PaymentMethod = "Cash" | "Bank Account" | "Udhar" | "Split";
+
+export interface BankAccount {
+  id: string;
+  ownerId: string;
+  bankName: string;
+  accountTitle: string;
+  accountNumber: string;
+  branchName?: string;
+  currentBalance: number;
+  initialBalance?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface BankTransaction {
+  id: string;
+  ownerId: string;
+  bankId: string;
+  bankName: string;
+  type: "deposit" | "withdrawal";
+  amount: number;
+  date: string;
+  customerName?: string;
+  customerId?: string;
+  saleId?: string;
+  invoiceNo?: string;
+  description?: string;
+  balanceAfter?: number;
+  createdAt: string;
+}
 
 export interface Shop {
   uid: string;
@@ -69,6 +99,10 @@ export interface Sale {
   description: string;
   invoiceNo: string;
   paymentMethod: PaymentMethod;
+  cashAmount?: number;
+  bankAmount?: number;
+  bankId?: string;
+  bankName?: string;
   isOffline?: boolean;
   syncedAt?: string;
   gatePassGenerated?: boolean;
@@ -139,6 +173,7 @@ export interface GatePass {
   driverName?: string;
   status: "Issued" | "Dispatched" | "Cancelled";
   notes?: string;
+  updatedAt?: string;
 }
 
 export interface Supplier {

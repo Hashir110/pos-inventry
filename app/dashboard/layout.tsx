@@ -28,6 +28,7 @@ import {
     Truck,
     HandCoins,
     ClipboardCheck,
+    Landmark,
     X
 } from "lucide-react";
 import Link from "next/link";
@@ -209,6 +210,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {
             title: t("shell_sectionAccounts"),
             items: [
+                { name: t("shell_navBanks"), href: "/dashboard/banks", icon: Landmark },
                 { name: t("shell_navSuppliers"), href: "/dashboard/suppliers", icon: Truck },
                 { name: t("navExpenses"), href: "/dashboard/expenses", icon: Wallet },
                 { name: t("navDashboard"), href: "/dashboard", icon: LayoutDashboard },

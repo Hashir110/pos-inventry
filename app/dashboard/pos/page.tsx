@@ -1,15 +1,32 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
 import { createOnlineSale, queueOfflineSale } from "../../lib/services/sales";
 import { subscribeProducts } from "../../lib/services/products";
 import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
-import { Search, ShoppingCart, Trash2, ChevronUp, ChevronDown, Banknote, Landmark, HandCoins, Plus, Minus, StickyNote, Loader2, Truck } from "lucide-react";
+import {
+    Search,
+    ShoppingCart,
+    Trash2,
+    ChevronUp,
+    ChevronDown,
+    Banknote,
+    Landmark,
+    HandCoins,
+    Plus,
+    Minus,
+    StickyNote,
+    Loader2,
+    Truck,
+    CreditCard,
+} from "lucide-react";
 import { toast } from 'react-toastify';
 import { listCustomers } from '../../lib/services/customers';
-import type { Customer, PaymentMethod, Product, SaleItem, Transport } from '../../types';
+import { listBankAccounts } from '../../lib/services/banks';
+import type { BankAccount, Customer, PaymentMethod, Product, SaleItem, Transport } from '../../types';
 import { listTransports } from '../../lib/services/transports';
 import SearchSelect from '../../components/SearchSelect';
 import AddTransportModal from '../../components/AddTransportModal';
@@ -38,6 +55,17 @@ export default function POSPage() {
     const [checkoutLoading, setCheckoutLoading] = useState(false);
     const [invoiceNumber, setInvoiceNumber] = useState("");
     const isOnline = useOnlineStatus();
+
+    // Banks and Split Payment States
+    const [banks, setBanks] = useState<BankAccount[]>([]);
+    const [selectedBankId, setSelectedBankId] = useState("");
+    const [cashAmountInput, setCashAmountInput] = useState("");
+    const [bankAmountInput, setBankAmountInput] = useState("");
+    const [lastSaleMeta, setLastSaleMeta] = useState<{
+        cashAmount?: number;
+        bankAmount?: number;
+        bankName?: string;
+    } | null>(null);
 
     const [showReceipt, setShowReceipt] = useState(false);
     const [showMobileCart, setShowMobileCart] = useState(false);
@@ -84,6 +112,22 @@ export default function POSPage() {
         listTransports(currentUser.uid)
             .then(list => { if (!cancelled) setTransports(list); })
             .catch(error => console.error("Transports load error:", error));
+        return () => { cancelled = true; };
+    }, [currentUser]);
+
+    useEffect(() => {
+        if (!currentUser) return;
+        let cancelled = false;
+        listBankAccounts(currentUser.uid)
+            .then(list => {
+                if (!cancelled) {
+                    setBanks(list);
+                    if (list.length > 0 && !selectedBankId) {
+                        setSelectedBankId(list[0].id);
+                    }
+                }
+            })
+            .catch(error => console.error("Banks load error:", error));
         return () => { cancelled = true; };
     }, [currentUser]);
 
@@ -172,6 +216,59 @@ export default function POSPage() {
             toast.error(t("pos_select_party_credit"));
             return;
         }
+
+        const selectedBank = banks.find(b => b.id === selectedBankId);
+
+        let calculatedCashAmount: number | undefined = undefined;
+        let calculatedBankAmount: number | undefined = undefined;
+        let chosenBankId: string | undefined = undefined;
+        let chosenBankName: string | undefined = undefined;
+
+        if (paymentMethod === "Cash") {
+            calculatedCashAmount = grandTotal;
+            calculatedBankAmount = 0;
+        } else if (paymentMethod === "Bank Account") {
+            if (banks.length === 0) {
+                toast.error("Pehle Bank Accounts page me bank account add karein");
+                return;
+            }
+            if (!selectedBank) {
+                toast.error("Barah-e-karam bank muntakhib karein");
+                return;
+            }
+            calculatedCashAmount = 0;
+            calculatedBankAmount = grandTotal;
+            chosenBankId = selectedBank.id;
+            chosenBankName = selectedBank.bankName;
+        } else if (paymentMethod === "Split") {
+            if (banks.length === 0) {
+                toast.error("Pehle Bank Accounts page me bank account add karein");
+                return;
+            }
+            if (!selectedBank) {
+                toast.error("Barah-e-karam bank muntakhib karein");
+                return;
+            }
+            const cVal = Math.max(0, parseFloat(cashAmountInput) || 0);
+            const bVal = Math.max(0, parseFloat(bankAmountInput) || 0);
+            if (cVal <= 0 && bVal <= 0) {
+                toast.error("Barah-e-karam cash ya bank ki raqam darj karein");
+                return;
+            }
+            const remaining = grandTotal - (cVal + bVal);
+            if (remaining > 0.01 && !customerId) {
+                toast.error(t("pos_select_party_credit"));
+                return;
+            }
+            calculatedCashAmount = cVal;
+            calculatedBankAmount = bVal;
+            chosenBankId = selectedBank.id;
+            chosenBankName = selectedBank.bankName;
+        } else if (paymentMethod === "Udhar") {
+            calculatedCashAmount = 0;
+            calculatedBankAmount = 0;
+        }
+
         setCheckoutLoading(true);
 
         try {
@@ -181,8 +278,13 @@ export default function POSPage() {
                 transport: transport.trim(),
                 extraCharges: extra,
                 paymentMethod,
-                ...(paymentMethod === "Udhar" && customerId ? { customerId } : {}),
+                ...(customerId ? { customerId } : {}),
+                ...(calculatedCashAmount !== undefined ? { cashAmount: calculatedCashAmount } : {}),
+                ...(calculatedBankAmount !== undefined ? { bankAmount: calculatedBankAmount } : {}),
+                ...(chosenBankId ? { bankId: chosenBankId } : {}),
+                ...(chosenBankName ? { bankName: chosenBankName } : {}),
             };
+
             const shortInvoiceNo = isOnline
                 ? await createOnlineSale(currentUser.uid, cart, grandTotal, meta)
                 : queueOfflineSale(currentUser.uid, cart, grandTotal, meta, products);
@@ -196,9 +298,14 @@ export default function POSPage() {
                 }));
             }
 
+            setLastSaleMeta({
+                cashAmount: calculatedCashAmount,
+                bankAmount: calculatedBankAmount,
+                bankName: chosenBankName,
+            });
             setInvoiceNumber(shortInvoiceNo);
             toast.success(t("pos_sale_success"));
-            if (paymentMethod === "Udhar") refreshCustomers();
+            if (customerId) refreshCustomers();
             setShowReceipt(true);
 
         } catch (error) {
@@ -618,10 +725,11 @@ export default function POSPage() {
                         </div>
                     )}
 
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div className="grid grid-cols-4 gap-1">
                         {([
                             { value: "Cash", label: t("pos_pay_cash"), icon: Banknote },
                             { value: "Bank Account", label: t("pos_pay_bank"), icon: Landmark },
+                            { value: "Split", label: t("pos_pay_split"), icon: CreditCard },
                             { value: "Udhar", label: t("pos_pay_credit"), icon: HandCoins },
                         ] as { value: PaymentMethod; label: string; icon: typeof Banknote }[]).map(opt => {
                             const Icon = opt.icon;
@@ -631,10 +739,12 @@ export default function POSPage() {
                                     key={opt.value}
                                     type="button"
                                     onClick={() => setPaymentMethod(opt.value)}
-                                    className={`flex items-center justify-center gap-1 rounded-lg border py-1.5 px-1 text-[11px] font-bold transition ${active
+                                    className={`flex flex-col sm:flex-row items-center justify-center gap-1 rounded-lg border py-1.5 px-1 text-[11px] font-bold transition text-center ${active
                                         ? opt.value === "Udhar"
                                             ? "border-amber-500 bg-amber-50 text-amber-900 shadow-sm"
-                                            : "border-brand-500 bg-brand-50 text-brand-900 shadow-sm"
+                                            : opt.value === "Split"
+                                                ? "border-indigo-500 bg-indigo-50 text-indigo-900 shadow-sm"
+                                                : "border-brand-500 bg-brand-50 text-brand-900 shadow-sm"
                                         : "border-stone-200 text-stone-600 hover:bg-stone-50"
                                         }`}
                                 >
@@ -644,6 +754,122 @@ export default function POSPage() {
                             );
                         })}
                     </div>
+
+                    {paymentMethod === "Bank Account" && (
+                        <div className="rounded-lg border border-brand-200 bg-brand-50/50 p-2 space-y-1">
+                            <div className="flex items-center justify-between">
+                                <label className="text-[11px] font-bold text-brand-900 flex items-center gap-1">
+                                    <Landmark size={13} /> {t("pos_select_bank")}
+                                </label>
+                                {banks.length === 0 ? (
+                                    <Link href="/dashboard/banks" className="text-[10px] font-bold text-brand-700 underline">
+                                        + Bank Add Karein
+                                    </Link>
+                                ) : null}
+                            </div>
+                            {banks.length > 0 ? (
+                                <select
+                                    value={selectedBankId}
+                                    onChange={(e) => setSelectedBankId(e.target.value)}
+                                    className="field !py-1 !text-xs font-semibold bg-white"
+                                >
+                                    {banks.map(b => (
+                                        <option key={b.id} value={b.id}>
+                                            {b.bankName} - {b.accountNumber} (Bal: Rs. {Math.round(b.currentBalance).toLocaleString()})
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <p className="text-[11px] text-amber-800 font-medium">
+                                    ⚠️ Koi bank account mojood nahi. Pehle Bank Accounts page me bank add karein.
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {paymentMethod === "Split" && (
+                        <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-2 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="text-[11px] font-bold text-indigo-950 flex items-center gap-1">
+                                    <Landmark size={13} /> {t("pos_select_bank")}
+                                </label>
+                                {banks.length === 0 && (
+                                    <Link href="/dashboard/banks" className="text-[10px] font-bold text-indigo-700 underline">
+                                        + Bank Add Karein
+                                    </Link>
+                                )}
+                            </div>
+                            {banks.length > 0 ? (
+                                <select
+                                    value={selectedBankId}
+                                    onChange={(e) => setSelectedBankId(e.target.value)}
+                                    className="field !py-1 !text-xs font-semibold bg-white"
+                                >
+                                    {banks.map(b => (
+                                        <option key={b.id} value={b.id}>
+                                            {b.bankName} - {b.accountNumber}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <p className="text-[11px] text-amber-800 font-medium">
+                                    ⚠️ Koi bank account mojood nahi. Pehle Bank Accounts page me bank add karein.
+                                </p>
+                            )}
+
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-600 block mb-0.5">
+                                        💵 {t("pos_cash_part")}
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="any"
+                                        value={cashAmountInput}
+                                        onChange={(e) => setCashAmountInput(e.target.value)}
+                                        placeholder="0"
+                                        className="field !py-1 !text-xs font-bold text-right"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-600 block mb-0.5">
+                                        🏛️ {t("pos_bank_part")}
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="any"
+                                        value={bankAmountInput}
+                                        onChange={(e) => setBankAmountInput(e.target.value)}
+                                        placeholder="0"
+                                        className="field !py-1 !text-xs font-bold text-right"
+                                    />
+                                </div>
+                            </div>
+
+                            {(() => {
+                                const cVal = parseFloat(cashAmountInput) || 0;
+                                const bVal = parseFloat(bankAmountInput) || 0;
+                                const paid = cVal + bVal;
+                                const remainder = grandTotal - paid;
+                                if (remainder > 0.01) {
+                                    return (
+                                        <div className="text-[10px] font-bold text-amber-800 bg-amber-50 p-1.5 rounded border border-amber-200">
+                                            ⚠️ {t("pos_split_remainder_warning", { amount: Math.round(remainder).toLocaleString() })}
+                                        </div>
+                                    );
+                                } else if (paid > grandTotal + 0.01) {
+                                    return (
+                                        <div className="text-[10px] font-semibold text-blue-800 bg-blue-50 p-1 rounded">
+                                            Wapsi (Change): Rs. {Math.round(paid - grandTotal).toLocaleString()}
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
+                        </div>
+                    )}
 
                     {paymentMethod === "Udhar" && !customerId && (
                         <p className="rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800 text-center">
@@ -688,9 +914,25 @@ export default function POSPage() {
                     items={cart}
                     total={grandTotal}
                     paymentMethod={paymentMethod}
+                    cashAmount={lastSaleMeta?.cashAmount}
+                    bankAmount={lastSaleMeta?.bankAmount}
+                    bankName={lastSaleMeta?.bankName}
                     printLabel={t("printSlip")}
                     closeLabel={t("clearCart")}
-                    onClose={() => { setShowReceipt(false); setCart([]); setCustomerName(""); setCustomerId(""); setDescription(""); setTransport(""); setTransportId(""); setExtraCharges(""); setInvoiceNumber(""); }}
+                    onClose={() => {
+                        setShowReceipt(false);
+                        setCart([]);
+                        setCustomerName("");
+                        setCustomerId("");
+                        setDescription("");
+                        setTransport("");
+                        setTransportId("");
+                        setExtraCharges("");
+                        setCashAmountInput("");
+                        setBankAmountInput("");
+                        setInvoiceNumber("");
+                        setLastSaleMeta(null);
+                    }}
                 />
             )}
         </div>

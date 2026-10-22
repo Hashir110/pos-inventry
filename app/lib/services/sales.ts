@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -12,7 +13,17 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { tr } from "../i18n/translate";
-import type { Customer, PaymentMethod, PendingSale, Product, Sale, SaleItem, UnitType } from "../../types";
+import type {
+  BankAccount,
+  BankTransaction,
+  Customer,
+  PaymentMethod,
+  PendingSale,
+  Product,
+  Sale,
+  SaleItem,
+  UnitType,
+} from "../../types";
 import {
   cacheKeys,
   getCached,
@@ -20,6 +31,7 @@ import {
   getPendingSales,
   savePendingSales,
   setCached,
+  invalidateCache,
 } from "./offlineStorage";
 
 export { getPendingSales, savePendingSales };
@@ -31,6 +43,10 @@ export interface SaleMeta {
   customerId?: string;
   transport?: string;
   extraCharges?: number;
+  cashAmount?: number;
+  bankAmount?: number;
+  bankId?: string;
+  bankName?: string;
 }
 
 export const stripUndefined = <T>(obj: T): T => {
@@ -101,14 +117,26 @@ const buildMeta = (meta: SaleMeta) => {
   if (typeof meta.extraCharges === "number" && meta.extraCharges > 0) {
     result.extraCharges = meta.extraCharges;
   }
-  if (meta.paymentMethod === "Udhar" && meta.customerId) {
+  if (meta.customerId) {
     result.customerId = meta.customerId;
+  }
+  if (typeof meta.cashAmount === "number") {
+    result.cashAmount = meta.cashAmount;
+  }
+  if (typeof meta.bankAmount === "number") {
+    result.bankAmount = meta.bankAmount;
+  }
+  if (meta.bankId) {
+    result.bankId = meta.bankId;
+  }
+  if (meta.bankName) {
+    result.bankName = meta.bankName;
   }
   return result;
 };
 
 const isUdharWithCustomer = (paymentMethod: PaymentMethod, customerId?: string): customerId is string =>
-  paymentMethod === "Udhar" && !!customerId;
+  (paymentMethod === "Udhar" || paymentMethod === "Split") && !!customerId;
 
 const roundMoney = (n: number) => Math.round(n * 100) / 100;
 
@@ -120,6 +148,15 @@ export const createOnlineSale = async (
 ): Promise<string> => {
   const saleRef = doc(collection(db, "sales"));
   let invoiceNo = "";
+
+  const bankPaidAmount =
+    meta.paymentMethod === "Bank Account"
+      ? (meta.bankAmount ?? totalAmount)
+      : (meta.bankAmount || 0);
+  const hasBankPayment =
+    (meta.paymentMethod === "Bank Account" || meta.paymentMethod === "Split") &&
+    !!meta.bankId &&
+    bankPaidAmount > 0;
 
   await runTransaction(db, async (transaction) => {
     const reads = [];
@@ -134,6 +171,13 @@ export const createOnlineSale = async (
       customerRef = doc(db, "customers", meta.customerId);
       customerSnap = await transaction.get(customerRef);
       if (!customerSnap.exists()) throw new Error(tr("sales_errCustomerNotFound"));
+    }
+
+    let bankRef = null;
+    let bankSnap = null;
+    if (hasBankPayment && meta.bankId) {
+      bankRef = doc(db, "banks", meta.bankId);
+      bankSnap = await transaction.get(bankRef);
     }
 
     const shopRef = doc(db, "users", ownerId);
@@ -157,10 +201,52 @@ export const createOnlineSale = async (
       createdAt: new Date().toISOString(),
     };
     transaction.set(shopRef, { ...shopDefaults, invoiceCounter: nextInvoice }, { merge: true });
+
     if (customerRef && customerSnap) {
       const balance = (customerSnap.data() as Customer).balance || 0;
-      transaction.update(customerRef, { balance: roundMoney(balance + totalAmount) });
+      let udharToAdd = 0;
+      if (meta.paymentMethod === "Udhar") {
+        udharToAdd = totalAmount;
+      } else if (meta.paymentMethod === "Split") {
+        const cashPaid = meta.cashAmount || 0;
+        const bankPaid = meta.bankAmount || 0;
+        udharToAdd = Math.max(0, roundMoney(totalAmount - cashPaid - bankPaid));
+      }
+      if (udharToAdd > 0) {
+        transaction.update(customerRef, { balance: roundMoney(balance + udharToAdd) });
+      }
     }
+
+    if (bankRef && bankSnap && bankSnap.exists() && bankPaidAmount > 0) {
+      const bankData = bankSnap.data() as BankAccount;
+      const currentBankBal = bankData.currentBalance || 0;
+      const newBankBal = roundMoney(currentBankBal + bankPaidAmount);
+
+      transaction.update(bankRef, {
+        currentBalance: newBankBal,
+        updatedAt: new Date().toISOString(),
+      });
+
+      const bankTxRef = doc(collection(db, "bank_transactions"));
+      const bankTxData: BankTransaction = {
+        id: bankTxRef.id,
+        ownerId,
+        bankId: meta.bankId!,
+        bankName: meta.bankName || bankData.bankName,
+        type: "deposit",
+        amount: bankPaidAmount,
+        date: new Date().toISOString(),
+        customerName: meta.customerName || "Counter Sale",
+        customerId: meta.customerId,
+        saleId: saleRef.id,
+        invoiceNo,
+        description: `Sale Payment #${invoiceNo}`,
+        balanceAfter: newBankBal,
+        createdAt: new Date().toISOString(),
+      };
+      transaction.set(bankTxRef, bankTxData);
+    }
+
     for (const { snapshot, item } of reads) {
       const prod = snapshot.data() as Product;
       const deductQty = item.qty;
@@ -197,6 +283,12 @@ export const createOnlineSale = async (
     transaction.set(saleRef, saleData);
   });
 
+  if (hasBankPayment && meta.bankId) {
+    invalidateCache(cacheKeys.banks(ownerId));
+    invalidateCache(cacheKeys.bankTransactions(ownerId, meta.bankId));
+    invalidateCache(cacheKeys.bankTransactions(ownerId));
+  }
+
   // Optimistically update local sales cache
   const salesKey = cacheKeys.sales(ownerId);
   const currentSales = getCachedEvenStale<Sale[]>(salesKey) || [];
@@ -211,6 +303,10 @@ export const createOnlineSale = async (
     customerName: meta.customerName || "Counter Sale",
     description: meta.description || "",
     paymentMethod: meta.paymentMethod || "Cash",
+    ...(meta.cashAmount !== undefined ? { cashAmount: meta.cashAmount } : {}),
+    ...(bankPaidAmount > 0 ? { bankAmount: bankPaidAmount } : {}),
+    ...(meta.bankId ? { bankId: meta.bankId } : {}),
+    ...(meta.bankName ? { bankName: meta.bankName } : {}),
     ...(meta.customerId ? { customerId: meta.customerId } : {}),
     ...(meta.transport ? { transport: meta.transport } : {}),
     ...(meta.extraCharges ? { extraCharges: meta.extraCharges } : {}),
@@ -920,20 +1016,58 @@ export const deleteSale = async (saleId: string, ownerId: string): Promise<void>
       }
     }
 
-    // 2. Reverse customer balance if Udhar
-    if (sale.paymentMethod === "Udhar" && sale.customerId) {
+    // 2. Reverse customer balance if Udhar or Split
+    if ((sale.paymentMethod === "Udhar" || sale.paymentMethod === "Split") && sale.customerId) {
       const custRef = doc(db, "customers", sale.customerId);
       const custSnap = await transaction.get(custRef);
       if (custSnap.exists()) {
         const bal = (custSnap.data() as Customer).balance || 0;
-        const net = roundMoney((sale.totalAmount || 0) - (sale.refundedAmount || 0));
+        const udharOnSale =
+          sale.paymentMethod === "Udhar"
+            ? (sale.totalAmount || 0)
+            : Math.max(0, (sale.totalAmount || 0) - (sale.cashAmount || 0) - (sale.bankAmount || 0));
+        const net = roundMoney(Math.max(0, udharOnSale - (sale.refundedAmount || 0)));
         transaction.update(custRef, { balance: Math.max(0, roundMoney(bal - net)) });
+      }
+    }
+
+    // 2b. Reverse bank balance if sale had bank payment
+    const bankPaidOnSale =
+      sale.bankAmount ?? (sale.paymentMethod === "Bank Account" ? (sale.totalAmount || 0) : 0);
+    if (sale.bankId && bankPaidOnSale > 0) {
+      const bankRef = doc(db, "banks", sale.bankId);
+      const bankSnap = await transaction.get(bankRef);
+      if (bankSnap.exists()) {
+        const curBal = (bankSnap.data() as BankAccount).currentBalance || 0;
+        transaction.update(bankRef, {
+          currentBalance: Math.max(0, roundMoney(curBal - bankPaidOnSale)),
+          updatedAt: new Date().toISOString(),
+        });
       }
     }
 
     // 3. Delete sale doc
     transaction.delete(saleRef);
   });
+
+  // Delete matching bank transaction if any
+  if (deletedInvoiceNo) {
+    try {
+      const qTx = query(
+        collection(db, "bank_transactions"),
+        where("ownerId", "==", ownerId),
+        where("invoiceNo", "==", deletedInvoiceNo)
+      );
+      const txSnaps = await getDocs(qTx);
+      for (const tDoc of txSnaps.docs) {
+        await deleteDoc(tDoc.ref);
+      }
+      invalidateCache(cacheKeys.banks(ownerId));
+      invalidateCache(cacheKeys.bankTransactions(ownerId));
+    } catch (err) {
+      console.warn("Failed to delete bank transaction on sale delete:", err);
+    }
+  }
 
   // 4. Update local caches
   const salesKey = cacheKeys.sales(ownerId);

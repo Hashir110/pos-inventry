@@ -61,6 +61,19 @@ const en = {
   gatePass_toastAddItems: "Please add at least one item",
   gatePass_toastSaved: "Gate Pass #{no} saved successfully.",
   gatePass_toastFailed: "Failed to issue gate pass",
+  gatePass_editTitle: "Edit Gate Pass #{no}",
+  gatePass_editParty: "Party / Customer Name",
+  gatePass_vehicleNo: "Vehicle / Vehicle #",
+  gatePass_driverName: "Driver Name",
+  gatePass_notes: "Notes / Details",
+  gatePass_updateSuccess: "Gate Pass #{no} updated successfully.",
+  gatePass_updateFailed: "Failed to update gate pass",
+  gatePass_deleteTitle: "Delete Gate Pass #{no}",
+  gatePass_deleteConfirmMsg: "Are you sure you want to delete this Gate Pass? All dispatched items will be automatically returned back to warehouse (Gudam) stock.",
+  gatePass_deleteSuccess: "Gate Pass #{no} deleted successfully and warehouse stock restored.",
+  gatePass_deleteFailed: "Failed to delete gate pass",
+  gatePass_deleting: "Deleting...",
+  gatePass_updating: "Updating...",
 };
 
 const ur: Record<keyof typeof en, string> = {
@@ -126,6 +139,19 @@ const ur: Record<keyof typeof en, string> = {
   gatePass_toastAddItems: "براہ کرم کم از کم ایک آئٹم شامل کریں",
   gatePass_toastSaved: "گیٹ پاس #{no} کامیابی سے محفوظ ہو گیا۔",
   gatePass_toastFailed: "گیٹ پاس جاری نہیں ہو سکا",
+  gatePass_editTitle: "گیٹ پاس ایڈٹ کریں #{no}",
+  gatePass_editParty: "پارٹی / کسٹمر کا نام",
+  gatePass_vehicleNo: "گاڑی / ٹرانسپورٹ نمبر",
+  gatePass_driverName: "ڈرائیور کا نام",
+  gatePass_notes: "نوٹ / تفصیل",
+  gatePass_updateSuccess: "گیٹ پاس #{no} کامیابی سے اپ ڈیٹ ہو گیا۔",
+  gatePass_updateFailed: "گیٹ پاس اپ ڈیٹ نہیں ہو سکا",
+  gatePass_deleteTitle: "گیٹ پاس حذف کریں #{no}",
+  gatePass_deleteConfirmMsg: "کیا آپ واقعی یہ گیٹ پاس ڈیلیٹ کرنا چاہتے ہیں؟ اس گیٹ پاس کا سارا مال گودام کے اسٹاک میں واپس شامل کر دیا جائے گا۔",
+  gatePass_deleteSuccess: "گیٹ پاس #{no} کامیابی سے ڈیلیٹ ہو گیا اور گودام کا اسٹاک بحال ہو گیا۔",
+  gatePass_deleteFailed: "گیٹ پاس ڈیلیٹ نہیں ہو سکا",
+  gatePass_deleting: "حذف ہو رہا ہے...",
+  gatePass_updating: "محفوظ ہو رہا ہے...",
 };
 
 export const gatePass = { en, ur };

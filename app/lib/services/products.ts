@@ -128,7 +128,21 @@ export const updateProduct = async (id: string, input: ProductInput, ownerId?: s
   const totalStock = gudamStock + shopStock;
   const updatedAt = new Date().toISOString();
 
-  await updateDoc(doc(db, "products", id), {
+  const productRef = doc(db, "products", id);
+  let resolvedOwnerId = ownerId;
+
+  if (!resolvedOwnerId) {
+    try {
+      const snap = await getDoc(productRef);
+      if (snap.exists()) {
+        resolvedOwnerId = snap.data().ownerId;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  await updateDoc(productRef, {
     ...input,
     gudamStock,
     shopStock,
@@ -137,20 +151,50 @@ export const updateProduct = async (id: string, input: ProductInput, ownerId?: s
     updatedAt,
   });
 
-  if (ownerId) {
-    const cacheKey = cacheKeys.products(ownerId);
+  if (resolvedOwnerId) {
+    const cacheKey = cacheKeys.products(resolvedOwnerId);
     const current = getCachedEvenStale<Product[]>(cacheKey) || [];
-    setCached(
-      cacheKey,
-      current.map((p) => (p.id === id ? { ...p, ...input, gudamStock, shopStock, stock: totalStock, updatedAt } : p))
-    );
+    const updatedProduct = {
+      id,
+      ownerId: resolvedOwnerId,
+      ...input,
+      gudamStock,
+      shopStock,
+      stock: totalStock,
+      category: input.category?.trim() || "",
+      updatedAt,
+    } as Product;
+
+    const exists = current.some((p) => p.id === id);
+    if (exists) {
+      setCached(
+        cacheKey,
+        current.map((p) => (p.id === id ? { ...p, ...updatedProduct } : p))
+      );
+    } else {
+      setCached(cacheKey, [updatedProduct, ...current]);
+    }
   }
 };
 
 export const deleteProduct = async (id: string, ownerId?: string): Promise<void> => {
-  await deleteDoc(doc(db, "products", id));
-  if (ownerId) {
-    const cacheKey = cacheKeys.products(ownerId);
+  const productRef = doc(db, "products", id);
+  let resolvedOwnerId = ownerId;
+
+  if (!resolvedOwnerId) {
+    try {
+      const snap = await getDoc(productRef);
+      if (snap.exists()) {
+        resolvedOwnerId = snap.data().ownerId;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  await deleteDoc(productRef);
+  if (resolvedOwnerId) {
+    const cacheKey = cacheKeys.products(resolvedOwnerId);
     const current = getCachedEvenStale<Product[]>(cacheKey) || [];
     setCached(cacheKey, current.filter((p) => p.id !== id));
   }

@@ -49,7 +49,7 @@ interface ItemDraft {
   manual: boolean;
   price: string;
 }
-type PayFilter = "all" | "Cash" | "Bank Account" | "Udhar";
+type PayFilter = "all" | "Cash" | "Bank Account" | "Split" | "Udhar";
 type SortKey = "new" | "old" | "high";
 
 const money = (n: number) => `Rs. ${Math.round(n || 0).toLocaleString()}`;
@@ -65,6 +65,7 @@ const formatDate = (iso: string) =>
 
 const methodLabelKey = (m?: string): TranslationKey => {
   if (m === "Bank Account") return "sales_methodBank";
+  if (m === "Split") return "pos_pay_split";
   if (m === "Udhar") return "sales_payCredit";
   return "cash";
 };
@@ -86,15 +87,34 @@ const saleStatus = (sale: Sale): { labelKey: TranslationKey; tone: string } => {
 
 const paymentInfo = (sale: Sale) => {
   const net = saleNetAmount(sale);
-  const isUdhar = sale.paymentMethod === "Udhar";
+  if (sale.paymentMethod === "Udhar") {
+    return {
+      isUdhar: true,
+      paid: 0,
+      due: net,
+      badge: "bg-amber-100 text-amber-800",
+      labelKey: "due" as TranslationKey,
+    };
+  }
+  if (sale.paymentMethod === "Split") {
+    const cash = sale.cashAmount || 0;
+    const bank = sale.bankAmount || 0;
+    const paid = cash + bank;
+    const due = Math.max(0, net - paid);
+    return {
+      isUdhar: due > 0,
+      paid,
+      due,
+      badge: due > 0 ? "bg-amber-100 text-amber-800" : "bg-indigo-100 text-indigo-800",
+      labelKey: (due > 0 ? "due" : "paid") as TranslationKey,
+    };
+  }
   return {
-    isUdhar,
-    paid: isUdhar ? 0 : net,
-    due: isUdhar ? net : 0,
-    badge: isUdhar
-      ? "bg-amber-100 text-amber-800"
-      : "bg-emerald-100 text-emerald-700",
-    labelKey: (isUdhar ? "due" : "paid") as TranslationKey,
+    isUdhar: false,
+    paid: net,
+    due: 0,
+    badge: "bg-emerald-100 text-emerald-700",
+    labelKey: "paid" as TranslationKey,
   };
 };
 
@@ -475,6 +495,7 @@ export default function SalesHistoryPage() {
               <option value="all">{t("allPayments")}</option>
               <option value="Cash">{t("cash")}</option>
               <option value="Bank Account">{t("bankOnline")}</option>
+              <option value="Split">{t("pos_pay_split")}</option>
               <option value="Udhar">{t("sales_payCredit")}</option>
             </select>
             <select
@@ -600,6 +621,7 @@ export default function SalesHistoryPage() {
                   </span>
                   <span className="text-[11px] font-semibold text-stone-400">
                     {t(methodLabelKey(sale.paymentMethod))}
+                    {sale.bankName ? ` (${sale.bankName})` : ""}
                   </span>
                 </div>
               );
@@ -663,18 +685,43 @@ export default function SalesHistoryPage() {
           ? Math.max(0, parseFloat(draftExtra) || 0)
           : sale.extraCharges || 0;
         const grandTotalCalc = Math.max(0, subTotal + extraVal - refunded);
+        const isSplitNow = isEditing
+          ? draftPaymentMethod === "Split"
+          : sale.paymentMethod === "Split";
         const isUdharNow = isEditing
           ? draftPaymentMethod === "Udhar"
           : sale.paymentMethod === "Udhar";
-        const payDisplay = {
-          isUdhar: isUdharNow,
-          paid: isUdharNow ? 0 : grandTotalCalc,
-          due: isUdharNow ? grandTotalCalc : 0,
-          badge: isUdharNow
-            ? "bg-amber-100 text-amber-800"
-            : "bg-emerald-100 text-emerald-700",
-          labelKey: (isUdharNow ? "due" : "paid") as TranslationKey,
-        };
+
+        let payDisplay;
+        if (isUdharNow) {
+          payDisplay = {
+            isUdhar: true,
+            paid: 0,
+            due: grandTotalCalc,
+            badge: "bg-amber-100 text-amber-800",
+            labelKey: "due" as TranslationKey,
+          };
+        } else if (isSplitNow) {
+          const cash = sale.cashAmount || 0;
+          const bank = sale.bankAmount || 0;
+          const paid = cash + bank;
+          const due = Math.max(0, grandTotalCalc - paid);
+          payDisplay = {
+            isUdhar: due > 0,
+            paid,
+            due,
+            badge: due > 0 ? "bg-amber-100 text-amber-800" : "bg-indigo-100 text-indigo-800",
+            labelKey: (due > 0 ? "due" : "paid") as TranslationKey,
+          };
+        } else {
+          payDisplay = {
+            isUdhar: false,
+            paid: grandTotalCalc,
+            due: 0,
+            badge: "bg-emerald-100 text-emerald-700",
+            labelKey: "paid" as TranslationKey,
+          };
+        }
         const hasReturns =
           refunded > 0 || sale.items.some((i) => (i.returnedQty || 0) > 0);
 
@@ -766,6 +813,7 @@ export default function SalesHistoryPage() {
                           >
                             <option value="Cash">{t("cash")}</option>
                             <option value="Bank Account">{t("bankOnline")}</option>
+                            <option value="Split">{t("pos_pay_split")}</option>
                             <option value="Udhar">{t("sales_payCredit")}</option>
                           </select>
                         </div>
@@ -1258,6 +1306,9 @@ export default function SalesHistoryPage() {
           items={receiptSale.items}
           total={saleNetAmount(receiptSale)}
           paymentMethod={receiptSale.paymentMethod}
+          cashAmount={receiptSale.cashAmount}
+          bankAmount={receiptSale.bankAmount}
+          bankName={receiptSale.bankName}
           printLabel={t("printSlip")}
           closeLabel={t("sales_close")}
           onClose={() => setReceiptSale(null)}

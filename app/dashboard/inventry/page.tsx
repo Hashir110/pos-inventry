@@ -9,7 +9,7 @@ import PageHeader from "../../components/PageHeader";
 import DataTable from "../../components/DataTable";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
-import { deleteProduct, listProducts, transferStock } from "../../lib/services/products";
+import { deleteProduct, listProducts, subscribeProducts, transferStock } from "../../lib/services/products";
 import type { Product } from "../../types";
 
 type StockFilter = "all" | "low" | "out";
@@ -30,11 +30,32 @@ export default function InventoryList() {
   const [transferTo, setTransferTo] = useState<"gudam" | "shop">("shop");
   const [transferring, setTransferring] = useState(false);
 
+  // Real-time synchronization so any inventory change updates instantly
+  useEffect(() => {
+    if (!currentUser) return;
+    setLoading(true);
+    const unsubscribe = subscribeProducts(
+      currentUser.uid,
+      (items) => {
+        setProducts(items);
+        setLoading(false);
+        setRefreshing(false);
+      },
+      (error) => {
+        console.error("Real-time products error:", error);
+        setLoading(false);
+        setRefreshing(false);
+      }
+    );
+    return () => unsubscribe();
+  }, [currentUser]);
+
   const fetchProducts = useCallback(async (force = false) => {
     if (!currentUser) return;
     if (force) setRefreshing(true);
     try {
-      setProducts(await listProducts(currentUser.uid, force));
+      const items = await listProducts(currentUser.uid, force);
+      setProducts(items);
       if (force) toast.success("Inventory updated");
 
     } catch (error) {
@@ -45,10 +66,6 @@ export default function InventoryList() {
       setRefreshing(false);
     }
   }, [currentUser, t]);
-
-  useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
 
   const handleDelete = async (product: Product) => {
     const ok = await confirm({
@@ -81,12 +98,12 @@ export default function InventoryList() {
     }
     try {
       setTransferring(true);
-      await transferStock(transferProd.id, Number(transferQty), transferFrom, transferTo);
+      await transferStock(transferProd.id, Number(transferQty), transferFrom, transferTo, currentUser?.uid);
       toast.success(
         t("inv_transferred", { qty: transferQty, from: locationLabel(transferFrom), to: locationLabel(transferTo) })
       );
       setTransferProd(null);
-      fetchProducts();
+      fetchProducts(true);
     } catch (err: any) {
       toast.error(err.message || t("inv_transferFailed"));
     } finally {

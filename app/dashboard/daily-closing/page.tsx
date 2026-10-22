@@ -41,15 +41,21 @@ const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour
 const methodLabel = (m: string) => (m === "Cash" ? tr("cash") : tr("bankOnline"));
 const signed = (n: number) => `${n < 0 ? "− " : ""}${formatMoney(Math.abs(n))}`;
 
-const paymentLabel = (m: PaymentMethod) => (m === "Cash" ? tr("cash") : m === "Bank Account" ? tr("closing_payBank") : tr("closing_credit"));
+const paymentLabel = (m: PaymentMethod) => {
+  if (m === "Cash") return tr("cash");
+  if (m === "Bank Account") return tr("closing_payBank");
+  if (m === "Split") return "Cash + Bank";
+  return tr("closing_credit");
+};
 const PAYMENT_TONE: Record<PaymentMethod, string> = {
   Cash: "!border-emerald-200 !bg-emerald-50 !text-emerald-800",
   "Bank Account": "!border-sky-200 !bg-sky-50 !text-sky-800",
+  Split: "!border-indigo-200 !bg-indigo-50 !text-indigo-800",
   Udhar: "!border-amber-200 !bg-amber-50 !text-amber-800",
 };
 const paymentOf = (sale: Sale): PaymentMethod => {
   const m = (sale.paymentMethod || "Cash").trim();
-  return m === "Bank Account" || m === "Udhar" ? m : "Cash";
+  return m === "Bank Account" || m === "Udhar" || m === "Split" ? (m as PaymentMethod) : "Cash";
 };
 const dayRange = (day: string) => {
   const start = new Date(`${day}T00:00:00`);
@@ -136,13 +142,29 @@ export default function DailyClosingPage() {
   const daySupplierPayments = useMemo(() => supplierPayments.filter((p) => dayKey(p.date) === date), [supplierPayments, date]);
 
   const totals = useMemo(() => {
-    const sumBy = (method: string) =>
-      sales
-        .filter((s) => (s.paymentMethod || "Cash").trim() === method)
-        .reduce((sum, s) => sum + saleNetAmount(s), 0);
-    const cash = sales.filter((s) => !["Bank Account", "Udhar"].includes((s.paymentMethod || "Cash").trim())).reduce((sum, s) => sum + saleNetAmount(s), 0);
-    const bank = sumBy("Bank Account");
-    const udhar = sumBy("Udhar");
+    let cash = 0;
+    let bank = 0;
+    let udhar = 0;
+
+    sales.forEach((s) => {
+      const net = saleNetAmount(s);
+      const m = (s.paymentMethod || "Cash").trim();
+      if (m === "Split") {
+        const c = s.cashAmount || 0;
+        const b = s.bankAmount || 0;
+        cash += c;
+        bank += b;
+        const rem = Math.max(0, net - (c + b));
+        udhar += rem;
+      } else if (m === "Bank Account") {
+        bank += net;
+      } else if (m === "Udhar") {
+        udhar += net;
+      } else {
+        cash += net;
+      }
+    });
+
     const amad = dayPayments.reduce((sum, p) => sum + p.amount, 0);
     const amadCash = dayPayments.filter((p) => p.method === "Cash").reduce((sum, p) => sum + p.amount, 0);
     const jamad = daySupplierPayments.reduce((sum, p) => sum + p.amount, 0);

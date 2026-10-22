@@ -5,12 +5,13 @@ import DataTable from "../../components/DataTable";
 import { useStore } from "../../store/useStore";
 import { subscribeProducts } from "../../lib/services/products";
 import { subscribeCustomers } from "../../lib/services/customers";
-import { issueGatePass, subscribeGatePasses } from "../../lib/services/gatePasses";
+import { deleteGatePass, issueGatePass, subscribeGatePasses, updateGatePass } from "../../lib/services/gatePasses";
 import type { Product, Customer, GatePass } from "../../types";
 import {
   FileText,
   Plus,
   Printer,
+  Pencil,
   Search,
   CheckCircle2,
   Trash2,
@@ -67,14 +68,41 @@ export default function GatePassPage() {
   const [isPartyOpen, setIsPartyOpen] = useState(false);
   const [partySearch, setPartySearch] = useState("");
   const partyDropdownRef = useRef<HTMLDivElement>(null);
+  const partyListRef = useRef<HTMLDivElement>(null);
 
   const [isProductOpen, setIsProductOpen] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const productDropdownRef = useRef<HTMLDivElement>(null);
+  const productListRef = useRef<HTMLDivElement>(null);
 
   const [printPass, setPrintPass] = useState<GatePass | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showAddPartyModal, setShowAddPartyModal] = useState(false);
+
+  // Delete modal state
+  const [deleteConfirmPass, setDeleteConfirmPass] = useState<GatePass | null>(null);
+  const [deletingPass, setDeletingPass] = useState(false);
+
+  // Edit modal state
+  const [editingPass, setEditingPass] = useState<GatePass | null>(null);
+  const [editCustomerName, setEditCustomerName] = useState("");
+  const [editCustomerId, setEditCustomerId] = useState("");
+  const [editVehicleNo, setEditVehicleNo] = useState("");
+  const [editDriverName, setEditDriverName] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editItems, setEditItems] = useState<Array<{
+    productId: string;
+    productName: string;
+    qty: number;
+    weight: number;
+    unit: string;
+  }>>([]);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Add Item inside Edit Modal state
+  const [editAddProductId, setEditAddProductId] = useState("");
+  const [editAddQty, setEditAddQty] = useState<number | "">(1);
+  const [editAddWeight, setEditAddWeight] = useState<number | "">(25);
 
   useEffect(() => {
     if (!ownerId) return;
@@ -108,6 +136,39 @@ export default function GatePassPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Prevent background scroll when scrolling inside the product or party dropdown
+  useEffect(() => {
+    const attachWheelLock = (element: HTMLElement | null) => {
+      if (!element) return () => {};
+
+      const handleWheel = (e: WheelEvent) => {
+        const { scrollTop, scrollHeight, clientHeight } = element;
+        const isScrollingDown = e.deltaY > 0;
+        const isScrollingUp = e.deltaY < 0;
+
+        // If at boundaries, prevent the parent/background page from scrolling
+        if (
+          (isScrollingDown && Math.ceil(scrollTop + clientHeight) >= scrollHeight) ||
+          (isScrollingUp && scrollTop <= 0)
+        ) {
+          e.preventDefault();
+        }
+        e.stopPropagation();
+      };
+
+      element.addEventListener("wheel", handleWheel, { passive: false });
+      return () => element.removeEventListener("wheel", handleWheel);
+    };
+
+    const cleanupProduct = isProductOpen ? attachWheelLock(productListRef.current) : undefined;
+    const cleanupParty = isPartyOpen ? attachWheelLock(partyListRef.current) : undefined;
+
+    return () => {
+      if (cleanupProduct) cleanupProduct();
+      if (cleanupParty) cleanupParty();
+    };
+  }, [isProductOpen, isPartyOpen]);
 
   const selectedCustomer = useMemo(
     () => customers.find((c) => c.id === customerId) || null,
@@ -253,6 +314,119 @@ export default function GatePassPage() {
     }
   };
 
+  const handleDeleteGatePass = async (pass: GatePass) => {
+    if (!ownerId) return;
+    setDeletingPass(true);
+    try {
+      await deleteGatePass(pass.id, ownerId);
+      toast.success(t("gatePass_deleteSuccess", { no: pass.gatePassNo }));
+      setDeleteConfirmPass(null);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || t("gatePass_deleteFailed"));
+    } finally {
+      setDeletingPass(false);
+    }
+  };
+
+  const startEditGatePass = (pass: GatePass) => {
+    setEditingPass(pass);
+    setEditCustomerName(pass.customerName);
+    setEditCustomerId(pass.customerId || "");
+    setEditVehicleNo(pass.vehicleNo || "");
+    setEditDriverName(pass.driverName || "");
+    setEditNotes(pass.notes || "");
+    setEditItems(
+      pass.items.map((i) => ({
+        productId: i.productId,
+        productName: i.productName,
+        qty: i.qty,
+        weight: i.weight || 0,
+        unit: i.unit || "",
+      }))
+    );
+    setEditAddProductId("");
+    setEditAddQty(1);
+    setEditAddWeight(25);
+  };
+
+  const handleEditAddProduct = () => {
+    if (!editAddProductId) {
+      toast.warn(t("gatePass_toastSelectProduct"));
+      return;
+    }
+    const prod = products.find((p) => p.id === editAddProductId);
+    if (!prod) return;
+    const qty = Number(editAddQty) || 1;
+    if (qty <= 0) {
+      toast.warn(t("gatePass_toastValidQty"));
+      return;
+    }
+    const isWeight = prod.unitType === "weight";
+    const weight = isWeight ? Number(editAddWeight) || qty * 25 : 0;
+
+    const existingIndex = editItems.findIndex((it) => it.productId === prod.id);
+    if (existingIndex !== -1) {
+      setEditItems((prev) =>
+        prev.map((it, idx) =>
+          idx === existingIndex
+            ? { ...it, qty: it.qty + qty, weight: isWeight ? it.weight + weight : 0 }
+            : it
+        )
+      );
+    } else {
+      setEditItems((prev) => [
+        ...prev,
+        {
+          productId: prod.id,
+          productName: prod.name,
+          qty,
+          weight,
+          unit: prod.unitType === "weight" ? "Bags" : "Pcs",
+        },
+      ]);
+    }
+
+    setEditAddProductId("");
+    setEditAddQty(1);
+    setEditAddWeight(25);
+  };
+
+  const handleSaveEditedGatePass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPass || !ownerId) return;
+    if (!editCustomerName.trim()) {
+      toast.warn(t("gatePass_toastSelectParty"));
+      return;
+    }
+    if (editItems.length === 0) {
+      toast.warn(t("gatePass_toastAddItems"));
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await updateGatePass(
+        editingPass.id,
+        {
+          customerName: editCustomerName.trim(),
+          customerId: editCustomerId || undefined,
+          vehicleNo: editVehicleNo.trim(),
+          driverName: editDriverName.trim(),
+          notes: editNotes.trim(),
+          items: editItems,
+        },
+        ownerId
+      );
+      toast.success(t("gatePass_updateSuccess", { no: editingPass.gatePassNo }));
+      setEditingPass(null);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || t("gatePass_updateFailed"));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const filteredStockProducts = useMemo(() => {
     const term = stockSearch.trim().toLowerCase();
     if (!term) return products;
@@ -283,8 +457,8 @@ export default function GatePassPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <form onSubmit={handleCreateGatePass} className="space-y-6">
-              <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-white">
+              <div className="bg-white rounded-xl border border-stone-200 shadow-sm">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-white rounded-t-xl">
                   <h5 className="flex items-center gap-2 text-sm font-bold text-stone-800">
                     <span className="flex h-5 w-5 items-center justify-center rounded-full border border-brand-500 text-brand-600 text-xs font-bold">
                       <User size={12} />
@@ -300,7 +474,7 @@ export default function GatePassPage() {
                     </label>
 
                     <div className="flex gap-2">
-                      <div className="relative min-w-0 flex-1" ref={partyDropdownRef}>
+                      <div className={`relative min-w-0 flex-1 ${isPartyOpen ? "z-30" : "z-10"}`} ref={partyDropdownRef}>
                         <button
                           type="button"
                           onClick={() => setIsPartyOpen((prev) => !prev)}
@@ -394,7 +568,11 @@ export default function GatePassPage() {
                               </div>
                             </div>
 
-                            <div className="max-h-56 overflow-y-auto divide-y divide-stone-50">
+                            <div
+                              ref={partyListRef}
+                              style={{ overscrollBehavior: "contain" }}
+                              className="max-h-64 overflow-y-auto overscroll-contain divide-y divide-stone-50"
+                            >
                               {filteredCustomers.length === 0 ? (
                                 <div className="p-5 text-center text-stone-400 text-xs space-y-2.5">
                                   <p>{t("gatePass_noParty")} {partySearch ? `"${partySearch}"` : ""}</p>
@@ -493,7 +671,7 @@ export default function GatePassPage() {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                      <div className="sm:col-span-6">
+                      <div className={`sm:col-span-6 ${isProductOpen ? "relative z-30" : "relative z-10"}`}>
                         <label className="block text-[11px] font-bold text-stone-600 mb-1">
                           {t("gatePass_itemProduct")} <span className="text-red-500">*</span>
                         </label>
@@ -562,7 +740,7 @@ export default function GatePassPage() {
                           </button>
 
                           {isProductOpen && (
-                            <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl border border-stone-200 shadow-xl overflow-hidden">
+                            <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl border border-stone-200 shadow-2xl overflow-hidden ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-100">
                               <div className="p-2 border-b border-stone-100 bg-stone-50/80">
                                 <div className="relative">
                                   <Search
@@ -574,6 +752,14 @@ export default function GatePassPage() {
                                     autoFocus
                                     value={productSearch}
                                     onChange={(e) => setProductSearch(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Escape") {
+                                        setIsProductOpen(false);
+                                      } else if (e.key === "Enter" && filteredDropdownProducts.length === 1) {
+                                        e.preventDefault();
+                                        handleProductSelect(filteredDropdownProducts[0].id);
+                                      }
+                                    }}
                                     placeholder={t("gatePass_searchItem")}
                                     className="w-full pl-7 pr-7 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-900 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                                   />
@@ -589,7 +775,11 @@ export default function GatePassPage() {
                                 </div>
                               </div>
 
-                              <div className="max-h-56 overflow-y-auto divide-y divide-stone-50">
+                              <div
+                                ref={productListRef}
+                                style={{ overscrollBehavior: "contain" }}
+                                className="max-h-72 overflow-y-auto overscroll-contain divide-y divide-stone-50"
+                              >
                                 {filteredDropdownProducts.length === 0 ? (
                                   <div className="p-4 text-center text-stone-400 text-xs">
                                     <p>{t("gatePass_noProduct")} {productSearch ? `"${productSearch}"` : ""}</p>
@@ -635,6 +825,13 @@ export default function GatePassPage() {
                                   })
                                 )}
                               </div>
+
+                              {filteredDropdownProducts.length > 0 && (
+                                <div className="px-3 py-1.5 bg-stone-50/90 border-t border-stone-100 flex items-center justify-between text-[10px] text-stone-500 font-medium">
+                                  <span>{filteredDropdownProducts.length} items</span>
+                                  <span className="text-stone-400 text-[9px]">Scroll for more</span>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -878,13 +1075,33 @@ export default function GatePassPage() {
               cell: (gp) => <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800">{gp.status === "Issued" ? t("gatePass_statusIssued") : gp.status}</span>,
             },
             {
-              key: "slip",
-              header: t("gatePass_colSlip"),
+              key: "actions",
+              header: t("action"),
               align: "right",
               cell: (gp) => (
-                <button onClick={() => setPrintPass(gp)} className="btn-ghost !py-1 !px-2.5 text-xs inline-flex items-center gap-1.5">
-                  <Printer size={13} /> {t("printSlip")}
-                </button>
+                <div className="flex items-center justify-end gap-1">
+                  <button
+                    onClick={() => setPrintPass(gp)}
+                    className="rounded-lg p-1.5 text-stone-600 hover:bg-stone-100 transition"
+                    title={t("printSlip")}
+                  >
+                    <Printer size={15} />
+                  </button>
+                  <button
+                    onClick={() => startEditGatePass(gp)}
+                    className="rounded-lg p-1.5 text-blue-600 hover:bg-blue-50 transition"
+                    title="Edit Gate Pass"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirmPass(gp)}
+                    className="rounded-lg p-1.5 text-red-600 hover:bg-red-50 transition"
+                    title="Delete Gate Pass"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               ),
             },
           ]}
@@ -973,6 +1190,298 @@ export default function GatePassPage() {
                 <Printer size={14} /> {t("gatePass_print")}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmPass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-stone-200">
+            <div className="flex items-center gap-3 text-red-600 mb-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 shrink-0">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-stone-900">
+                  {t("gatePass_deleteTitle", { no: deleteConfirmPass.gatePassNo })}
+                </h3>
+                <span className="text-xs font-semibold text-stone-500">
+                  {deleteConfirmPass.customerName} • {new Date(deleteConfirmPass.date).toLocaleDateString()}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-sm text-stone-600 mb-6 bg-red-50/70 p-3.5 rounded-xl border border-red-100 leading-relaxed">
+              {t("gatePass_deleteConfirmMsg")}
+            </p>
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmPass(null)}
+                disabled={deletingPass}
+                className="btn-ghost"
+              >
+                {t("cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteGatePass(deleteConfirmPass)}
+                disabled={deletingPass}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-red-700 active:scale-95 disabled:opacity-50 transition"
+              >
+                {deletingPass ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>{t("gatePass_deleting")}</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    <span>Delete Gate Pass</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Gate Pass Modal */}
+      {editingPass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl border border-stone-200">
+            <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4 bg-stone-50">
+              <div className="flex items-center gap-2">
+                <Pencil size={18} className="text-brand-600" />
+                <h3 className="text-base font-bold text-stone-900">
+                  {t("gatePass_editTitle", { no: editingPass.gatePassNo })}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingPass(null)}
+                className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-200 hover:text-stone-700 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedGatePass} className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    {t("gatePass_editParty")} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editCustomerName}
+                    onChange={(e) => setEditCustomerName(e.target.value)}
+                    className="field w-full text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    {t("gatePass_vehicleNo")}
+                  </label>
+                  <input
+                    type="text"
+                    value={editVehicleNo}
+                    onChange={(e) => setEditVehicleNo(e.target.value)}
+                    placeholder="e.g. LES-1234"
+                    className="field w-full text-xs font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    {t("gatePass_driverName")}
+                  </label>
+                  <input
+                    type="text"
+                    value={editDriverName}
+                    onChange={(e) => setEditDriverName(e.target.value)}
+                    placeholder="Driver name"
+                    className="field w-full text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    {t("gatePass_notes")}
+                  </label>
+                  <input
+                    type="text"
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    placeholder="Notes..."
+                    className="field w-full text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Items Section */}
+              <div className="border border-stone-200 rounded-xl overflow-hidden mt-3">
+                <div className="bg-stone-100 px-4 py-2 border-b border-stone-200 flex items-center justify-between">
+                  <span className="text-xs font-bold text-stone-800 uppercase tracking-wider">
+                    {t("gatePass_colItemsWeight")}
+                  </span>
+                  <span className="text-[11px] font-bold text-stone-500">
+                    {editItems.length} items
+                  </span>
+                </div>
+
+                <div className="divide-y divide-stone-100 max-h-56 overflow-y-auto">
+                  {editItems.map((item, idx) => (
+                    <div key={idx} className="p-3 flex items-center justify-between gap-3 hover:bg-stone-50">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-xs text-stone-900 truncate">{item.productName}</p>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="w-20">
+                          <label className="block text-[9px] font-bold text-stone-400 uppercase">Qty</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.qty}
+                            onChange={(e) => {
+                              const q = Math.max(1, parseInt(e.target.value) || 1);
+                              setEditItems((prev) =>
+                                prev.map((it, i) => (i === idx ? { ...it, qty: q } : it))
+                              );
+                            }}
+                            className="field !py-1 text-xs font-bold text-center"
+                          />
+                        </div>
+
+                        <div className="w-24">
+                          <label className="block text-[9px] font-bold text-stone-400 uppercase">Weight (kg)</label>
+                          <input
+                            type="number"
+                            step="any"
+                            value={item.weight}
+                            onChange={(e) => {
+                              const w = parseFloat(e.target.value) || 0;
+                              setEditItems((prev) =>
+                                prev.map((it, i) => (i === idx ? { ...it, weight: w } : it))
+                              );
+                            }}
+                            className="field !py-1 text-xs font-bold text-center"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setEditItems((prev) => prev.filter((_, i) => i !== idx))}
+                          className="p-1.5 text-red-500 hover:bg-red-50 rounded mt-3"
+                          title="Remove item"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add Item to Gate Pass */}
+                <div className="p-3 bg-stone-50 border-t border-stone-200">
+                  <div className="text-[11px] font-bold text-stone-700 mb-2">+ Add Another Product</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <div className="sm:col-span-6">
+                      <select
+                        value={editAddProductId}
+                        onChange={(e) => {
+                          const pId = e.target.value;
+                          setEditAddProductId(pId);
+                          const p = products.find((pr) => pr.id === pId);
+                          if (p?.unitType === "weight") {
+                            setEditAddWeight(25);
+                          } else {
+                            setEditAddWeight(0);
+                          }
+                        }}
+                        className="field w-full !py-1 text-xs bg-white"
+                      >
+                        <option value="">Select product...</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} (Gudam: {p.gudamStock ?? 0})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Qty"
+                        value={editAddQty}
+                        onChange={(e) => {
+                          const q = parseInt(e.target.value) || 1;
+                          setEditAddQty(q);
+                          const p = products.find((pr) => pr.id === editAddProductId);
+                          if (p?.unitType === "weight") {
+                            setEditAddWeight(q * 25);
+                          }
+                        }}
+                        className="field w-full !py-1 text-xs font-bold text-center"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <input
+                        type="number"
+                        step="any"
+                        placeholder="Weight"
+                        value={editAddWeight}
+                        onChange={(e) => setEditAddWeight(parseFloat(e.target.value) || 0)}
+                        className="field w-full !py-1 text-xs font-bold text-center"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <button
+                        type="button"
+                        onClick={handleEditAddProduct}
+                        className="btn-primary w-full !py-1 text-xs font-bold flex items-center justify-center gap-1"
+                      >
+                        <Plus size={14} /> Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingPass(null)}
+                  disabled={savingEdit}
+                  className="btn-ghost"
+                >
+                  {t("cancel")}
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit || editItems.length === 0}
+                  className="btn-primary !py-2 !px-5 text-xs font-bold flex items-center gap-2 shadow-sm"
+                >
+                  {savingEdit ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      <span>{t("gatePass_updating")}</span>
+                    </>
+                  ) : (
+                    <span>Save Changes</span>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

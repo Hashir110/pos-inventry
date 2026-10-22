@@ -8,9 +8,11 @@ import ProductForm from "../../../../components/ProductForm";
 import PageHeader from "../../../../components/PageHeader";
 import { getProduct, updateProduct, type ProductInput } from "../../../../lib/services/products";
 import { useLanguage } from "../../../../store/useLanguage";
+import { useStore } from "../../../../store/useStore";
 
 export default function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: productId } = use(params);
+  const { currentUser } = useStore();
   const { t } = useLanguage();
   const router = useRouter();
 
@@ -21,7 +23,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     let cancelled = false;
     (async () => {
       try {
-        const found = await getProduct(productId);
+        const found = await getProduct(productId, currentUser?.uid);
         if (cancelled) return;
         if (!found) {
           toast.error(t("inv_notFound"));
@@ -33,6 +35,8 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           buyingPrice: found.buyingPrice,
           sellingPrice: found.sellingPrice,
           stock: found.stock,
+          gudamStock: found.gudamStock ?? 0,
+          shopStock: found.shopStock ?? found.stock ?? 0,
           unitType: found.unitType,
           category: found.category ?? "",
         });
@@ -46,11 +50,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     return () => {
       cancelled = true;
     };
-  }, [productId, router, t]);
+  }, [productId, currentUser, router, t]);
 
   const handleSubmit = async (values: ProductInput) => {
     try {
-      await updateProduct(productId, values);
+      await updateProduct(productId, values, currentUser?.uid);
       toast.success(t("inv_updated"));
       router.push("/dashboard/inventry");
     } catch (error) {

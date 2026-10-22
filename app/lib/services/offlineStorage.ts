@@ -83,6 +83,9 @@ export const cacheKeys = {
   dayClosings: (ownerId: string) => `cache_day_closings_${ownerId}`,
   expenses: (ownerId: string) => `cache_expenses_${ownerId}`,
   transports: (ownerId: string) => `cache_transports_${ownerId}`,
+  banks: (ownerId: string) => `cache_banks_${ownerId}`,
+  bankTransactions: (ownerId: string, bankId?: string) =>
+    `cache_bank_txs_${ownerId}_${bankId || "all"}`,
 };
 
 // ========================
