@@ -925,9 +925,13 @@ export default function BankAccountsPage() {
           customerName={receiptSale.customerName}
           transport={receiptSale.transport}
           extraCharges={receiptSale.extraCharges}
+          advanceAmount={receiptSale.advanceAmount}
           items={receiptSale.items}
           total={saleNetAmount(receiptSale)}
           paymentMethod={receiptSale.paymentMethod}
+          cashAmount={receiptSale.cashAmount}
+          bankAmount={receiptSale.bankAmount}
+          bankName={receiptSale.bankName}
           printLabel="Print Slip"
           closeLabel="Close"
           onClose={() => setReceiptSale(null)}

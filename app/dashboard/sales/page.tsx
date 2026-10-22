@@ -1303,6 +1303,7 @@ export default function SalesHistoryPage() {
           }
           transport={receiptSale.transport}
           extraCharges={receiptSale.extraCharges}
+          advanceAmount={receiptSale.advanceAmount}
           items={receiptSale.items}
           total={saleNetAmount(receiptSale)}
           paymentMethod={receiptSale.paymentMethod}

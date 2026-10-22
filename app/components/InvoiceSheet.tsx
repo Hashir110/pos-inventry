@@ -10,6 +10,7 @@ interface InvoiceSheetProps {
   customerName?: string;
   transport?: string;
   extraCharges?: number;
+  advanceAmount?: number;
   items: SaleItem[];
   total: number;
   paymentMethod: PaymentMethod;
@@ -28,6 +29,7 @@ const InvoiceSheet = forwardRef<HTMLDivElement, InvoiceSheetProps>(function Invo
     customerName,
     transport,
     extraCharges,
+    advanceAmount,
     items,
     total,
     paymentMethod,
@@ -46,6 +48,7 @@ const InvoiceSheet = forwardRef<HTMLDivElement, InvoiceSheetProps>(function Invo
   };
   const gross = items.reduce((sum, item) => sum + item.total, 0);
   const extra = extraCharges && extraCharges > 0 ? extraCharges : 0;
+  const advance = advanceAmount && advanceAmount > 0 ? advanceAmount : 0;
   const when = new Date(date).toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
@@ -149,20 +152,28 @@ const InvoiceSheet = forwardRef<HTMLDivElement, InvoiceSheetProps>(function Invo
 
       <div className="mt-5 flex justify-end">
         <div className="w-[360px] space-y-1.5 text-[20px]">
-          {extra > 0 && (
+          {(extra > 0 || advance > 0) && (
             <>
               <div className="flex justify-between font-semibold text-stone-700">
                 <span>{t("pos_receipt_items_total")}</span>
                 <span>{num(gross)}</span>
               </div>
-              <div className="flex justify-between font-semibold text-stone-700">
-                <span>{t("pos_receipt_extra_charges")}</span>
-                <span>{num(extra)}</span>
-              </div>
+              {extra > 0 && (
+                <div className="flex justify-between font-semibold text-stone-700">
+                  <span>{t("pos_receipt_extra_charges")}</span>
+                  <span>+{num(extra)}</span>
+                </div>
+              )}
+              {advance > 0 && (
+                <div className="flex justify-between font-bold text-emerald-800">
+                  <span>{t("pos_receipt_advance_paid")}</span>
+                  <span>-{num(advance)}</span>
+                </div>
+              )}
             </>
           )}
           <div className="flex justify-between border-t-2 border-black pt-2 text-[26px] font-black">
-            <span>{t("pos_receipt_total")}</span>
+            <span>{advance > 0 ? t("pos_receipt_net_payable") : t("pos_receipt_total")}</span>
             <span>{num(total)}</span>
           </div>
 

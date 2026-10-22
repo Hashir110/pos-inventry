@@ -43,6 +43,7 @@ export interface SaleMeta {
   customerId?: string;
   transport?: string;
   extraCharges?: number;
+  advanceAmount?: number;
   cashAmount?: number;
   bankAmount?: number;
   bankId?: string;
@@ -117,6 +118,9 @@ const buildMeta = (meta: SaleMeta) => {
   if (typeof meta.extraCharges === "number" && meta.extraCharges > 0) {
     result.extraCharges = meta.extraCharges;
   }
+  if (typeof meta.advanceAmount === "number" && meta.advanceAmount > 0) {
+    result.advanceAmount = meta.advanceAmount;
+  }
   if (meta.customerId) {
     result.customerId = meta.customerId;
   }
@@ -149,9 +153,12 @@ export const createOnlineSale = async (
   const saleRef = doc(collection(db, "sales"));
   let invoiceNo = "";
 
+  const advancePaid = meta.advanceAmount || 0;
+  const netPayable = Math.max(0, roundMoney(totalAmount - advancePaid));
+
   const bankPaidAmount =
     meta.paymentMethod === "Bank Account"
-      ? (meta.bankAmount ?? totalAmount)
+      ? (meta.bankAmount ?? netPayable)
       : (meta.bankAmount || 0);
   const hasBankPayment =
     (meta.paymentMethod === "Bank Account" || meta.paymentMethod === "Split") &&
@@ -206,11 +213,11 @@ export const createOnlineSale = async (
       const balance = (customerSnap.data() as Customer).balance || 0;
       let udharToAdd = 0;
       if (meta.paymentMethod === "Udhar") {
-        udharToAdd = totalAmount;
+        udharToAdd = netPayable;
       } else if (meta.paymentMethod === "Split") {
         const cashPaid = meta.cashAmount || 0;
         const bankPaid = meta.bankAmount || 0;
-        udharToAdd = Math.max(0, roundMoney(totalAmount - cashPaid - bankPaid));
+        udharToAdd = Math.max(0, roundMoney(netPayable - cashPaid - bankPaid));
       }
       if (udharToAdd > 0) {
         transaction.update(customerRef, { balance: roundMoney(balance + udharToAdd) });
@@ -310,6 +317,7 @@ export const createOnlineSale = async (
     ...(meta.customerId ? { customerId: meta.customerId } : {}),
     ...(meta.transport ? { transport: meta.transport } : {}),
     ...(meta.extraCharges ? { extraCharges: meta.extraCharges } : {}),
+    ...(meta.advanceAmount ? { advanceAmount: meta.advanceAmount } : {}),
   };
   setCached(salesKey, [createdSale, ...currentSales]);
 
@@ -436,7 +444,19 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
 
       if (customerRef && customerSnap?.exists()) {
         const balance = (customerSnap.data() as Customer).balance || 0;
-        transaction.update(customerRef, { balance: roundMoney(balance + order.totalAmount) });
+        const advancePaid = order.advanceAmount || 0;
+        const netPayable = Math.max(0, roundMoney(order.totalAmount - advancePaid));
+        let udharToAdd = 0;
+        if (order.paymentMethod === "Udhar") {
+          udharToAdd = netPayable;
+        } else if (order.paymentMethod === "Split") {
+          const cashPaid = order.cashAmount || 0;
+          const bankPaid = order.bankAmount || 0;
+          udharToAdd = Math.max(0, roundMoney(netPayable - cashPaid - bankPaid));
+        }
+        if (udharToAdd > 0) {
+          transaction.update(customerRef, { balance: roundMoney(balance + udharToAdd) });
+        }
       }
 
       const { isOffline: _isOffline, ...cleanOrder } = order;

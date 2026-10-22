@@ -46,6 +46,7 @@ export default function POSPage() {
     const [transport, setTransport] = useState("");
     const [transportId, setTransportId] = useState("");
     const [extraCharges, setExtraCharges] = useState("");
+    const [advanceAmount, setAdvanceAmount] = useState("");
     const [transports, setTransports] = useState<Transport[]>([]);
     const [showTransportModal, setShowTransportModal] = useState(false);
     const [products, setProducts] = useState<Product[]>([]);
@@ -65,6 +66,7 @@ export default function POSPage() {
         cashAmount?: number;
         bankAmount?: number;
         bankName?: string;
+        advanceAmount?: number;
     } | null>(null);
 
     const [showReceipt, setShowReceipt] = useState(false);
@@ -202,7 +204,9 @@ export default function POSPage() {
 
     const itemsTotal = cart.reduce((sum, item) => sum + item.total, 0);
     const extra = Math.max(0, parseFloat(extraCharges) || 0);
-    const grandTotal = itemsTotal + extra;
+    const advance = Math.max(0, parseFloat(advanceAmount) || 0);
+    const grossTotal = itemsTotal + extra;
+    const grandTotal = Math.max(0, grossTotal - advance);
 
     const handleFinalizeSale = async () => {
         if (!currentUser) return;
@@ -277,6 +281,7 @@ export default function POSPage() {
                 description: description.trim(),
                 transport: transport.trim(),
                 extraCharges: extra,
+                ...(advance > 0 ? { advanceAmount: advance } : {}),
                 paymentMethod,
                 ...(customerId ? { customerId } : {}),
                 ...(calculatedCashAmount !== undefined ? { cashAmount: calculatedCashAmount } : {}),
@@ -286,8 +291,8 @@ export default function POSPage() {
             };
 
             const shortInvoiceNo = isOnline
-                ? await createOnlineSale(currentUser.uid, cart, grandTotal, meta)
-                : queueOfflineSale(currentUser.uid, cart, grandTotal, meta, products);
+                ? await createOnlineSale(currentUser.uid, cart, grossTotal, meta)
+                : queueOfflineSale(currentUser.uid, cart, grossTotal, meta, products);
 
             if (!isOnline) {
                 setProducts(prev => prev.map(p => {
@@ -302,6 +307,7 @@ export default function POSPage() {
                 cashAmount: calculatedCashAmount,
                 bankAmount: calculatedBankAmount,
                 bankName: chosenBankName,
+                advanceAmount: advance,
             });
             setInvoiceNumber(shortInvoiceNo);
             toast.success(t("pos_sale_success"));
@@ -334,11 +340,11 @@ export default function POSPage() {
         setCustomerName("");
         setCustomerId("");
         setDescription("");
-        setTransport(""); setTransportId(""); setExtraCharges("");
+        setTransport(""); setTransportId(""); setExtraCharges(""); setAdvanceAmount("");
         setShowNote(false);
     };
 
-    
+
 
     const updateBagsQty = (index: number, newBagsQty: string | number) => {
         setCart(prev => prev.map((item, i) => {
@@ -671,28 +677,51 @@ export default function POSPage() {
                     )}
                 </div>
                 <div className="border-t border-stone-200 p-2.5 space-y-1.5 bg-white">
-                    <div className="flex items-center justify-between gap-3">
-                        <label htmlFor="extra-charges" className="text-xs font-bold uppercase tracking-wider text-stone-500">
-                            {t("pos_extra_charges")} <span className="font-medium normal-case tracking-normal text-stone-400">{t("pos_extra_charges_hint")}</span>
-                        </label>
-                        <div className="relative w-32">
-                            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-stone-400">Rs.</span>
-                            <input
-                                id="extra-charges"
-                                type="number"
-                                min="0"
-                                step="any"
-                                value={extraCharges}
-                                onChange={(e) => setExtraCharges(e.target.value)}
-                                placeholder="0"
-                                className="field !py-1.5 pl-8 text-right font-bold"
-                            />
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <label htmlFor="extra-charges" className="text-[11px] font-bold uppercase tracking-wider text-stone-500 flex items-center justify-between">
+                                <span className="truncate">{t("pos_extra_charges")}</span>
+                            </label>
+                            <div className="relative mt-1">
+                                <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-stone-400">Rs.</span>
+                                <input
+                                    id="extra-charges"
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    value={extraCharges}
+                                    onChange={(e) => setExtraCharges(e.target.value)}
+                                    placeholder="0"
+                                    className="field !py-1 pl-7 text-right font-bold text-xs"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label htmlFor="advance-amount" className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 flex items-center justify-between">
+                                <span className="truncate">{t("pos_advance_amount")}</span>
+                            </label>
+                            <div className="relative mt-1">
+                                <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-600">Rs.</span>
+                                <input
+                                    id="advance-amount"
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    value={advanceAmount}
+                                    onChange={(e) => setAdvanceAmount(e.target.value)}
+                                    placeholder="0"
+                                    className="field !py-1 pl-7 text-right font-bold text-xs border-emerald-200 focus:border-emerald-500 focus:ring-emerald-500/20 text-emerald-800"
+                                />
+                            </div>
                         </div>
                     </div>
 
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold uppercase tracking-wider text-stone-500">{t("grandTotal")}</span>
+                            <span className="text-xs font-bold uppercase tracking-wider text-stone-500">
+                                {advance > 0 ? t("pos_receipt_net_payable") : t("grandTotal")}
+                            </span>
                             {!showNote && (
                                 <button
                                     onClick={() => setShowNote(true)}
@@ -702,9 +731,16 @@ export default function POSPage() {
                                 </button>
                             )}
                         </div>
-                        <span className="tabular font-display text-lg font-black text-brand-700">
-                            Rs. {Math.round(grandTotal).toLocaleString()}
-                        </span>
+                        <div className="text-right">
+                            {advance > 0 && (
+                                <span className="block text-[10px] text-stone-400 line-through">
+                                    Rs. {Math.round(grossTotal).toLocaleString()}
+                                </span>
+                            )}
+                            <span className="tabular font-display text-lg font-black text-brand-700">
+                                Rs. {Math.round(grandTotal).toLocaleString()}
+                            </span>
+                        </div>
                     </div>
 
                     {showNote && (
@@ -911,6 +947,7 @@ export default function POSPage() {
                     customerName={customerName}
                     transport={transport}
                     extraCharges={extra}
+                    advanceAmount={lastSaleMeta?.advanceAmount}
                     items={cart}
                     total={grandTotal}
                     paymentMethod={paymentMethod}
@@ -928,6 +965,7 @@ export default function POSPage() {
                         setTransport("");
                         setTransportId("");
                         setExtraCharges("");
+                        setAdvanceAmount("");
                         setCashAmountInput("");
                         setBankAmountInput("");
                         setInvoiceNumber("");

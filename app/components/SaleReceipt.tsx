@@ -16,6 +16,7 @@ interface SaleReceiptProps {
   customerName?: string;
   transport?: string;
   extraCharges?: number;
+  advanceAmount?: number;
   items: SaleItem[];
   total: number;
   paymentMethod: PaymentMethod;
@@ -34,6 +35,7 @@ export default function SaleReceipt({
   customerName,
   transport,
   extraCharges,
+  advanceAmount,
   items,
   total,
   paymentMethod,
@@ -124,6 +126,7 @@ export default function SaleReceipt({
           customerName={customerName}
           transport={transport}
           extraCharges={extraCharges}
+          advanceAmount={advanceAmount}
           items={items}
           total={total}
           paymentMethod={paymentMethod}
@@ -192,12 +195,20 @@ export default function SaleReceipt({
             {!!extraCharges && extraCharges > 0 && (
               <div className="flex justify-between text-[11px] font-semibold text-black">
                 <span>{t("pos_receipt_extra_charges")}</span>
-                <span className="tabular">{Math.round(extraCharges).toLocaleString()}</span>
+                <span className="tabular">+{Math.round(extraCharges).toLocaleString()}</span>
+              </div>
+            )}
+            {!!advanceAmount && advanceAmount > 0 && (
+              <div className="flex justify-between text-[11px] font-bold text-emerald-800">
+                <span>{t("pos_receipt_advance_paid")}</span>
+                <span className="tabular">-{Math.round(advanceAmount).toLocaleString()}</span>
               </div>
             )}
             <div className="flex justify-between items-end">
               <div className="text-right w-full">
-                <p className="text-xs font-black uppercase tracking-wider text-black">{t("pos_receipt_total_amount")}</p>
+                <p className="text-xs font-black uppercase tracking-wider text-black">
+                  {advanceAmount && advanceAmount > 0 ? t("pos_receipt_net_payable") : t("pos_receipt_total_amount")}
+                </p>
                 <p className="text-2xl font-black text-black tabular">{Math.round(total).toLocaleString()}</p>
               </div>
             </div>
