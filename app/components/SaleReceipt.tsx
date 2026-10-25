@@ -134,43 +134,43 @@ export default function SaleReceipt({
           bankAmount={bankAmount}
           bankName={bankName}
         />
-      </div>      <div id="printable-receipt" className="bg-white p-4 rounded-xl w-full max-w-[340px] max-h-[95vh] overflow-y-auto shadow-2xl relative text-black">
+      </div>      <div id="printable-receipt" className="bg-white p-4 print:p-0 rounded-xl w-full max-w-[340px] max-h-[95vh] overflow-y-auto shadow-2xl relative text-black">
         <button onClick={onClose} className="absolute top-2 right-2 p-1 text-stone-400 no-print hover:text-stone-700">
           <X size={20} />
         </button>
 
-        <div className="bg-white">
-          <div className="text-center mb-3 border-b border-black pb-3">
-            <h2 className="text-xl font-bold uppercase text-black leading-tight">{shop?.shopName || t("pos_receipt_default_shop")}</h2>
-            {shop?.address && <p className="text-[10px] text-stone-800 mt-0.5">{shop.address}</p>}
-            {shop?.contact && <p className="text-[10px] font-bold text-stone-900">{t("pos_receipt_phone", { phone: shop.contact })}</p>}
+        <div className="bg-white px-1.5 text-black">
+          <div className="text-center mb-3 border-b-2 border-black pb-3">
+            <h2 className="text-xl font-black uppercase text-black leading-tight tracking-wide">{shop?.shopName || t("pos_receipt_default_shop")}</h2>
+            {shop?.address && <p className="text-[11px] font-bold text-black mt-0.5">{shop.address}</p>}
+            {shop?.contact && <p className="text-[11px] font-black text-black">{t("pos_receipt_phone", { phone: shop.contact })}</p>}
 
-            <div className="mt-2 text-[10px] text-stone-700 flex flex-col items-center">
-              <p>{new Date(date).toLocaleString()}</p>
-              <p className="font-bold text-black text-[12px] mt-1 tracking-wider">{t("pos_receipt_invoice_no", { no: invoiceNo })}</p>
+            <div className="mt-2 text-[11px] font-bold text-black flex flex-col items-center">
+              <p className="font-bold text-black">{new Date(date).toLocaleString()}</p>
+              <p className="font-black text-black text-[13px] mt-1 tracking-wider">{t("pos_receipt_invoice_no", { no: invoiceNo })}</p>
               {transport && (
-                <p className="font-bold text-black mt-1 uppercase">{t("pos_receipt_transport", { name: transport })}</p>
+                <p className="font-black text-black mt-1 uppercase text-xs">{t("pos_receipt_transport", { name: transport })}</p>
               )}
               {customerName && (
-                <p className="font-bold text-black mt-1 uppercase border-b border-dashed border-stone-400 pb-0.5">
+                <p className="font-black text-black mt-1 uppercase border-b-2 border-black pb-0.5 text-xs">
                   {t("pos_receipt_customer", { name: isCounterSale(customerName) ? t("pos_select_counter_sale") : customerName })}
                 </p>
               )}
             </div>
           </div>
 
-          <div className="mb-3 overflow-x-auto text-black">
-            <table className="w-full text-left text-[11px] border-collapse">
+          <div className="mb-3 overflow-hidden text-black">
+            <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b-2 border-black text-[10px] font-black uppercase">
-                  <th className="py-1 pr-1">{t("pos_receipt_col_qty")}</th>
-                  <th className="py-1 px-1">{t("pos_receipt_col_items")}</th>
-                  <th className="py-1 px-1 text-center">{t("pos_receipt_col_weight")}</th>
-                  <th className="py-1 px-1 text-right">{t("pos_receipt_col_rate")}</th>
-                  <th className="py-1 pl-1 text-right">{t("pos_receipt_col_amount")}</th>
+                <tr className="border-b-2 border-t-2 border-black text-[11px] font-black uppercase text-black">
+                  <th className="py-1.5 pl-1.5 pr-1">{t("pos_receipt_col_qty")}</th>
+                  <th className="py-1.5 px-1">{t("pos_receipt_col_items")}</th>
+                  <th className="py-1.5 px-1 text-center">{t("pos_receipt_col_weight")}</th>
+                  <th className="py-1.5 px-1 text-right">{t("pos_receipt_col_rate")}</th>
+                  <th className="py-1.5 pl-1 pr-1.5 text-right">{t("pos_receipt_col_amount")}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-200">
+              <tbody className="divide-y divide-black/30 text-black">
                 {items.map((item, idx) => {
                   const isWeight = item.type === "weight";
                   const qtyStr = `${item.qty} ${isWeight ? t("pos_unit_bags") : t("pos_unit_pcs")}`;
@@ -178,12 +178,12 @@ export default function SaleReceipt({
                   const weightStr = isWeight ? `${weightVal}kg` : "—";
 
                   return (
-                    <tr key={idx} className="align-top">
-                      <td className="py-1.5 pr-1 font-bold whitespace-nowrap">{qtyStr}</td>
-                      <td className="py-1.5 px-1 font-semibold leading-tight">{item.name}</td>
-                      <td className="py-1.5 px-1 text-center font-medium whitespace-nowrap">{weightStr}</td>
-                      <td className="py-1.5 px-1 text-right tabular">{item.price}</td>
-                      <td className="py-1.5 pl-1 text-right font-bold tabular">{Math.round(item.total).toLocaleString()}</td>
+                    <tr key={idx} className="align-top font-bold">
+                      <td className="py-2 pl-1.5 pr-1 font-black whitespace-nowrap text-black">{qtyStr}</td>
+                      <td className="py-2 px-1 font-bold leading-snug text-black">{item.name}</td>
+                      <td className="py-2 px-1 text-center font-bold whitespace-nowrap text-black">{weightStr}</td>
+                      <td className="py-2 px-1 text-right font-bold tabular text-black">{item.price}</td>
+                      <td className="py-2 pl-1 pr-1.5 text-right font-black tabular text-black">{Math.round(item.total).toLocaleString()}</td>
                     </tr>
                   );
                 })}
@@ -191,21 +191,21 @@ export default function SaleReceipt({
             </table>
           </div>
 
-          <div className="border-t-2 border-black pt-2 mb-4 space-y-1">
+          <div className="border-t-[3px] border-black pt-2 mb-3 space-y-1">
             {!!extraCharges && extraCharges > 0 && (
-              <div className="flex justify-between text-[11px] font-semibold text-black">
+              <div className="flex justify-between text-xs font-bold text-black px-1">
                 <span>{t("pos_receipt_extra_charges")}</span>
-                <span className="tabular">+{Math.round(extraCharges).toLocaleString()}</span>
+                <span className="tabular font-black">+{Math.round(extraCharges).toLocaleString()}</span>
               </div>
             )}
             {!!advanceAmount && advanceAmount > 0 && (
-              <div className="flex justify-between text-[11px] font-bold text-emerald-800">
+              <div className="flex justify-between text-xs font-black text-black px-1">
                 <span>{t("pos_receipt_advance_paid")}</span>
-                <span className="tabular">-{Math.round(advanceAmount).toLocaleString()}</span>
+                <span className="tabular font-black">-{Math.round(advanceAmount).toLocaleString()}</span>
               </div>
             )}
             <div className="flex justify-between items-end">
-              <div className="text-right w-full">
+              <div className="text-right w-full px-1">
                 <p className="text-xs font-black uppercase tracking-wider text-black">
                   {advanceAmount && advanceAmount > 0 ? t("pos_receipt_net_payable") : t("pos_receipt_total_amount")}
                 </p>
@@ -213,52 +213,52 @@ export default function SaleReceipt({
               </div>
             </div>
 
-            <div className="border-t border-dotted border-stone-400 pt-1.5 mt-2 text-[10px] space-y-0.5">
-              <div className="flex justify-between font-semibold text-stone-800">
+            <div className="border-t-2 border-black pt-2 mt-2 text-xs space-y-1 px-1">
+              <div className="flex justify-between font-bold text-black">
                 <span>{t("pos_receipt_payment_mode")}</span>
-                <span className="font-bold uppercase text-black">
+                <span className="font-black uppercase text-black">
                   {paymentMethod === "Bank Account" && bankName
                     ? `Bank (${bankName})`
                     : paymentLabels[paymentMethod] ?? paymentMethod}
                 </span>
               </div>
               {paymentMethod === "Split" && (
-                <div className="bg-stone-50 border border-stone-200 p-1.5 rounded mt-1 space-y-0.5 text-[10px]">
-                  <div className="flex justify-between font-bold text-stone-800">
+                <div className="border-2 border-black p-2 rounded mt-1 space-y-1 text-xs bg-white text-black font-bold">
+                  <div className="flex justify-between font-bold text-black">
                     <span>Cash Received:</span>
-                    <span>Rs. {Math.round(cashAmount || 0).toLocaleString()}</span>
+                    <span className="font-black">Rs. {Math.round(cashAmount || 0).toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between font-bold text-brand-700">
+                  <div className="flex justify-between font-bold text-black">
                     <span>Bank ({bankName || "Online"}):</span>
-                    <span>Rs. {Math.round(bankAmount || 0).toLocaleString()}</span>
+                    <span className="font-black">Rs. {Math.round(bankAmount || 0).toLocaleString()}</span>
                   </div>
                   {total - (cashAmount || 0) - (bankAmount || 0) > 0 && (
-                    <div className="flex justify-between font-bold text-red-600">
+                    <div className="flex justify-between font-black text-black">
                       <span>Udhar (Remaining):</span>
-                      <span>Rs. {Math.round(total - (cashAmount || 0) - (bankAmount || 0)).toLocaleString()}</span>
+                      <span className="font-black">Rs. {Math.round(total - (cashAmount || 0) - (bankAmount || 0)).toLocaleString()}</span>
                     </div>
                   )}
                 </div>
               )}
               {paymentMethod === "Udhar" && customerName && (
-                <div className="bg-stone-100 border border-stone-300 p-1 rounded mt-1">
-                  <div className="flex justify-between font-bold text-black">
+                <div className="border-2 border-black p-2 rounded mt-1 bg-white text-black font-bold">
+                  <div className="flex justify-between font-black text-black">
                     <span>{t("pos_receipt_party_ledger")}</span>
-                    <span>{customerName}</span>
+                    <span className="font-black">{customerName}</span>
                   </div>
-                  <p className="text-[9px] text-stone-600 mt-0.5">{t("pos_receipt_ledger_note")}</p>
+                  <p className="text-[10px] font-bold text-black mt-0.5">{t("pos_receipt_ledger_note")}</p>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="text-center text-[10px] text-black mb-4">
+          <div className="text-center text-xs font-bold text-black mb-3">
             {shop?.receiptMessage && (
-              <div className="whitespace-pre-wrap leading-tight font-medium mb-2">{shop.receiptMessage}</div>
+              <div className="whitespace-pre-wrap leading-tight font-black mb-2 text-black">{shop.receiptMessage}</div>
             )}
-            <div className="border-t border-dotted border-stone-400 pt-2 mt-2">
-              <p className="font-bold italic">{t("pos_receipt_powered_by")}</p>
-              <p>{t("pos_receipt_contact")}</p>
+            <div className="border-t-2 border-black pt-2 mt-2 text-[11px] font-black text-black">
+              <p className="font-black italic">{t("pos_receipt_powered_by")}</p>
+              <p className="font-black">{t("pos_receipt_contact")}</p>
             </div>
           </div>
 

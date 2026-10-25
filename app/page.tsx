@@ -112,7 +112,7 @@ export default function LoginPage() {
         }
         return true;
       } else {
-        toast.error("Incorrect system password! Access denied.");
+        toast.error(data.error || "Incorrect system password! Access denied.");
         return false;
       }
     } catch {

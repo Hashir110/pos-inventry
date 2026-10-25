@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const secret = () => process.env.ADMIN_PASSWORD ?? "";
+const secret = () => process.env.ADMIN_PASSWORD || process.env.NEXT_PUBLIC_ADMIN_PASSWORD || "";
 
 const safeEqual = (a: string, b: string) => {
   const ba = Buffer.from(a);
@@ -13,7 +13,7 @@ const safeEqual = (a: string, b: string) => {
 
 export async function POST(request: Request) {
   if (!secret()) {
-    return NextResponse.json({ ok: false, error: "ADMIN_PASSWORD is not set" }, { status: 503 });
+    return NextResponse.json({ ok: false, error: "ADMIN_PASSWORD is not set in environment" }, { status: 503 });
   }
 
   let password = "";
