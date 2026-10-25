@@ -183,7 +183,6 @@ export const listBankTransactions = async (
     let q = query(
       collection(db, "bank_transactions"),
       where("ownerId", "==", ownerId),
-      orderBy("date", "desc"),
       limit(limitCount)
     );
 
@@ -192,13 +191,14 @@ export const listBankTransactions = async (
         collection(db, "bank_transactions"),
         where("ownerId", "==", ownerId),
         where("bankId", "==", bankId),
-        orderBy("date", "desc"),
         limit(limitCount)
       );
     }
 
     const snap = await getDocs(q);
-    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as BankTransaction);
+    const items = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }) as BankTransaction)
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
     setCached(cacheKey, items);
     return items;
   } catch (error) {

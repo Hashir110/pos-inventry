@@ -155,6 +155,10 @@ export const addSupplierPurchase = async (
 
 
 ): Promise<string> => {
+  if (purchase.paidAmount && purchase.paidAmount > purchase.totalAmount) {
+    throw new Error("Paid/Advance amount cannot exceed total purchase amount");
+  }
+
   const purchaseRef = await addDoc(collection(db, "supplier_purchases"), {
     ownerId,
     ...purchase,
@@ -215,21 +219,46 @@ export const addSupplierPayment = async (
     note?: string;
   }
 ): Promise<string> => {
+  if (payment.amount <= 0) {
+    throw new Error("Payment amount must be greater than zero");
+  }
+
+  const suppliersSnap = await getDocs(
+    query(collection(db, "suppliers"), where("ownerId", "==", ownerId))
+  );
+  const targetSupplier = suppliersSnap.docs.find((d) => d.id === payment.supplierId);
+  if (!targetSupplier) throw new Error("Supplier not found");
+
+  const currentBalance = targetSupplier.data().balance || 0;
+  if (currentBalance <= 0) {
+    throw new Error("This supplier has no outstanding balance to pay");
+  }
+
+  if (payment.amount > currentBalance + 0.01) {
+    throw new Error(
+      `Payment amount (Rs. ${payment.amount}) cannot exceed supplier balance (Rs. ${currentBalance})`
+    );
+  }
+
   const ref = await addDoc(collection(db, "supplier_payments"), {
     ownerId,
     ...payment,
     date: new Date().toISOString(),
   });
 
-  const suppliersSnap = await getDocs(
-    query(collection(db, "suppliers"), where("ownerId", "==", ownerId))
-  );
-  const targetSupplier = suppliersSnap.docs.find((d) => d.id === payment.supplierId);
-  if (targetSupplier) {
-    const currentBalance = targetSupplier.data().balance || 0;
-    await updateDoc(doc(db, "suppliers", payment.supplierId), {
-      balance: currentBalance - payment.amount,
-    });
+  const newBalance = Math.max(0, Math.round((currentBalance - payment.amount) * 100) / 100);
+  await updateDoc(doc(db, "suppliers", payment.supplierId), {
+    balance: newBalance,
+  });
+
+  // Update local cache
+  const cacheKey = cacheKeys.suppliers(ownerId);
+  const current = getCachedEvenStale<Supplier[]>(cacheKey);
+  if (current) {
+    setCached(
+      cacheKey,
+      current.map((s) => (s.id === payment.supplierId ? { ...s, balance: newBalance } : s))
+    );
   }
 
   return ref.id;

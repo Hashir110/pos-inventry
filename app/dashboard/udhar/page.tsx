@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { History, Plus, RefreshCw, Search, Users, Wallet, Loader2 } from "lucide-react";
+import { History, Plus, RefreshCw, Search, Users, Wallet, Loader2, Pencil, Trash2, X, AlertTriangle } from "lucide-react";
 import { toast } from "react-toastify";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
@@ -12,7 +12,7 @@ import DataTable from "../../components/DataTable";
 import SummaryBox from "../../components/SummaryBox";
 import ReceivePaymentModal from "../../components/ReceivePaymentModal";
 import { formatMoney } from "../../lib/format";
-import { addCustomer, listCustomers } from "../../lib/services/customers";
+import { addCustomer, listCustomers, updateCustomer, deleteCustomer } from "../../lib/services/customers";
 import type { Customer } from "../../types";
 
 export default function UdharPage() {
@@ -29,13 +29,22 @@ export default function UdharPage() {
 
   const [payFor, setPayFor] = useState<Customer | null>(null);
 
+  // Edit party state
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [updating, setUpdating] = useState(false);
+
+  // Delete party state
+  const [deleteCustomerTarget, setDeleteCustomerTarget] = useState<Customer | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const fetchCustomers = useCallback(async (force = false) => {
     if (!currentUser) return;
     if (force) setRefreshing(true);
     try {
       setCustomers(await listCustomers(currentUser.uid, force));
       if (force) toast.success("Customers updated");
-
     } catch (error) {
       console.error(error);
       toast.error(t("credit_loadFailed"));
@@ -48,7 +57,6 @@ export default function UdharPage() {
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
-
 
   const totalOutstanding = useMemo(
     () => customers.reduce((sum, c) => sum + (c.balance || 0), 0),
@@ -81,6 +89,47 @@ export default function UdharPage() {
     }
   };
 
+  const startEdit = (c: Customer) => {
+    setEditingCustomer(c);
+    setEditName(c.name);
+    setEditPhone(c.phone || "");
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !editingCustomer || !editName.trim()) return;
+    setUpdating(true);
+    try {
+      await updateCustomer(currentUser.uid, editingCustomer.id, {
+        name: editName,
+        phone: editPhone,
+      });
+      toast.success(t("credit_editSuccess"));
+      setEditingCustomer(null);
+      fetchCustomers();
+    } catch (error) {
+      console.error(error);
+      toast.error(t("credit_editFailed"));
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!currentUser || !deleteCustomerTarget) return;
+    setDeleting(true);
+    try {
+      await deleteCustomer(currentUser.uid, deleteCustomerTarget.id);
+      toast.success(t("credit_deleteSuccess"));
+      setDeleteCustomerTarget(null);
+      fetchCustomers();
+    } catch (error) {
+      console.error(error);
+      toast.error(t("credit_deleteFailed"));
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -102,7 +151,6 @@ export default function UdharPage() {
             <SummaryBox label={t("customersCount")} value={debtors} />
           </div>
         }
-
       />
       <form
         onSubmit={handleAdd}
@@ -188,20 +236,34 @@ export default function UdharPage() {
             header: t("action"),
             align: "right",
             cell: (c) => (
-              <div className="flex justify-end gap-2">
+              <div className="flex justify-end items-center gap-1.5">
                 <Link
                   href={`/dashboard/udhar/${c.id}`}
-                  className="p-2 text-stone-500 hover:bg-stone-100 rounded-lg"
+                  className="p-2 text-stone-500 hover:bg-stone-100 rounded-lg transition"
                   title={t("viewLedger")}
                 >
-                  <History size={18} />
+                  <History size={17} />
                 </Link>
                 <button
                   onClick={() => setPayFor(c)}
                   disabled={c.balance <= 0}
-                  className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-md hover:bg-emerald-200 text-xs font-bold flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-2.5 py-1.5 bg-emerald-100 text-emerald-700 rounded-md hover:bg-emerald-200 text-xs font-bold flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Wallet size={14} /> {t("credit_collect")}
+                </button>
+                <button
+                  onClick={() => startEdit(c)}
+                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                  title={t("credit_editCustomer")}
+                >
+                  <Pencil size={16} />
+                </button>
+                <button
+                  onClick={() => setDeleteCustomerTarget(c)}
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                  title={t("credit_deleteCustomer")}
+                >
+                  <Trash2 size={16} />
                 </button>
               </div>
             ),
@@ -210,6 +272,132 @@ export default function UdharPage() {
       />
 
       <ReceivePaymentModal customer={payFor} onClose={() => setPayFor(null)} onSuccess={fetchCustomers} />
+
+      {/* Edit Party Modal */}
+      {editingCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-stone-200 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4 bg-stone-50">
+              <div className="flex items-center gap-2">
+                <Pencil size={18} className="text-blue-600" />
+                <h3 className="font-bold text-stone-900 text-base">
+                  {t("credit_editCustomer")}
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingCustomer(null)}
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdate} className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-stone-600 mb-1 block">
+                  {t("customerNameCol")} *
+                </label>
+                <input
+                  required
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder={t("credit_partyNamePlaceholder")}
+                  className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-stone-900 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-stone-600 mb-1 block">
+                  {t("phone")}
+                </label>
+                <input
+                  type="tel"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  placeholder="03xx-xxxxxxx"
+                  className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-stone-900"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-stone-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingCustomer(null)}
+                  className="btn-ghost !py-2 text-xs"
+                >
+                  {t("cancel")}
+                </button>
+                <button
+                  type="submit"
+                  disabled={updating || !editName.trim()}
+                  className="btn-primary !py-2 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {updating ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : (
+                    <span>{t("save")}</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteCustomerTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-stone-200">
+            <div className="flex items-center gap-3 text-red-600 mb-3">
+              <div className="p-2.5 rounded-full bg-red-100">
+                <AlertTriangle size={24} />
+              </div>
+              <h3 className="text-lg font-bold text-stone-900">
+                {t("credit_deleteCustomer")}
+              </h3>
+            </div>
+
+            <p className="text-sm text-stone-600 mb-2">
+              {t("credit_deleteConfirm", { name: deleteCustomerTarget.name })}
+            </p>
+
+            {deleteCustomerTarget.balance > 0 && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 font-semibold mb-4">
+                {t("credit_deleteBalanceWarning", {
+                  balance: formatMoney(deleteCustomerTarget.balance),
+                })}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setDeleteCustomerTarget(null)}
+                disabled={deleting}
+                className="btn-ghost !py-2 text-xs"
+              >
+                {t("cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {deleting ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    <span>{t("delete")}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

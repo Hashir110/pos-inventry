@@ -1,6 +1,7 @@
 const en = {
   pos_search_items: "Search items",
   pos_cart_empty_toast: "The cart is empty",
+  pos_item_already_in_cart: "\"{name}\" is already in the bill",
   pos_qty_zero: "Quantity is 0. Fix it or remove the item",
   pos_select_party_credit: "Select a party for credit sales",
   pos_sale_success: "Sale completed successfully",
@@ -104,6 +105,7 @@ const en = {
 const ur: Record<keyof typeof en, string> = {
   pos_search_items: "آئٹم تلاش کریں",
   pos_cart_empty_toast: "کارٹ خالی ہے",
+  pos_item_already_in_cart: "\"{name}\" پہلے ہی بل میں شامل ہے",
   pos_qty_zero: "مقدار 0 ہے۔ اسے درست کریں یا آئٹم ہٹا دیں",
   pos_select_party_credit: "ادھار کے لیے پارٹی منتخب کریں",
   pos_sale_success: "سیل کامیابی سے مکمل ہو گئی",

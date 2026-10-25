@@ -251,7 +251,7 @@ export const createOnlineSale = async (
         balanceAfter: newBankBal,
         createdAt: new Date().toISOString(),
       };
-      transaction.set(bankTxRef, bankTxData);
+      transaction.set(bankTxRef, stripUndefined(bankTxData));
     }
 
     for (const { snapshot, item } of reads) {

@@ -139,6 +139,16 @@ export default function SuppliersPage() {
       ? Number(purchaseQty) * 25 * Number(purchaseBuyingPrice)
       : Number(purchaseQty) * Number(purchaseBuyingPrice);
 
+    if (Number(purchasePaidAmount) > totalBill) {
+      toast.warn(
+        t("suppliers_warn_paid_excess", {
+          amount: Number(purchasePaidAmount).toLocaleString(),
+          total: totalBill.toLocaleString(),
+        })
+      );
+      return;
+    }
+
     try {
       setSavingPurchase(true);
       await addSupplierPurchase(ownerId, {
@@ -192,6 +202,22 @@ export default function SuppliersPage() {
     }
     const sup = suppliers.find((s) => s.id === paymentSupId);
     if (!sup) return;
+
+    const currentBalance = sup.balance || 0;
+    if (currentBalance <= 0) {
+      toast.error(t("suppliers_err_no_balance"));
+      return;
+    }
+
+    if (paymentAmount > currentBalance) {
+      toast.error(
+        t("suppliers_err_excess_payment", {
+          amount: paymentAmount.toLocaleString(),
+          balance: currentBalance.toLocaleString(),
+        })
+      );
+      return;
+    }
 
     try {
       setSavingPayment(true);
@@ -642,18 +668,43 @@ export default function SuppliersPage() {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">
-                  {t("suppliers_label_payment_amount")}
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="0"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                  className="input-field text-lg font-bold text-emerald-800"
-                  required
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-stone-700">
+                    {t("suppliers_label_payment_amount")}
+                  </label>
+                  {paymentSupId && (
+                    <span className="text-[11px] font-semibold text-stone-500">
+                      We Owe:{" "}
+                      <span className={`font-bold ${(suppliers.find((s) => s.id === paymentSupId)?.balance || 0) > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                        Rs. {(suppliers.find((s) => s.id === paymentSupId)?.balance || 0).toLocaleString()}
+                      </span>
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    max={suppliers.find((s) => s.id === paymentSupId)?.balance || undefined}
+                    placeholder="0"
+                    value={paymentAmount || ""}
+                    onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                    className="input-field text-lg font-bold text-emerald-800 pr-20"
+                    required
+                  />
+                  {paymentSupId && (suppliers.find((s) => s.id === paymentSupId)?.balance || 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const bal = suppliers.find((s) => s.id === paymentSupId)?.balance || 0;
+                        setPaymentAmount(bal);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-800 hover:bg-emerald-200"
+                    >
+                      Pay Full
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

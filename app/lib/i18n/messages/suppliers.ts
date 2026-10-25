@@ -66,6 +66,9 @@ const en = {
   suppliers_err_purchase: "Failed to save purchase entry",
   suppliers_payment_recorded: "Payment of Rs. {amount} paid to {name}",
   suppliers_err_payment: "Failed to save payment entry",
+  suppliers_err_no_balance: "This supplier has no outstanding balance to pay",
+  suppliers_err_excess_payment: "Payment amount (Rs. {amount}) cannot exceed supplier balance (Rs. {balance})",
+  suppliers_warn_paid_excess: "Paid amount (Rs. {amount}) cannot exceed total bill (Rs. {total})",
 };
 
 const ur: Record<keyof typeof en, string> = {
@@ -136,6 +139,9 @@ const ur: Record<keyof typeof en, string> = {
   suppliers_err_purchase: "خریداری کا اندراج محفوظ نہیں ہو سکا",
   suppliers_payment_recorded: "{name} کو Rs. {amount} کی ادائیگی ہو گئی",
   suppliers_err_payment: "ادائیگی کا اندراج محفوظ نہیں ہو سکا",
+  suppliers_err_no_balance: "اس سپلائر کا کوئی بقایا واجب الادا نہیں ہے",
+  suppliers_err_excess_payment: "ادائیگی کی رقم (Rs. {amount}) واجب الادا بیلنس (Rs. {balance}) سے زیادہ نہیں ہو سکتی",
+  suppliers_warn_paid_excess: "ادائیگی کی رقم (Rs. {amount}) کل بل (Rs. {total}) سے زیادہ نہیں ہو سکتی",
 };
 
 export const suppliers = { en, ur };

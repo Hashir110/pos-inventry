@@ -300,6 +300,7 @@ export default function GatePassPage() {
       });
 
       toast.success(t("gatePass_toastSaved", { no: created.gatePassNo }));
+      setPrintPass(created);
 
       setCustomerName("");
       setCustomerId("");
@@ -1110,7 +1111,7 @@ export default function GatePassPage() {
       {printPass && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-pop w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-stone-50">
+            <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-stone-50 no-print">
               <div className="flex items-center gap-2">
                 <Printer size={16} className="text-brand-600" />
                 <h3 className="font-bold text-stone-900 text-sm">
@@ -1125,41 +1126,48 @@ export default function GatePassPage() {
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1 bg-white">
-              <div className="text-center border-b border-stone-200 pb-3 mb-3">
-                <h2 className="font-extrabold text-base text-stone-900 uppercase">
+            <div id="printable-receipt" className="p-5 overflow-y-auto flex-1 bg-white text-black font-sans">
+              <div className="text-center border-b-2 border-black pb-3 mb-3">
+                <h2 className="font-black text-xl text-black uppercase leading-tight tracking-wide">
                   {currentShop?.shopName || t("gatePass_defaultSlipTitle")}
                 </h2>
-                <p className="text-[11px] text-stone-500 font-bold uppercase tracking-widest mt-0.5">
+                {currentShop?.address && (
+                  <p className="text-[11px] font-bold text-black mt-0.5">{currentShop.address}</p>
+                )}
+                {currentShop?.contact && (
+                  <p className="text-[11px] font-black text-black">Ph: {currentShop.contact}</p>
+                )}
+                <div className="mt-2 inline-block border-2 border-black px-3 py-0.5 rounded font-black text-xs uppercase tracking-wider text-black">
                   {t("gatePass_slipHeading")}
-                </p>
-                <p className="text-[11px] text-stone-400 mt-1 font-mono">
-                  #{printPass.gatePassNo} • {new Date(printPass.date).toLocaleDateString()}
-                </p>
-              </div>
-
-              <div className="space-y-1 mb-4 text-xs text-stone-700">
-                <p>
-                  <span className="font-bold text-stone-900">{t("gatePass_partyColon")}</span> {printPass.customerName}
+                </div>
+                <p className="text-xs text-black mt-1.5 font-black">
+                  #{printPass.gatePassNo} • {new Date(printPass.date).toLocaleString()}
                 </p>
               </div>
 
-              <table className="w-full text-left text-xs border-t border-b border-stone-200 my-3">
+              <div className="space-y-1 mb-3 text-xs text-black">
+                <p className="font-bold">
+                  <span className="font-black">{t("gatePass_partyColon")}</span>{" "}
+                  <span className="font-black uppercase">{printPass.customerName}</span>
+                </p>
+              </div>
+
+              <table className="w-full text-left text-xs border-collapse my-3">
                 <thead>
-                  <tr className="border-b border-stone-200 font-bold text-stone-700">
-                    <th className="py-2">{t("gatePass_slipItem")}</th>
-                    <th className="py-2 text-center">{t("gatePass_slipBags")}</th>
-                    <th className="py-2 text-right">{t("gatePass_slipTotalWt")}</th>
+                  <tr className="border-b-2 border-t-2 border-black font-black uppercase text-black text-[11px]">
+                    <th className="py-1.5 pl-1">{t("gatePass_slipItem")}</th>
+                    <th className="py-1.5 text-center">{t("gatePass_slipBags")}</th>
+                    <th className="py-1.5 pr-1 text-right">{t("gatePass_slipTotalWt")}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-100">
+                <tbody className="divide-y divide-black/20">
                   {printPass.items.map((it, idx) => (
-                    <tr key={idx}>
-                      <td className="py-2 font-bold text-stone-900">{it.productName}</td>
-                      <td className="py-2 text-center text-stone-800 font-semibold">
+                    <tr key={idx} className="font-bold text-black">
+                      <td className="py-1.5 pl-1 font-black text-black">{it.productName}</td>
+                      <td className="py-1.5 text-center text-black font-bold">
                         {t("gatePass_bagsCount", { qty: it.qty })}
                       </td>
-                      <td className="py-2 text-right font-extrabold text-stone-900">
+                      <td className="py-1.5 pr-1 text-right font-black text-black">
                         {it.weight ? `${it.weight} kg` : "—"}
                       </td>
                     </tr>
@@ -1167,19 +1175,19 @@ export default function GatePassPage() {
                 </tbody>
               </table>
 
-              <div className="grid grid-cols-2 gap-4 mt-8 text-center text-[10px] text-stone-400 pt-3 border-t border-dashed border-stone-200">
+              <div className="grid grid-cols-2 gap-6 mt-8 text-center text-[11px] font-bold text-black pt-4 border-t-2 border-dashed border-black">
                 <div>
-                  <div className="border-b border-stone-300 h-6 mb-1"></div>
-                  <span>{t("gatePass_incharge")}</span>
+                  <div className="border-b-2 border-black h-8 mb-1"></div>
+                  <span className="font-black">{t("gatePass_incharge")}</span>
                 </div>
                 <div>
-                  <div className="border-b border-stone-300 h-6 mb-1"></div>
-                  <span>{t("gatePass_receiver")}</span>
+                  <div className="border-b-2 border-black h-8 mb-1"></div>
+                  <span className="font-black">{t("gatePass_receiver")}</span>
                 </div>
               </div>
             </div>
 
-            <div className="p-3 border-t border-stone-200 bg-stone-50 flex justify-end gap-2">
+            <div className="p-3 border-t border-stone-200 bg-stone-50 flex justify-end gap-2 no-print">
               <button onClick={() => setPrintPass(null)} className="btn-ghost !py-2 text-xs">
                 {t("gatePass_close")}
               </button>

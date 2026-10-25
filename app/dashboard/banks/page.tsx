@@ -121,7 +121,55 @@ export default function BankAccountsPage() {
     setLoadingTx(true);
     try {
       const data = await listBankTransactions(currentUser.uid, bankId, 200, force);
-      setTransactions(data);
+
+      // Also check recent sales that were made with this bank to ensure statement history is never empty
+      const currentBankObj = banks.find((b) => b.id === bankId) || selectedBank;
+      const recentSales = await listRecentSales(currentUser.uid, 200);
+      const bankSales = recentSales.filter(
+        (s) =>
+          (s.bankId === bankId || (currentBankObj?.bankName && s.bankName === currentBankObj.bankName)) &&
+          ((s.paymentMethod === "Bank Account" && saleNetAmount(s) > 0) || (s.bankAmount && s.bankAmount > 0))
+      );
+
+      const existingSaleIds = new Set(
+        data.map((tx) => tx.saleId || tx.invoiceNo?.toString()).filter(Boolean)
+      );
+      const missingTx: BankTransaction[] = [];
+
+      for (const sale of bankSales) {
+        const identifier = sale.id || sale.invoiceNo?.toString();
+        if (!existingSaleIds.has(identifier) && !existingSaleIds.has(sale.invoiceNo?.toString())) {
+          const amount =
+            sale.paymentMethod === "Bank Account"
+              ? saleNetAmount(sale)
+              : (sale.bankAmount || 0);
+
+          if (amount > 0) {
+            missingTx.push({
+              id: `sale_tx_${sale.id}`,
+              ownerId: currentUser.uid,
+              bankId: bankId,
+              bankName: currentBankObj?.bankName || sale.bankName || "Bank",
+              type: "deposit",
+              amount,
+              date: sale.date,
+              customerName: sale.customerName || "Counter Sale",
+              customerId: sale.customerId,
+              saleId: sale.id,
+              invoiceNo: sale.invoiceNo,
+              description: `Sale Payment #${sale.invoiceNo}`,
+              balanceAfter: undefined,
+              createdAt: sale.date,
+            });
+          }
+        }
+      }
+
+      const merged = [...data, ...missingTx].sort((a, b) =>
+        (b.date || "").localeCompare(a.date || "")
+      );
+
+      setTransactions(merged);
     } catch (err) {
       console.error(err);
       toast.error("Failed to load transactions");

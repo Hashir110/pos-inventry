@@ -88,12 +88,20 @@ const saleStatus = (sale: Sale): { labelKey: TranslationKey; tone: string } => {
 const paymentInfo = (sale: Sale) => {
   const net = saleNetAmount(sale);
   if (sale.paymentMethod === "Udhar") {
+    const advance = sale.advanceAmount || 0;
+    const paid = advance;
+    const due = Math.max(0, net - advance);
     return {
       isUdhar: true,
-      paid: 0,
-      due: net,
-      badge: "bg-amber-100 text-amber-800",
-      labelKey: "due" as TranslationKey,
+      paid,
+      due,
+      badge:
+        due === 0
+          ? "bg-emerald-100 text-emerald-700"
+          : paid > 0
+          ? "bg-blue-100 text-blue-800"
+          : "bg-amber-100 text-amber-800",
+      labelKey: (due === 0 ? "paid" : paid > 0 ? "partialPaid" : "due") as TranslationKey,
     };
   }
   if (sale.paymentMethod === "Split") {
@@ -105,8 +113,13 @@ const paymentInfo = (sale: Sale) => {
       isUdhar: due > 0,
       paid,
       due,
-      badge: due > 0 ? "bg-amber-100 text-amber-800" : "bg-indigo-100 text-indigo-800",
-      labelKey: (due > 0 ? "due" : "paid") as TranslationKey,
+      badge:
+        due > 0
+          ? paid > 0
+            ? "bg-blue-100 text-blue-800"
+            : "bg-amber-100 text-amber-800"
+          : "bg-indigo-100 text-indigo-800",
+      labelKey: (due === 0 ? "paid" : paid > 0 ? "partialPaid" : "due") as TranslationKey,
     };
   }
   return {
@@ -612,6 +625,7 @@ export default function SalesHistoryPage() {
             header: t("paymentBreakdown"),
             cell: (sale) => {
               const pay = paymentInfo(sale);
+              const advance = sale.advanceAmount || 0;
               return (
                 <div className="flex flex-col items-start gap-1">
                   <span
@@ -623,6 +637,11 @@ export default function SalesHistoryPage() {
                     {t(methodLabelKey(sale.paymentMethod))}
                     {sale.bankName ? ` (${sale.bankName})` : ""}
                   </span>
+                  {advance > 0 && (
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                      {t("advancePaid")}: {money(advance)}
+                    </span>
+                  )}
                 </div>
               );
             },
@@ -694,12 +713,20 @@ export default function SalesHistoryPage() {
 
         let payDisplay;
         if (isUdharNow) {
+          const advance = sale.advanceAmount || 0;
+          const paid = advance;
+          const due = Math.max(0, grandTotalCalc - advance);
           payDisplay = {
             isUdhar: true,
-            paid: 0,
-            due: grandTotalCalc,
-            badge: "bg-amber-100 text-amber-800",
-            labelKey: "due" as TranslationKey,
+            paid,
+            due,
+            badge:
+              due === 0
+                ? "bg-emerald-100 text-emerald-700"
+                : paid > 0
+                ? "bg-blue-100 text-blue-800"
+                : "bg-amber-100 text-amber-800",
+            labelKey: (due === 0 ? "paid" : paid > 0 ? "partialPaid" : "due") as TranslationKey,
           };
         } else if (isSplitNow) {
           const cash = sale.cashAmount || 0;
@@ -710,8 +737,13 @@ export default function SalesHistoryPage() {
             isUdhar: due > 0,
             paid,
             due,
-            badge: due > 0 ? "bg-amber-100 text-amber-800" : "bg-indigo-100 text-indigo-800",
-            labelKey: (due > 0 ? "due" : "paid") as TranslationKey,
+            badge:
+              due > 0
+                ? paid > 0
+                  ? "bg-blue-100 text-blue-800"
+                  : "bg-amber-100 text-amber-800"
+                : "bg-indigo-100 text-indigo-800",
+            labelKey: (due === 0 ? "paid" : paid > 0 ? "partialPaid" : "due") as TranslationKey,
           };
         } else {
           payDisplay = {
@@ -1138,6 +1170,15 @@ export default function SalesHistoryPage() {
                         value: money(grandTotalCalc),
                         tone: "font-extrabold text-stone-900",
                       },
+                      ...((sale.advanceAmount ?? 0) > 0
+                        ? [
+                            {
+                              label: t("advancePaid"),
+                              value: `− ${money(sale.advanceAmount || 0)}`,
+                              tone: "font-semibold text-blue-700",
+                            },
+                          ]
+                        : []),
                       { label: t("paid"), value: money(payDisplay.paid), tone: "" },
                       {
                         label: t("due"),

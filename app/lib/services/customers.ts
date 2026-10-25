@@ -1,12 +1,14 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
   onSnapshot,
   query,
   runTransaction,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "../firebase";
@@ -108,6 +110,53 @@ export const addCustomer = async (
   );
 
   return newCust;
+};
+
+export const updateCustomer = async (
+  ownerId: string,
+  customerId: string,
+  input: { name: string; phone?: string }
+): Promise<void> => {
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+  const updateData = {
+    name: input.name.trim(),
+    phone: input.phone?.trim() || "",
+  };
+
+  if (isOnline) {
+    const customerRef = doc(db, "customers", customerId);
+    await updateDoc(customerRef, updateData);
+  }
+
+  // Update local cache
+  const cacheKey = cacheKeys.customers(ownerId);
+  const current = getCachedEvenStale<Customer[]>(cacheKey) || [];
+  setCached(
+    cacheKey,
+    current
+      .map((c) => (c.id === customerId ? { ...c, ...updateData } : c))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  );
+};
+
+export const deleteCustomer = async (
+  ownerId: string,
+  customerId: string
+): Promise<void> => {
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+
+  if (isOnline) {
+    const customerRef = doc(db, "customers", customerId);
+    await deleteDoc(customerRef);
+  }
+
+  // Update local cache
+  const cacheKey = cacheKeys.customers(ownerId);
+  const current = getCachedEvenStale<Customer[]>(cacheKey) || [];
+  setCached(
+    cacheKey,
+    current.filter((c) => c.id !== customerId)
+  );
 };
 
 export const receivePayment = async (

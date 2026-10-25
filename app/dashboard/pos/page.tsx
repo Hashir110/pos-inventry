@@ -144,6 +144,17 @@ export default function POSPage() {
     };
 
     const handleProductClick = (product: Product) => {
+        const inCart = cart.some((item) => item.id === product.id);
+        if (inCart) {
+            toast.info(t("pos_item_already_in_cart", { name: product.name }));
+            const el = document.getElementById(`cart-item-${product.id}`);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                el.classList.add("bg-brand-50");
+                setTimeout(() => el.classList.remove("bg-brand-50"), 1200);
+            }
+            return;
+        }
         addToCart(product, 1);
     };
 
@@ -157,26 +168,8 @@ export default function POSPage() {
         setCart(prev => {
             const idx = prev.findIndex(item => item.id === product.id);
             if (idx !== -1) {
-                return prev.map((item, i) => {
-                    if (i !== idx) return item;
-                    const newQty = item.qty + bagsQty;
-                    const newTotalWeight = isWeight
-                        ? (item.isManualWeight ? (item.totalWeight ?? 0) + (bagsQty * bagWeight) : newQty * bagWeight)
-                        : undefined;
-                    const lineTotal = isWeight ? ((newTotalWeight ?? 0) * finalPrice) : (newQty * finalPrice);
-
-                    const updated: SaleItem = {
-                        ...item,
-                        qty: newQty,
-                        total: lineTotal,
-                    };
-                    if (newTotalWeight !== undefined) {
-                        updated.totalWeight = newTotalWeight;
-                    } else {
-                        delete updated.totalWeight;
-                    }
-                    return updated;
-                });
+                // Already in cart: do NOT increment qty on click
+                return prev;
             }
             const newItem: SaleItem = {
                 id: product.id,
@@ -605,7 +598,8 @@ export default function POSPage() {
                                 return (
                                     <div
                                         key={item.id}
-                                        className="grid grid-cols-[minmax(0,1fr)_110px_90px_90px_100px_28px] items-center gap-3 border-b border-stone-100 px-3.5 py-2.5"
+                                        id={`cart-item-${item.id}`}
+                                        className="grid grid-cols-[minmax(0,1fr)_110px_90px_90px_100px_28px] items-center gap-3 border-b border-stone-100 px-3.5 py-2.5 transition-colors duration-300 rounded-lg"
                                     >
                                         <div className="min-w-0">
                                             <p className="truncate text-sm font-semibold text-stone-900">{item.name}</p>
