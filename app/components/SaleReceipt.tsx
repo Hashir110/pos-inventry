@@ -173,35 +173,34 @@ export default function SaleReceipt({
             <table className="w-full text-left border-collapse table-fixed text-[10px]">
               <thead>
                 <tr className="border-y-2 border-black text-[10px] font-black uppercase text-black">
-                  <th className="py-1.5 pl-1 pr-0.5 text-left w-[16%]">{t("pos_receipt_col_qty")}</th>
+                  <th className="py-1.5 pl-0.5 pr-0.5 text-center w-[11%]">{t("pos_receipt_col_qty")}</th>
                   <th className="py-1.5 px-1 text-left w-[37%]">{t("pos_receipt_col_items")}</th>
                   <th className="py-1.5 px-0.5 text-center w-[15%]">{t("pos_receipt_col_weight")}</th>
-                  <th className="py-1.5 px-0.5 text-right w-[14%]">{t("pos_receipt_col_rate")}</th>
-                  <th className="py-1.5 pl-0.5 pr-1.5 text-right w-[18%]">{t("pos_receipt_col_amount")}</th>
+                  <th className="py-1.5 px-0.5 text-right w-[16%]">{t("pos_receipt_col_rate")}</th>
+                  <th className="py-1.5 pl-0.5 pr-1 text-right w-[21%]">{t("pos_receipt_col_amount")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-black/25 text-black">
                 {items.map((item, idx) => {
                   const isWeight = item.type === "weight";
-                  const qtyStr = `${item.qty} ${isWeight ? t("pos_unit_bags") : t("pos_unit_pcs")}`;
                   const weightVal = item.totalWeight ?? item.qty * (item.weightPerBag || 25);
                   const weightStr = isWeight ? `${weightVal}kg` : "—";
 
                   return (
                     <tr key={idx} className="align-middle font-bold">
-                      <td className="py-1.5 pl-1 pr-0.5 text-left font-black text-black text-[9.5px] break-words">
-                        {qtyStr}
+                      <td className="py-1.5 pl-0.5 pr-0.5 text-center font-black text-black text-[10px]">
+                        {item.qty}
                       </td>
                       <td className="py-1.5 px-1 text-left font-bold leading-tight text-black text-[10px] break-words">
                         {item.name}
                       </td>
-                      <td className="py-1.5 px-0.5 text-center font-bold text-black text-[10px] whitespace-nowrap">
+                      <td className="py-1.5 px-0.5 text-center font-bold text-black text-[9.5px] whitespace-nowrap">
                         {weightStr}
                       </td>
                       <td className="py-1.5 px-0.5 text-right font-bold tabular text-black text-[10px]">
                         {Number(item.price).toLocaleString()}
                       </td>
-                      <td className="py-1.5 pl-0.5 pr-1.5 text-right font-black tabular text-black text-[10px]">
+                      <td className="py-1.5 pl-0.5 pr-1 text-right font-black tabular text-black text-[10px]">
                         {Math.round(item.total).toLocaleString()}
                       </td>
                     </tr>
