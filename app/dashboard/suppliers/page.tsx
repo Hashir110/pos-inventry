@@ -6,6 +6,8 @@ import { useLanguage } from "../../store/useLanguage";
 import {
   subscribeSuppliers,
   addSupplier,
+  updateSupplier,
+  deleteSupplier,
   addSupplierPurchase,
   addSupplierPayment,
   listSupplierPurchases,
@@ -27,6 +29,9 @@ import {
   Building2,
   CheckCircle2,
   Loader2,
+  Pencil,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "react-toastify";
 import DataTable from "../../components/DataTable";
@@ -53,19 +58,28 @@ export default function SuppliersPage() {
 
   const [purchaseSupId, setPurchaseSupId] = useState("");
   const [purchaseProdId, setPurchaseProdId] = useState("");
-  const [purchaseQty, setPurchaseQty] = useState(1);
-  const [purchaseBuyingPrice, setPurchaseBuyingPrice] = useState(0);
+  const [purchaseQty, setPurchaseQty] = useState<number | "">(1);
+  const [purchaseBuyingPrice, setPurchaseBuyingPrice] = useState<number | "">("");
   const [purchaseDestination, setPurchaseDestination] = useState<"gudam" | "shop">("gudam");
-  const [purchasePaidAmount, setPurchasePaidAmount] = useState(0);
+  const [purchasePaidAmount, setPurchasePaidAmount] = useState<number | "">("");
 
   const [paymentSupId, setPaymentSupId] = useState("");
-  const [paymentAmount, setPaymentAmount] = useState(0);
+  const [paymentAmount, setPaymentAmount] = useState<number | "">("");
   const [paymentMethod, setPaymentMethod] = useState<"Cash" | "Bank Account">("Cash");
   const [paymentNote, setPaymentNote] = useState("");
 
   const [addingSupplier, setAddingSupplier] = useState(false);
   const [savingPurchase, setSavingPurchase] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
+
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [editSupName, setEditSupName] = useState("");
+  const [editSupPhone, setEditSupPhone] = useState("");
+  const [editSupAddress, setEditSupAddress] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const [deleteSupplierTarget, setDeleteSupplierTarget] = useState<Supplier | null>(null);
+  const [deletingSupplier, setDeletingSupplier] = useState(false);
 
   useEffect(() => {
     if (!ownerId) return;
@@ -116,6 +130,54 @@ export default function SuppliersPage() {
       toast.error(err.message || t("suppliers_err_add"));
     } finally {
       setAddingSupplier(false);
+    }
+  };
+
+  const startEditSupplier = (s: Supplier) => {
+    setEditingSupplier(s);
+    setEditSupName(s.name);
+    setEditSupPhone(s.phone || "");
+    setEditSupAddress(s.address || "");
+  };
+
+  const handleEditSupplierSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSupplier) return;
+    if (!editSupName.trim()) {
+      toast.warn(t("suppliers_warn_name"));
+      return;
+    }
+    try {
+      setSavingEdit(true);
+      await updateSupplier(
+        editingSupplier.id,
+        {
+          name: editSupName,
+          phone: editSupPhone,
+          address: editSupAddress,
+        },
+        ownerId
+      );
+      toast.success(t("suppliers_updated", { name: editSupName }));
+      setEditingSupplier(null);
+    } catch (err: any) {
+      toast.error(err.message || t("suppliers_err_update"));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDeleteSupplier = async () => {
+    if (!deleteSupplierTarget) return;
+    try {
+      setDeletingSupplier(true);
+      await deleteSupplier(deleteSupplierTarget.id, ownerId);
+      toast.success(t("suppliers_deleted", { name: deleteSupplierTarget.name }));
+      setDeleteSupplierTarget(null);
+    } catch (err: any) {
+      toast.error(err.message || t("suppliers_err_delete"));
+    } finally {
+      setDeletingSupplier(false);
     }
   };
 
@@ -181,8 +243,8 @@ export default function SuppliersPage() {
       setPurchaseSupId("");
       setPurchaseProdId("");
       setPurchaseQty(1);
-      setPurchaseBuyingPrice(0);
-      setPurchasePaidAmount(0);
+      setPurchaseBuyingPrice("");
+      setPurchasePaidAmount("");
     } catch (err: any) {
       toast.error(err.message || t("suppliers_err_purchase"));
     } finally {
@@ -196,7 +258,8 @@ export default function SuppliersPage() {
       toast.warn(t("suppliers_warn_select_supplier"));
       return;
     }
-    if (paymentAmount <= 0) {
+    const payAmt = Number(paymentAmount) || 0;
+    if (payAmt <= 0) {
       toast.warn(t("suppliers_warn_amount"));
       return;
     }
@@ -209,10 +272,10 @@ export default function SuppliersPage() {
       return;
     }
 
-    if (paymentAmount > currentBalance) {
+    if (payAmt > currentBalance) {
       toast.error(
         t("suppliers_err_excess_payment", {
-          amount: paymentAmount.toLocaleString(),
+          amount: payAmt.toLocaleString(),
           balance: currentBalance.toLocaleString(),
         })
       );
@@ -224,19 +287,19 @@ export default function SuppliersPage() {
       await addSupplierPayment(ownerId, {
         supplierId: sup.id,
         supplierName: sup.name,
-        amount: Number(paymentAmount),
+        amount: payAmt,
         method: paymentMethod,
         note: paymentNote,
       });
 
-      toast.success(t("suppliers_payment_recorded", { amount: paymentAmount, name: sup.name }));
+      toast.success(t("suppliers_payment_recorded", { amount: payAmt, name: sup.name }));
       setShowPaymentModal(false);
 
       const pay = await listSupplierPayments(ownerId);
       setPayments(pay);
 
       setPaymentSupId("");
-      setPaymentAmount(0);
+      setPaymentAmount("");
       setPaymentNote("");
     } catch (err: any) {
       toast.error(err.message || t("suppliers_err_payment"));
@@ -382,6 +445,20 @@ export default function SuppliersPage() {
                 >
                   <History size={16} />
                 </button>
+                <button
+                  onClick={() => startEditSupplier(s)}
+                  className="p-1 text-blue-600 hover:bg-blue-50 rounded transition"
+                  title={t("suppliers_edit_title")}
+                >
+                  <Pencil size={16} />
+                </button>
+                <button
+                  onClick={() => setDeleteSupplierTarget(s)}
+                  className="p-1 text-red-600 hover:bg-red-50 rounded transition"
+                  title={t("suppliers_delete_title")}
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             ),
           },
@@ -506,7 +583,7 @@ export default function SuppliersPage() {
                   onChange={(e) => {
                     setPurchaseProdId(e.target.value);
                     const pr = products.find((p) => p.id === e.target.value);
-                    if (pr) setPurchaseBuyingPrice(pr.buyingPrice || 0);
+                    if (pr) setPurchaseBuyingPrice(pr.buyingPrice ? pr.buyingPrice : "");
                   }}
                   className="input-field"
                   required
@@ -528,14 +605,15 @@ export default function SuppliersPage() {
                   <input
                     type="number"
                     min="1"
+                    placeholder="1"
                     value={purchaseQty}
-                    onChange={(e) => setPurchaseQty(Math.max(1, Number(e.target.value)))}
+                    onChange={(e) => setPurchaseQty(e.target.value === "" ? "" : Number(e.target.value))}
                     className="input-field"
                     required
                   />
                   {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
                     <p className="text-[10px] text-stone-500 mt-1 font-medium">
-                      {t("suppliers_weight_line", { weight: purchaseQty * 25 })}
+                      {t("suppliers_weight_line", { weight: (Number(purchaseQty) || 1) * 25 })}
                     </p>
                   )}
                 </div>
@@ -547,14 +625,15 @@ export default function SuppliersPage() {
                     type="number"
                     min="0"
                     step="any"
+                    placeholder="0"
                     value={purchaseBuyingPrice}
-                    onChange={(e) => setPurchaseBuyingPrice(Number(e.target.value))}
+                    onChange={(e) => setPurchaseBuyingPrice(e.target.value === "" ? "" : Number(e.target.value))}
                     className="input-field"
                     required
                   />
                   {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
                     <p className="text-[10px] text-stone-500 mt-1 font-medium">
-                      {t("suppliers_per_bag", { amount: (purchaseBuyingPrice * 25).toLocaleString() })}
+                      {t("suppliers_per_bag", { amount: ((Number(purchaseBuyingPrice) || 0) * 25).toLocaleString() })}
                     </p>
                   )}
                 </div>
@@ -583,8 +662,9 @@ export default function SuppliersPage() {
                   <input
                     type="number"
                     min="0"
+                    placeholder="0"
                     value={purchasePaidAmount}
-                    onChange={(e) => setPurchasePaidAmount(Number(e.target.value))}
+                    onChange={(e) => setPurchasePaidAmount(e.target.value === "" ? "" : Number(e.target.value))}
                     className="input-field"
                   />
                 </div>
@@ -595,15 +675,15 @@ export default function SuppliersPage() {
                   {t("suppliers_total_bill")}
                   {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
                     <span className="text-[11px] text-stone-500 font-normal ml-1">
-                      ({purchaseQty * 25} kg × Rs. {purchaseBuyingPrice})
+                      ({(Number(purchaseQty) || 1) * 25} kg × Rs. {Number(purchaseBuyingPrice) || 0})
                     </span>
                   )}
                 </span>
                 <span className="text-amber-900 font-extrabold text-sm">
                   Rs. {(
                     products.find((p) => p.id === purchaseProdId)?.unitType === "weight"
-                      ? purchaseQty * 25 * purchaseBuyingPrice
-                      : purchaseQty * purchaseBuyingPrice
+                      ? (Number(purchaseQty) || 1) * 25 * (Number(purchaseBuyingPrice) || 0)
+                      : (Number(purchaseQty) || 1) * (Number(purchaseBuyingPrice) || 0)
                   ).toLocaleString()}
                 </span>
               </div>
@@ -687,8 +767,8 @@ export default function SuppliersPage() {
                     min="1"
                     max={suppliers.find((s) => s.id === paymentSupId)?.balance || undefined}
                     placeholder="0"
-                    value={paymentAmount || ""}
-                    onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value === "" ? "" : Number(e.target.value))}
                     className="input-field text-lg font-bold text-emerald-800 pr-20"
                     required
                   />
@@ -843,6 +923,136 @@ export default function SuppliersPage() {
                     ))}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Supplier Modal */}
+      {editingSupplier && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-pop w-full max-w-md overflow-hidden">
+            <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-blue-50">
+              <h3 className="font-extrabold text-blue-900 text-sm flex items-center gap-2">
+                <Pencil size={18} className="text-blue-600" /> {t("suppliers_modal_edit_title")}
+              </h3>
+              <button
+                onClick={() => setEditingSupplier(null)}
+                className="rounded-lg p-1 text-stone-400 hover:bg-stone-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleEditSupplierSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-stone-700 block mb-1">
+                  {t("suppliers_label_name")}
+                </label>
+                <input
+                  type="text"
+                  placeholder={t("suppliers_placeholder_name")}
+                  value={editSupName}
+                  onChange={(e) => setEditSupName(e.target.value)}
+                  className="input-field"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-stone-700 block mb-1">
+                  {t("suppliers_label_phone")}
+                </label>
+                <input
+                  type="text"
+                  placeholder="03xx-xxxxxxx"
+                  value={editSupPhone}
+                  onChange={(e) => setEditSupPhone(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-stone-700 block mb-1">{t("address")}</label>
+                <input
+                  type="text"
+                  placeholder={t("address")}
+                  value={editSupAddress}
+                  onChange={(e) => setEditSupAddress(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingSupplier(null)}
+                  className="btn-ghost flex-1 text-xs"
+                >
+                  {t("cancel")}
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="btn-primary flex-1 text-xs font-bold min-h-[38px] flex items-center justify-center bg-blue-600 hover:bg-blue-700"
+                >
+                  {savingEdit ? (
+                    <Loader2 className="animate-spin text-white" size={16} />
+                  ) : (
+                    t("suppliers_update_supplier")
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteSupplierTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-stone-200">
+            <div className="flex items-center gap-3 text-red-600 mb-3">
+              <div className="p-2.5 rounded-full bg-red-100">
+                <AlertTriangle size={24} />
+              </div>
+              <h3 className="text-lg font-bold text-stone-900">
+                {t("suppliers_delete_title")}
+              </h3>
+            </div>
+
+            <p className="text-sm text-stone-600 mb-2">
+              {t("suppliers_delete_confirm", { name: deleteSupplierTarget.name })}
+            </p>
+
+            {deleteSupplierTarget.balance > 0 && (
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-900 font-semibold mb-4">
+                {t("suppliers_delete_balance_warning", {
+                  balance: (deleteSupplierTarget.balance || 0).toLocaleString(),
+                })}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                type="button"
+                onClick={() => setDeleteSupplierTarget(null)}
+                disabled={deletingSupplier}
+                className="btn-ghost !py-2 text-xs"
+              >
+                {t("cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSupplier}
+                disabled={deletingSupplier}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {deletingSupplier ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 size={14} />
+                    <span>{t("delete")}</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

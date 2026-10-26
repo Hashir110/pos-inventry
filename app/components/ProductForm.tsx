@@ -31,8 +31,8 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
   const [form, setForm] = useState<FormValues>({
     name: initial?.name ?? "",
     sellingPrice: initial ? String(initial.sellingPrice) : "",
-    gudamStock: initial ? String(initial.gudamStock ?? 0) : "0",
-    shopStock: initial ? String(initial.shopStock ?? initial.stock ?? 0) : "0",
+    gudamStock: initial ? String(initial.gudamStock ?? "") : "",
+    shopStock: initial ? String(initial.shopStock ?? initial.stock ?? "") : "",
     unitType: initial?.unitType ?? "weight",
     category: initial?.category ?? "",
   });

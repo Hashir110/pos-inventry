@@ -212,10 +212,14 @@ export default function GatePassPage() {
     }
     const isWeight = prod.unitType === "weight";
     setItemQty(1);
-    setItemWeight(isWeight ? 25 : 0);
+    setItemWeight(isWeight ? 25 : "");
   };
 
-  const handleQtyChange = (qtyVal: number) => {
+  const handleQtyChange = (qtyVal: number | "") => {
+    if (qtyVal === "") {
+      setItemQty("");
+      return;
+    }
     const q = isNaN(qtyVal) || qtyVal < 1 ? 1 : qtyVal;
     setItemQty(q);
     if (selectedProduct?.unitType === "weight") {
@@ -847,7 +851,7 @@ export default function GatePassPage() {
                           min="1"
                           placeholder={t("gatePass_qtyPlaceholder")}
                           value={itemQty}
-                          onChange={(e) => handleQtyChange(Number(e.target.value))}
+                          onChange={(e) => handleQtyChange(e.target.value === "" ? "" : Number(e.target.value))}
                           className="field w-full text-xs font-bold tabular !py-2"
                         />
                       </div>
@@ -861,7 +865,7 @@ export default function GatePassPage() {
                           step="any"
                           placeholder={t("gatePass_weightPlaceholder")}
                           value={itemWeight}
-                          onChange={(e) => setItemWeight(Number(e.target.value))}
+                          onChange={(e) => setItemWeight(e.target.value === "" ? "" : Number(e.target.value))}
                           disabled={selectedProduct?.unitType === "count"}
                           className="field w-full text-xs font-bold tabular !py-2 disabled:bg-stone-100 disabled:text-stone-400"
                         />

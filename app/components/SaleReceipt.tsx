@@ -58,6 +58,16 @@ export default function SaleReceipt({
     Split: "Cash + Bank",
   };
 
+  const formatReceiptDate = (dStr: string) => {
+    const d = new Date(dStr);
+    if (isNaN(d.getTime())) return dStr;
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true });
+    return `${day}/${month}/${year}, ${time}`;
+  };
+
   const makeSlipBlob = async (): Promise<Blob> => {
     if (!invoiceRef.current) throw new Error(t("pos_receipt_slip_not_found"));
     const blob = await toBlob(invoiceRef.current, { pixelRatio: 2, backgroundColor: "#ffffff", cacheBust: true });
@@ -139,14 +149,14 @@ export default function SaleReceipt({
           <X size={20} />
         </button>
 
-        <div className="bg-white px-1.5 text-black">
+        <div className="receipt-outer-border border-2 border-black p-2.5 bg-white text-black rounded-sm">
           <div className="text-center mb-3 border-b-2 border-black pb-3">
             <h2 className="text-xl font-black uppercase text-black leading-tight tracking-wide">{shop?.shopName || t("pos_receipt_default_shop")}</h2>
             {shop?.address && <p className="text-[11px] font-bold text-black mt-0.5">{shop.address}</p>}
             {shop?.contact && <p className="text-[11px] font-black text-black">{t("pos_receipt_phone", { phone: shop.contact })}</p>}
 
             <div className="mt-2 text-[11px] font-bold text-black flex flex-col items-center">
-              <p className="font-bold text-black">{new Date(date).toLocaleString()}</p>
+              <p className="font-bold text-black">{formatReceiptDate(date)}</p>
               <p className="font-black text-black text-[13px] mt-1 tracking-wider">{t("pos_receipt_invoice_no", { no: invoiceNo })}</p>
               {transport && (
                 <p className="font-black text-black mt-1 uppercase text-xs">{t("pos_receipt_transport", { name: transport })}</p>
@@ -159,18 +169,18 @@ export default function SaleReceipt({
             </div>
           </div>
 
-          <div className="mb-3 overflow-hidden text-black">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="mb-3 text-black">
+            <table className="w-full text-left border-collapse table-fixed text-[10px]">
               <thead>
-                <tr className="border-b-2 border-t-2 border-black text-[11px] font-black uppercase text-black">
-                  <th className="py-1.5 pl-1.5 pr-1">{t("pos_receipt_col_qty")}</th>
-                  <th className="py-1.5 px-1">{t("pos_receipt_col_items")}</th>
-                  <th className="py-1.5 px-1 text-center">{t("pos_receipt_col_weight")}</th>
-                  <th className="py-1.5 px-1 text-right">{t("pos_receipt_col_rate")}</th>
-                  <th className="py-1.5 pl-1 pr-1.5 text-right">{t("pos_receipt_col_amount")}</th>
+                <tr className="border-y-2 border-black text-[10px] font-black uppercase text-black">
+                  <th className="py-1.5 pl-1 pr-0.5 text-left w-[16%]">{t("pos_receipt_col_qty")}</th>
+                  <th className="py-1.5 px-1 text-left w-[37%]">{t("pos_receipt_col_items")}</th>
+                  <th className="py-1.5 px-0.5 text-center w-[15%]">{t("pos_receipt_col_weight")}</th>
+                  <th className="py-1.5 px-0.5 text-right w-[14%]">{t("pos_receipt_col_rate")}</th>
+                  <th className="py-1.5 pl-0.5 pr-1.5 text-right w-[18%]">{t("pos_receipt_col_amount")}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-black/30 text-black">
+              <tbody className="divide-y divide-black/25 text-black">
                 {items.map((item, idx) => {
                   const isWeight = item.type === "weight";
                   const qtyStr = `${item.qty} ${isWeight ? t("pos_unit_bags") : t("pos_unit_pcs")}`;
@@ -178,12 +188,22 @@ export default function SaleReceipt({
                   const weightStr = isWeight ? `${weightVal}kg` : "—";
 
                   return (
-                    <tr key={idx} className="align-top font-bold">
-                      <td className="py-2 pl-1.5 pr-1 font-black whitespace-nowrap text-black">{qtyStr}</td>
-                      <td className="py-2 px-1 font-bold leading-snug text-black">{item.name}</td>
-                      <td className="py-2 px-1 text-center font-bold whitespace-nowrap text-black">{weightStr}</td>
-                      <td className="py-2 px-1 text-right font-bold tabular text-black">{item.price}</td>
-                      <td className="py-2 pl-1 pr-1.5 text-right font-black tabular text-black">{Math.round(item.total).toLocaleString()}</td>
+                    <tr key={idx} className="align-middle font-bold">
+                      <td className="py-1.5 pl-1 pr-0.5 text-left font-black text-black text-[9.5px] break-words">
+                        {qtyStr}
+                      </td>
+                      <td className="py-1.5 px-1 text-left font-bold leading-tight text-black text-[10px] break-words">
+                        {item.name}
+                      </td>
+                      <td className="py-1.5 px-0.5 text-center font-bold text-black text-[10px] whitespace-nowrap">
+                        {weightStr}
+                      </td>
+                      <td className="py-1.5 px-0.5 text-right font-bold tabular text-black text-[10px]">
+                        {Number(item.price).toLocaleString()}
+                      </td>
+                      <td className="py-1.5 pl-0.5 pr-1.5 text-right font-black tabular text-black text-[10px]">
+                        {Math.round(item.total).toLocaleString()}
+                      </td>
                     </tr>
                   );
                 })}
@@ -252,13 +272,17 @@ export default function SaleReceipt({
             </div>
           </div>
 
-          <div className="text-center text-xs font-bold text-black mb-3">
-            {shop?.receiptMessage && (
-              <div className="whitespace-pre-wrap leading-tight font-black mb-2 text-black">{shop.receiptMessage}</div>
+          <div className="text-center text-xs font-bold text-black mb-1">
+            <div className="leading-tight font-bold text-[11px] text-black my-2">
+              <p>Thank you for shopping with us ,</p>
+              <p className="mt-0.5 tracking-wider font-extrabold">03124032200 / 03120032200</p>
+            </div>
+            {shop?.receiptMessage && !shop.receiptMessage.includes("03124032200") && (
+              <div className="whitespace-pre-wrap leading-tight font-medium text-[10px] mb-2 text-stone-700">{shop.receiptMessage}</div>
             )}
-            <div className="border-t-2 border-black pt-2 mt-2 text-[11px] font-black text-black">
-              <p className="font-black italic">{t("pos_receipt_powered_by")}</p>
-              <p className="font-black">{t("pos_receipt_contact")}</p>
+            <div className="receipt-footer border-t border-black/30 pt-1.5 mt-1 text-[8.5px] font-medium text-stone-500 leading-tight">
+              <p className="italic">{t("pos_receipt_powered_by")}</p>
+              <p>{t("pos_receipt_contact")}</p>
             </div>
           </div>
 

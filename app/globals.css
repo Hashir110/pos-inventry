@@ -84,9 +84,9 @@ textarea:focus-visible {
     right: 0 !important;
     top: 0 !important;
     width: 100% !important;
-    max-width: 76mm !important;
+    max-width: 72mm !important;
     margin: 0 auto !important;
-    padding: 2mm 5mm 8mm 5mm !important; /* 5mm safe margins on left and right to prevent cutoffs */
+    padding: 2mm 2.5mm 6mm 2.5mm !important;
     box-sizing: border-box !important;
     overflow: visible !important;
     background: #ffffff !important;
@@ -96,21 +96,38 @@ textarea:focus-visible {
     border-radius: 0 !important;
   }
 
-  /* Force thermal printers to print deep, crisp, dark black text */
+  /* Force thermal printers to print deep, crisp, dark black text and borders */
   #printable-receipt,
   #printable-receipt * {
     color: #000000 !important;
-    -webkit-text-stroke: 0.15px #000000 !important;
+    -webkit-text-stroke: 0.12px #000000 !important;
+  }
+
+  #printable-receipt .receipt-outer-border {
+    border: 2px solid #000000 !important;
+    padding: 5px !important;
+    box-sizing: border-box !important;
   }
 
   #printable-receipt table {
     width: 100% !important;
     border-collapse: collapse !important;
+    table-layout: fixed !important;
   }
 
+  #printable-receipt table,
   #printable-receipt th,
   #printable-receipt td {
     color: #000000 !important;
+    border-color: #000000 !important;
+  }
+
+  #printable-receipt .receipt-footer,
+  #printable-receipt .receipt-footer * {
+    color: #666666 !important;
+    -webkit-text-stroke: 0px !important;
+    font-size: 8.5px !important;
+    font-weight: 500 !important;
   }
 
   .no-print {

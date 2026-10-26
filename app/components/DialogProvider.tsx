@@ -23,6 +23,7 @@ interface NumberOptions {
   defaultValue?: number;
   unit?: string;
   confirmLabel?: string;
+  placeholder?: string;
 }
 
 interface DialogApi {
@@ -162,6 +163,7 @@ export default function DialogProvider({ children }: { children: ReactNode }) {
                       min={dialog.options.min ?? 0}
                       max={dialog.options.max}
                       value={numberValue}
+                      placeholder={dialog.options.placeholder ?? "0"}
                       onChange={(e) => setNumberValue(e.target.value)}
                       className="field text-center text-2xl font-bold"
                     />

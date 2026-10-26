@@ -49,11 +49,14 @@ const InvoiceSheet = forwardRef<HTMLDivElement, InvoiceSheetProps>(function Invo
   const gross = items.reduce((sum, item) => sum + item.total, 0);
   const extra = extraCharges && extraCharges > 0 ? extraCharges : 0;
   const advance = advanceAmount && advanceAmount > 0 ? advanceAmount : 0;
-  const when = new Date(date).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  const when = (() => {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return date;
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  })();
 
   const box =
     "rounded-md border-2 border-black px-3.5 py-1.5 text-[18px] font-black text-black min-h-[40px] flex items-center";
@@ -204,9 +207,13 @@ const InvoiceSheet = forwardRef<HTMLDivElement, InvoiceSheetProps>(function Invo
         </div>
       </div>
       <div className="mt-6 border-t-2 border-black pt-3 text-center text-[15px] font-bold text-black">
-        {shop?.receiptMessage && <p className="mb-1 whitespace-pre-wrap font-black text-black">{shop.receiptMessage}</p>}
-        <p className="italic font-black">{t("pos_receipt_powered_by")}</p>
-        <p className="font-black">{t("pos_receipt_contact")}</p>
+        <p className="mb-0.5 font-bold">Thank you for shopping with us</p>
+        <p className="mb-2 tracking-wider font-extrabold">03124032200 / 03120032200</p>
+        {shop?.receiptMessage && !shop.receiptMessage.includes("03124032200") && (
+          <p className="mb-1 whitespace-pre-wrap font-medium text-stone-700">{shop.receiptMessage}</p>
+        )}
+        <p className="italic font-medium text-[11px] text-stone-500">{t("pos_receipt_powered_by")}</p>
+        <p className="font-medium text-[11px] text-stone-500">{t("pos_receipt_contact")}</p>
       </div>
     </div>
   );

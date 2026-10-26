@@ -69,6 +69,16 @@ const en = {
   suppliers_err_no_balance: "This supplier has no outstanding balance to pay",
   suppliers_err_excess_payment: "Payment amount (Rs. {amount}) cannot exceed supplier balance (Rs. {balance})",
   suppliers_warn_paid_excess: "Paid amount (Rs. {amount}) cannot exceed total bill (Rs. {total})",
+  suppliers_edit_title: "Edit Supplier",
+  suppliers_delete_title: "Delete Supplier",
+  suppliers_modal_edit_title: "Edit Supplier Details",
+  suppliers_update_supplier: "Update Supplier",
+  suppliers_updated: "Supplier \"{name}\" updated successfully",
+  suppliers_err_update: "Failed to update supplier",
+  suppliers_delete_confirm: "Are you sure you want to delete supplier \"{name}\"?",
+  suppliers_delete_balance_warning: "Warning: This supplier has an outstanding payable balance of Rs. {balance}.",
+  suppliers_deleted: "Supplier \"{name}\" deleted",
+  suppliers_err_delete: "Failed to delete supplier",
 };
 
 const ur: Record<keyof typeof en, string> = {
@@ -142,6 +152,16 @@ const ur: Record<keyof typeof en, string> = {
   suppliers_err_no_balance: "اس سپلائر کا کوئی بقایا واجب الادا نہیں ہے",
   suppliers_err_excess_payment: "ادائیگی کی رقم (Rs. {amount}) واجب الادا بیلنس (Rs. {balance}) سے زیادہ نہیں ہو سکتی",
   suppliers_warn_paid_excess: "ادائیگی کی رقم (Rs. {amount}) کل بل (Rs. {total}) سے زیادہ نہیں ہو سکتی",
+  suppliers_edit_title: "سپلائر تبدیل کریں",
+  suppliers_delete_title: "سپلائر حذف کریں",
+  suppliers_modal_edit_title: "سپلائر کی تفصیلات تبدیل کریں",
+  suppliers_update_supplier: "سپلائر اپڈیٹ کریں",
+  suppliers_updated: "سپلائر \"{name}\" کامیابی سے اپڈیٹ ہو گیا",
+  suppliers_err_update: "سپلائر اپڈیٹ کرنے میں ناکامی",
+  suppliers_delete_confirm: "کیا آپ واقعی سپلائر \"{name}\" کو حذف کرنا چاہتے ہیں؟",
+  suppliers_delete_balance_warning: "انتباہ: اس سپلائر کا Rs. {balance} کا بقایا واجب الادا بیلنس موجود ہے۔",
+  suppliers_deleted: "سپلائر \"{name}\" حذف ہو گیا",
+  suppliers_err_delete: "سپلائر حذف کرنے میں ناکامی",
 };
 
 export const suppliers = { en, ur };
