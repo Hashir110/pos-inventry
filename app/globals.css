@@ -80,13 +80,13 @@ textarea:focus-visible {
 
   #printable-receipt {
     position: absolute !important;
-    left: 0 !important;
-    right: 0 !important;
+    left: 2mm !important;
+    right: auto !important;
     top: 0 !important;
-    width: 68mm !important;
-    max-width: 68mm !important;
-    margin: 0 auto !important;
-    padding: 3mm 1mm 8mm 1mm !important;
+    width: 56mm !important;
+    max-width: 56mm !important;
+    margin: 0 !important;
+    padding: 3mm 0mm 8mm 0mm !important;
     box-sizing: border-box !important;
     overflow: visible !important;
     background: #ffffff !important;
@@ -106,7 +106,7 @@ textarea:focus-visible {
   #printable-receipt .receipt-outer-border {
     border: 2px solid #000000 !important;
     border-radius: 0 !important;
-    padding: 5px !important;
+    padding: 4px 5px !important;
     box-sizing: border-box !important;
     width: 100% !important;
   }
