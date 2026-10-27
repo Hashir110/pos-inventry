@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, DollarSign, Filter, Loader2, Lock, TrendingUp, Truck, Wallet } from "lucide-react";
+import { Calendar, DollarSign, Filter, History, Loader2, Lock, TrendingUp, Truck, Wallet } from "lucide-react";
 import { toast } from "react-toastify";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
@@ -81,7 +81,11 @@ export default function AdminPage() {
     const grossProfit = sales.reduce((sum, s) => sum + saleProfit(s), 0);
     const expenseSum = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const jamad = supplierPayments.reduce((sum, p) => sum + p.amount, 0);
+    const creditSales = sales
+      .filter((s) => (s.paymentMethod || "").trim() === "Udhar")
+      .reduce((sum, s) => sum + saleNetAmount(s), 0);
     return {
+      creditSales,
       posSales,
       grossProfit,
       expenseSum,
@@ -142,7 +146,8 @@ export default function AdminPage() {
         <StatCard title={t("netProfit")} value={signed(totals.netProfit)} subtitle={t("admin_netHint")} icon={TrendingUp} theme="purple" loading={loading} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard title={t("admin_creditSales")} value={formatMoney(totals.creditSales)} subtitle={t("admin_creditHint")} icon={History} theme="purple" loading={loading} />
         <StatCard title={t("admin_paidSuppliers")} value={formatMoney(totals.jamad)} subtitle={t("admin_paidOut")} icon={Truck} theme="red" loading={loading} />
         <StatCard title={t("admin_balance")} value={signed(totals.baqi)} subtitle={t("admin_balanceHint")} icon={Wallet} theme="green" loading={loading} />
       </div>

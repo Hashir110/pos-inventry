@@ -13,11 +13,12 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { tr } from "../i18n/translate";
-import type { Customer, CustomerPayment, Sale } from "../../types";
+import type { BankAccount, Customer, CustomerPayment, Sale } from "../../types";
 import {
   cacheKeys,
   getCached,
   getCachedEvenStale,
+  invalidateCache,
   setCached,
 } from "./offlineStorage";
 
@@ -164,15 +165,20 @@ export const receivePayment = async (
   customerId: string,
   amount: number,
   method: CustomerPayment["method"],
-  note = ""
+  note = "",
+  bankId?: string
 ): Promise<void> => {
   if (!(amount > 0)) throw new Error(tr("closing_errAmountPositive"));
 
   const customerRef = doc(db, "customers", customerId);
   const paymentRef = doc(collection(db, "payments"));
+  const bankRef = method === "Bank Account" && bankId ? doc(db, "banks", bankId) : null;
+  const bankTxRef = bankRef ? doc(collection(db, "bank_transactions")) : null;
+  let bankName = "";
 
   await runTransaction(db, async (transaction) => {
     const snap = await transaction.get(customerRef);
+    const bankSnap = bankRef ? await transaction.get(bankRef) : null;
     if (!snap.exists()) throw new Error(tr("closing_errCustomerNotFound"));
     const customer = snap.data() as Customer;
     if (amount > customer.balance + 0.001) {
@@ -180,17 +186,47 @@ export const receivePayment = async (
     }
 
     const newBalance = Math.round((customer.balance - amount) * 100) / 100;
+    const now = new Date().toISOString();
     transaction.update(customerRef, { balance: newBalance });
+
+    if (bankRef && bankTxRef && bankSnap?.exists()) {
+      const bank = bankSnap.data() as BankAccount;
+      const newBankBalance = Math.round(((bank.currentBalance || 0) + amount) * 100) / 100;
+      bankName = bank.bankName;
+      transaction.update(bankRef, { currentBalance: newBankBalance, updatedAt: now });
+      transaction.set(bankTxRef, {
+        id: bankTxRef.id,
+        ownerId,
+        bankId: bankRef.id,
+        bankName,
+        type: "deposit",
+        amount,
+        date: now,
+        customerName: customer.name,
+        customerId,
+        description: note.trim() || `Collection from ${customer.name}`,
+        balanceAfter: newBankBalance,
+        createdAt: now,
+      });
+    }
+
     transaction.set(paymentRef, {
       ownerId,
       customerId,
       customerName: customer.name,
       amount,
       method,
+      ...(bankRef && bankName ? { bankId: bankRef.id, bankName } : {}),
       note: note.trim(),
-      date: new Date().toISOString(),
+      date: now,
     });
   });
+
+  if (bankRef) {
+    invalidateCache(cacheKeys.banks(ownerId));
+    invalidateCache(cacheKeys.bankTransactions(ownerId, bankRef.id));
+    invalidateCache(cacheKeys.bankTransactions(ownerId));
+  }
 
   // Update customer balance in cache
   const cacheKey = cacheKeys.customers(ownerId);

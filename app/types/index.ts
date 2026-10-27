@@ -151,6 +151,8 @@ export interface CustomerPayment {
   customerName: string;
   amount: number;
   method: "Cash" | "Bank Account";
+  bankId?: string;
+  bankName?: string;
   note?: string;
   date: string;
 }

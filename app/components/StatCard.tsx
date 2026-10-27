@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Eye, EyeOff, type LucideIcon } from "lucide-react";
 import { useLanguage } from "../store/useLanguage";
 
@@ -11,11 +12,10 @@ export interface StatCardProps {
     theme: string;
     loading: boolean;
     isPrivate?: boolean;
-    isVisible?: boolean;
-    onToggle?: () => void;
 }
-export default function StatCard({ title, value, subtitle, icon: Icon, theme, loading, isPrivate, isVisible, onToggle }: StatCardProps) {
+export default function StatCard({ title, value, subtitle, icon: Icon, theme, loading, isPrivate }: StatCardProps) {
     const { t } = useLanguage();
+    const [isVisible, setIsVisible] = useState(false);
     const chips: Record<string, string> = {
         blue: "bg-brand-100 text-brand-700",
         green: "bg-emerald-100 text-emerald-700",
@@ -41,8 +41,8 @@ export default function StatCard({ title, value, subtitle, icon: Icon, theme, lo
                                 {isPrivate && !isVisible ? "••••" : value}
                             </h3>
                             {isPrivate && (
-                                <button onClick={onToggle} className="text-stone-400 hover:text-stone-700" title={isVisible ? t("shared_hide") : t("shared_show")}>
-                                    {isVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                                <button onClick={() => setIsVisible((v) => !v)} className="text-stone-400 hover:text-stone-700" title={isVisible ? t("shared_hide") : t("shared_show")}>
+                                    {isVisible ? <Eye size={16} /> : <EyeOff size={16} />}
                                 </button>
                             )}
                         </div>

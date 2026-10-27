@@ -12,7 +12,9 @@ import { countLowStock } from "../lib/services/products";
 import { listDayClosings } from "../lib/services/dailyClosing";
 import { listSupplierPayments } from "../lib/services/suppliers";
 import { saleNetAmount } from "../lib/calc";
-import { customerLabel } from "../lib/format";
+import { customerLabel, isCounterSale } from "../lib/format";
+import SaleReceipt from "../components/SaleReceipt";
+import HiddenAmount from "../components/HiddenAmount";
 import { useLanguage } from "../store/useLanguage";
 import { DualSeriesCanvasChart } from "../components/CanvasDiagram";
 import {
@@ -27,7 +29,7 @@ import {
     Wallet,
     Banknote,
     CreditCard,
-    History,
+    Eye,
     ClipboardCheck,
     Truck,
     PiggyBank
@@ -69,6 +71,7 @@ export default function DashboardHome() {
 
     const [invoices, setInvoices] = useState<Sale[]>([]);
     const [searchInvoice, setSearchInvoice] = useState("");
+    const [receiptSale, setReceiptSale] = useState<Sale | null>(null);
 
     const [refreshing, setRefreshing] = useState(false);
 
@@ -188,13 +191,12 @@ export default function DashboardHome() {
 
     const money = (n: number) => `Rs ${Math.round(n || 0).toLocaleString()}`;
     const signedMoney = (n: number) => `${n < 0 ? "− " : ""}${money(Math.abs(n))}`;
-    const paymentTotal =(stats.cashSales || 0) + (stats.bankSales || 0) + (stats.udharSales || 0);
+    const paymentTotal = (stats.cashSales || 0) + (stats.bankSales || 0);
     const pct = (n: number) => (paymentTotal > 0 ? Math.max(0, Math.min(100, ((n || 0) / paymentTotal) * 100)) : 0);
 
     const paymentRows = [
         { label: t("cash"), value: stats.cashSales, icon: Banknote, bar: "bg-emerald-500", chip: "bg-emerald-100 text-emerald-700" },
         { label: t("bankOnline"), value: stats.bankSales, icon: CreditCard, bar: "bg-sky-500", chip: "bg-sky-100 text-sky-700" },
-        { label: t("dashboard_credit"), value: stats.udharSales, icon: History, bar: "bg-amber-500", chip: "bg-amber-100 text-amber-700" },
     ];
 
     const methodBadge = (method?: string) => {
@@ -261,6 +263,7 @@ export default function DashboardHome() {
                     title={t("totalSales")}
                     value={money(stats.totalSales)}
                     subtitle={t("afterRefunds")}
+                    isPrivate
                     icon={DollarSign}
                     theme="blue"
                     loading={loading}
@@ -269,6 +272,7 @@ export default function DashboardHome() {
                     title={t("expenses")}
                     value={money(stats.totalExpenses)}
                     subtitle={t("totalExpenses")}
+                    isPrivate
                     icon={Wallet}
                     theme="red"
                     loading={loading}
@@ -288,6 +292,7 @@ export default function DashboardHome() {
                     title={t("dashboard_paidToSuppliers")}
                     value={money(jamadRange)}
                     subtitle={t("dashboard_paidOutSubtitle")}
+                    isPrivate
                     icon={Truck}
                     theme="red"
                     loading={loading}
@@ -296,6 +301,7 @@ export default function DashboardHome() {
                     title={t("dashboard_balance")}
                     value={signedMoney(stats.totalSales - jamadRange)}
                     subtitle={t("dashboard_balanceSubtitle")}
+                    isPrivate
                     icon={Wallet}
                     theme="green"
                     loading={loading}
@@ -304,6 +310,7 @@ export default function DashboardHome() {
                     title={t("dashboard_cumulativeBalance")}
                     value={signedMoney(closingTotal)}
                     subtitle={t("dashboard_cumulativeSubtitle")}
+                    isPrivate
                     icon={PiggyBank}
                     theme="purple"
                     loading={loading}
@@ -376,7 +383,7 @@ export default function DashboardHome() {
                 <div className="card p-5 lg:col-span-2">
                     <div className="mb-4 flex items-center justify-between">
                         <h3 className="text-base font-bold text-stone-900">{t("paymentBreakdown")}</h3>
-                        <span className="tabular text-sm font-bold text-stone-500">{money(paymentTotal)}</span>
+                        <HiddenAmount value={money(paymentTotal)} className="tabular text-sm font-bold text-stone-500" iconSize={14} />
                     </div>
 
                     <div className="mb-5 flex h-3 w-full overflow-hidden rounded-full bg-stone-100">
@@ -385,7 +392,7 @@ export default function DashboardHome() {
                         ))}
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         {paymentRows.map((row) => {
                             const Icon = row.icon;
                             return (
@@ -397,7 +404,7 @@ export default function DashboardHome() {
                                         <span className="text-xs font-bold uppercase tracking-wider text-stone-500">{row.label}</span>
                                     </div>
                                     <p className="tabular text-lg font-extrabold text-stone-900">
-                                        {loading ? "…" : money(row.value)}
+                                        {loading ? "…" : <HiddenAmount value={money(row.value)} />}
                                     </p>
                                     <p className="text-xs text-stone-400">{Math.round(pct(row.value))}%</p>
                                 </div>
@@ -487,8 +494,43 @@ export default function DashboardHome() {
                     },
                     { key: "items", header: t("items"), cell: (inv) => <span className="text-stone-600">{inv.items?.length || 0}</span> },
                     { key: "amount", header: t("amount"), align: "right", cell: (inv) => <span className="font-extrabold text-stone-900">{money(inv.totalAmount)}</span> },
+                    {
+                        key: "actions",
+                        header: "",
+                        align: "right",
+                        cell: (inv) => (
+                            <button
+                                onClick={() => setReceiptSale(inv)}
+                                className="rounded-lg p-2 text-stone-500 transition hover:bg-brand-50 hover:text-brand-700"
+                                title={t("sales_viewBill")}
+                            >
+                                <Eye size={17} />
+                            </button>
+                        ),
+                    },
                 ]}
             />
+
+            {receiptSale && (
+                <SaleReceipt
+                    shop={currentShop}
+                    invoiceNo={receiptSale.invoiceNo}
+                    date={receiptSale.date}
+                    customerName={isCounterSale(receiptSale.customerName) ? "" : receiptSale.customerName}
+                    transport={receiptSale.transport}
+                    extraCharges={receiptSale.extraCharges}
+                    advanceAmount={receiptSale.advanceAmount}
+                    items={receiptSale.items}
+                    total={saleNetAmount(receiptSale)}
+                    paymentMethod={receiptSale.paymentMethod}
+                    cashAmount={receiptSale.cashAmount}
+                    bankAmount={receiptSale.bankAmount}
+                    bankName={receiptSale.bankName}
+                    printLabel={t("printSlip")}
+                    closeLabel={t("sales_close")}
+                    onClose={() => setReceiptSale(null)}
+                />
+            )}
 
         </div>
     );

@@ -22,7 +22,8 @@ import { listExpensesInRange } from "../../lib/services/expenses";
 import { listCustomers, listAllPayments, receivePayment } from "../../lib/services/customers";
 import { addSupplierPayment, listSuppliers, listSupplierPayments } from "../../lib/services/suppliers";
 import { listDayClosings, saveDayClosing } from "../../lib/services/dailyClosing";
-import type { Customer, CustomerPayment, DayClosing, Expense, PaymentMethod, Sale, Supplier, SupplierPayment } from "../../types";
+import { listBankAccounts } from "../../lib/services/banks";
+import type { BankAccount, Customer, CustomerPayment, DayClosing, Expense, PaymentMethod, Sale, Supplier, SupplierPayment } from "../../types";
 
 type Kind = "amad" | "jamad";
 
@@ -87,6 +88,7 @@ export default function DailyClosingPage() {
   const [payments, setPayments] = useState<CustomerPayment[]>([]);
   const [supplierPayments, setSupplierPayments] = useState<SupplierPayment[]>([]);
   const [dayClosings, setDayClosings] = useState<DayClosing[]>([]);
+  const [banks, setBanks] = useState<BankAccount[]>([]);
   const [editSale, setEditSale] = useState<Sale | null>(null);
   const [partyForSale, setPartyForSale] = useState<Sale | null>(null);
 
@@ -104,6 +106,7 @@ export default function DailyClosingPage() {
       tr("closing_src_collections"),
       tr("closing_src_supplierPayments"),
       tr("closing_src_closings"),
+      tr("shell_navBanks"),
     ];
     const results = await Promise.allSettled([
       listSalesInRange(ownerId, startIso, endIso, force).then(setSales),
@@ -113,6 +116,7 @@ export default function DailyClosingPage() {
       listAllPayments(ownerId).then(setPayments),
       listSupplierPayments(ownerId, force).then(setSupplierPayments),
       listDayClosings(ownerId, force).then(setDayClosings),
+      listBankAccounts(ownerId, force).then(setBanks),
     ]);
     const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
     results.forEach((r, i) => {
@@ -254,34 +258,39 @@ export default function DailyClosingPage() {
     }
     await applyPayment(sale, method);
   };
-  const handleAmad = async (lines: SettleLine[], method: SettleMethod, note: string) => {
-    let failed = 0;
-    for (const { party, amount } of lines) {
+  const handleAmad = async (lines: SettleLine[], method: SettleMethod, note: string, bankId?: string) => {
+    const failed: SettleLine[] = [];
+    for (const line of lines) {
       try {
-        await receivePayment(ownerId, party.id, amount, method, note);
+        await receivePayment(ownerId, line.party.id, line.amount, line.method ?? method, note, bankId);
       } catch (error) {
-        failed++;
-        toast.error(`${party.name}: ${error instanceof Error ? error.message : t("closing_saveItemFailed")}`);
+        failed.push(line);
+        toast.error(`${line.party.name}: ${error instanceof Error ? error.message : t("closing_saveItemFailed")}`);
       }
     }
-    if (failed < lines.length) toast.success(t("closing_collectionSaved", { count: lines.length - failed }));
+    const saved = lines.filter((l) => !failed.includes(l));
+    const parties = new Set(saved.map((l) => l.party.id)).size;
+    if (saved.length > 0) toast.success(t("closing_collectionSaved", { count: parties }));
     await load();
-    return failed === 0;
+    return failed;
   };
 
   const handleJamad = async (lines: SettleLine[], method: SettleMethod, note: string) => {
-    let failed = 0;
-    for (const { party, amount } of lines) {
+    const failed: SettleLine[] = [];
+    for (const line of lines) {
+      const { party, amount, method: lineMethod } = line;
       try {
-        await addSupplierPayment(ownerId, { supplierId: party.id, supplierName: party.name, amount, method, note });
+        await addSupplierPayment(ownerId, { supplierId: party.id, supplierName: party.name, amount, method: lineMethod ?? method, note });
       } catch (error) {
-        failed++;
+        failed.push(line);
         toast.error(`${party.name}: ${error instanceof Error ? error.message : t("closing_saveItemFailed")}`);
       }
     }
-    if (failed < lines.length) toast.success(t("closing_supplierSaved", { count: lines.length - failed }));
+    const saved = lines.filter((l) => !failed.includes(l));
+    const parties = new Set(saved.map((l) => l.party.id)).size;
+    if (saved.length > 0) toast.success(t("closing_supplierSaved", { count: parties }));
     await load();
-    return failed === 0;
+    return failed;
   };
 
   const moneyRows = useMemo<MoneyRow[]>(
@@ -355,14 +364,14 @@ export default function DailyClosingPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title={t("totalSales")} value={formatMoney(totals.salesTotal)} subtitle={t("closing_billsCount", { count: sales.length })} icon={ReceiptText} theme="blue" loading={loading} />
-        <StatCard title={t("cash")} value={formatMoney(totals.cash)} subtitle={t("closing_cashSales")} icon={Banknote} theme="green" loading={loading} />
-        <StatCard title={t("bankOnline")} value={formatMoney(totals.bank)} subtitle={t("closing_bankSales")} icon={CreditCard} theme="cyan" loading={loading} />
-        <StatCard title={t("closing_credit")} value={formatMoney(totals.udhar)} subtitle={t("closing_creditGiven")} icon={HandCoins} theme="amber" loading={loading} />
-        <StatCard title={t("closing_received")} value={formatMoney(totals.amad)} subtitle={t("closing_receivedHint")} icon={ArrowDownLeft} theme="green" loading={loading} />
-        <StatCard title={t("closing_paidOut")} value={formatMoney(totals.jamad)} subtitle={t("closing_paidOutHint")} icon={ArrowUpRight} theme="red" loading={loading} />
-        <StatCard title={t("expenses")} value={formatMoney(totals.expenses)} subtitle={t("closing_expensesToday")} icon={Wallet} theme="orange" loading={loading} />
-        <StatCard title={t("closing_cashInHand")} value={signed(totals.cashInHand)} subtitle={t("closing_cashFormula")} icon={Wallet} theme="purple" loading={loading} />
+        <StatCard title={t("totalSales")} value={formatMoney(totals.salesTotal)} subtitle={t("closing_billsCount", { count: sales.length })} icon={ReceiptText} theme="blue" isPrivate loading={loading} />
+        <StatCard title={t("cash")} value={formatMoney(totals.cash)} subtitle={t("closing_cashSales")} icon={Banknote} theme="green" isPrivate loading={loading} />
+        <StatCard title={t("bankOnline")} value={formatMoney(totals.bank)} subtitle={t("closing_bankSales")} icon={CreditCard} theme="cyan" isPrivate loading={loading} />
+        <StatCard title={t("closing_credit")} value={formatMoney(totals.udhar)} subtitle={t("closing_creditGiven")} icon={HandCoins} theme="amber" isPrivate loading={loading} />
+        <StatCard title={t("closing_received")} value={formatMoney(totals.amad)} subtitle={t("closing_receivedHint")} icon={ArrowDownLeft} theme="green" isPrivate loading={loading} />
+        <StatCard title={t("closing_paidOut")} value={formatMoney(totals.jamad)} subtitle={t("closing_paidOutHint")} icon={ArrowUpRight} theme="red" isPrivate loading={loading} />
+        <StatCard title={t("expenses")} value={formatMoney(totals.expenses)} subtitle={t("closing_expensesToday")} icon={Wallet} theme="orange" isPrivate loading={loading} />
+        <StatCard title={t("closing_cashInHand")} value={signed(totals.cashInHand)} subtitle={t("closing_cashFormula")} icon={Wallet} theme="purple" isPrivate loading={loading} />
       </div>
 
       <DataTable
@@ -432,6 +441,8 @@ export default function DailyClosingPage() {
             tone="emerald"
             parties={debtors}
             capToBalance
+            allowSplit
+            banks={banks}
             noteLabel={t("closing_note")}
             notePlaceholder={t("closing_optional")}
             submitLabel={t("closing_saveCollection")}
@@ -444,6 +455,7 @@ export default function DailyClosingPage() {
             icon={<ArrowUpRight size={20} />}
             tone="amber"
             parties={payables}
+            allowSplit
             noteLabel={t("closing_reasonLabel")}
             notePlaceholder={t("closing_reasonPlaceholder")}
             submitLabel={t("closing_savePayment")}
