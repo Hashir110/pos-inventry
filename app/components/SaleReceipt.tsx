@@ -151,7 +151,7 @@ export default function SaleReceipt({
           <X size={20} />
         </button>
 
-        <div className="receipt-outer-border border-2 border-black p-2.5 bg-white text-black rounded-sm">
+        <div className="receipt-outer-border p-2.5 bg-white text-black">
           <div className="text-center mb-3 border-b-2 border-black pb-3">
             <h2 className="text-xl font-black uppercase text-black leading-tight tracking-wide">{shop?.shopName || t("pos_receipt_default_shop")}</h2>
             {shop?.address && <p className="text-[11px] font-bold text-black mt-0.5">{shop.address}</p>}
@@ -270,7 +270,7 @@ export default function SaleReceipt({
 
           <div className="text-center text-xs font-bold text-black mb-1">
             <div className="leading-tight font-bold text-[11px] text-black my-2">
-              <p>Thank you for shopping with us ,</p>
+              <p>Thank you for shopping with us</p>
               <p className="mt-0.5 tracking-wider font-extrabold">03124032200 / 03120032200</p>
             </div>
             {shop?.receiptMessage && !shop.receiptMessage.includes("03124032200") && (
@@ -294,11 +294,10 @@ export default function SaleReceipt({
           <button
             onClick={() => handleCopySlip(true)}
             disabled={copying}
-            className={`w-full py-3 text-white rounded-lg font-bold flex justify-center items-center gap-2 transition-colors shadow-sm disabled:opacity-60 ${
-              copied
+            className={`w-full py-3 text-white rounded-lg font-bold flex justify-center items-center gap-2 transition-colors shadow-sm disabled:opacity-60 ${copied
                 ? "bg-emerald-600 hover:bg-emerald-700"
                 : "bg-blue-600 hover:bg-blue-700"
-            }`}
+              }`}
           >
             {copying ? (
               <Loader2 size={18} className="animate-spin" />
