@@ -55,10 +55,11 @@ textarea:focus-visible {
 @media print {
   @page {
     size: auto;
-    margin: 0mm;
+    margin: 0;
   }
 
-  html, body {
+  html,
+  body {
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
@@ -80,23 +81,23 @@ textarea:focus-visible {
 
   #printable-receipt {
     position: absolute !important;
-    left: 2mm !important;
-    right: auto !important;
+    left: 0 !important;
+    right: 0 !important;
     top: 0 !important;
-    width: 56mm !important;
-    max-width: 56mm !important;
-    margin: 0 !important;
-    padding: 3mm 0mm 8mm 0mm !important;
+    width: min(var(--receipt-w, 48mm), calc(100% - 6mm)) !important;
+    max-width: none !important;
+    max-height: none !important;
+    height: auto !important;
+    margin: 0 auto !important;
+    padding: 3mm 0 12mm 0 !important;
     box-sizing: border-box !important;
     overflow: visible !important;
     background: #ffffff !important;
-    color: #000000 !important;
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
   }
 
-  /* Force thermal printers to print deep, crisp, dark black text and borders */
   #printable-receipt,
   #printable-receipt * {
     color: #000000 !important;
@@ -106,30 +107,14 @@ textarea:focus-visible {
   #printable-receipt .receipt-outer-border {
     border: 2px solid #000000 !important;
     border-radius: 0 !important;
-    padding: 4px 5px !important;
+    padding: 4px 6px !important;
     box-sizing: border-box !important;
     width: 100% !important;
   }
 
-  #printable-receipt table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-    table-layout: fixed !important;
-  }
-
-  #printable-receipt table,
-  #printable-receipt th,
-  #printable-receipt td {
-    color: #000000 !important;
-    border-color: #000000 !important;
-  }
-
-  #printable-receipt .receipt-footer,
-  #printable-receipt .receipt-footer * {
-    color: #666666 !important;
-    -webkit-text-stroke: 0px !important;
-    font-size: 8.5px !important;
-    font-weight: 500 !important;
+  #printable-receipt .receipt-item {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .no-print {

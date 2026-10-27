@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Check, Copy, Loader2, Printer, X } from "lucide-react";
 import { toBlob } from "html-to-image";
 import { toast } from "react-toastify";
@@ -50,6 +50,15 @@ export default function SaleReceipt({
   const invoiceRef = useRef<HTMLDivElement>(null);
   const [copying, setCopying] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [receiptWidth] = useState(() => {
+    try {
+      return localStorage.getItem("printerSize") === "80mm" ? "72mm" : "48mm";
+    } catch {
+      return "48mm";
+    }
+  });
+  const totalText = Math.round(total).toLocaleString();
+  const totalSize = totalText.length > 11 ? "text-lg" : totalText.length > 8 ? "text-xl" : "text-2xl";
 
   const paymentLabels: Record<PaymentMethod, string> = {
     Cash: t("pos_pay_cash"),
@@ -144,7 +153,7 @@ export default function SaleReceipt({
           bankAmount={bankAmount}
           bankName={bankName}
         />
-      </div>      <div id="printable-receipt" className="bg-white p-4 print:p-0 rounded-xl w-full max-w-[340px] max-h-[95vh] overflow-y-auto shadow-2xl relative text-black">
+      </div>      <div id="printable-receipt" style={{ "--receipt-w": receiptWidth } as CSSProperties} className="bg-white p-4 print:p-0 rounded-xl w-full max-w-[340px] max-h-[95vh] overflow-y-auto shadow-2xl relative text-black">
         <button onClick={onClose} className="absolute top-2 right-2 p-1 text-stone-400 no-print hover:text-stone-700">
           <X size={20} />
         </button>
@@ -170,44 +179,26 @@ export default function SaleReceipt({
           </div>
 
           <div className="mb-3 text-black">
-            <table className="w-full text-left border-collapse table-fixed text-[10px]">
-              <thead>
-                <tr className="border-y-2 border-black text-[10px] font-black uppercase text-black">
-                  <th className="py-1.5 pl-0.5 pr-0.5 text-center w-[11%]">{t("pos_receipt_col_qty")}</th>
-                  <th className="py-1.5 px-1 text-left w-[36%]">{t("pos_receipt_col_items")}</th>
-                  <th className="py-1.5 px-0.5 text-center w-[14%]">{t("pos_receipt_col_weight")}</th>
-                  <th className="py-1.5 px-0.5 text-right w-[16%]">{t("pos_receipt_col_rate")}</th>
-                  <th className="py-1.5 pl-0.5 pr-1 text-right w-[23%]">{t("pos_receipt_col_amount")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-black/25 text-black">
-                {items.map((item, idx) => {
-                  const isWeight = item.type === "weight";
-                  const weightVal = item.totalWeight ?? item.qty * (item.weightPerBag || 25);
-                  const weightStr = isWeight ? `${weightVal}kg` : "—";
+            <div className="flex items-center justify-between gap-2 border-y-2 border-black py-1.5 text-[10px] font-black uppercase">
+              <span>{t("pos_receipt_col_items")}</span>
+              <span>{t("pos_receipt_col_amount")}</span>
+            </div>
+            {items.map((item, idx) => {
+              const isWeight = item.type === "weight";
+              const weightVal = item.totalWeight ?? item.qty * (item.weightPerBag || 25);
+              const unit = isWeight ? t("pos_receipt_unit_bags") : t("pos_receipt_unit_pcs");
+              const detail = `${item.qty} ${unit}${isWeight ? ` • ${weightVal} kg` : ""} × ${Number(item.price).toLocaleString()}`;
 
-                  return (
-                    <tr key={idx} className="align-middle font-bold">
-                      <td className="py-1.5 pl-0.5 pr-0.5 text-center font-black text-black text-[10px]">
-                        {item.qty}
-                      </td>
-                      <td className="py-1.5 px-1 text-left font-bold leading-tight text-black text-[10px] break-words">
-                        {item.name}
-                      </td>
-                      <td className="py-1.5 px-0.5 text-center font-bold text-black text-[9.5px] whitespace-nowrap">
-                        {weightStr}
-                      </td>
-                      <td className="py-1.5 px-0.5 text-right font-bold tabular text-black text-[10px]">
-                        {Number(item.price).toLocaleString()}
-                      </td>
-                      <td className="py-1.5 pl-0.5 pr-1 text-right font-black tabular text-black text-[10px]">
-                        {Math.round(item.total).toLocaleString()}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+              return (
+                <div key={idx} className="receipt-item border-b border-black py-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 flex-1 break-words text-[11px] font-black leading-tight">{item.name}</p>
+                    <p className="shrink-0 whitespace-nowrap text-[12px] font-black tabular">{Math.round(item.total).toLocaleString()}</p>
+                  </div>
+                  <p className="mt-0.5 text-[10px] font-bold tabular">{detail}</p>
+                </div>
+              );
+            })}
           </div>
 
           <div className="border-t-[3px] border-black pt-2 mb-3 space-y-1">
@@ -228,7 +219,7 @@ export default function SaleReceipt({
                 <p className="text-xs font-black uppercase tracking-wider text-black">
                   {advanceAmount && advanceAmount > 0 ? t("pos_receipt_net_payable") : t("pos_receipt_total_amount")}
                 </p>
-                <p className="text-2xl font-black text-black tabular">{Math.round(total).toLocaleString()}</p>
+                <p className={`${totalSize} whitespace-nowrap font-black text-black tabular`}>{totalText}</p>
               </div>
             </div>
 
@@ -279,7 +270,7 @@ export default function SaleReceipt({
             {shop?.receiptMessage && !shop.receiptMessage.includes("03124032200") && (
               <div className="whitespace-pre-wrap leading-tight font-medium text-[10px] mb-2 text-stone-700">{shop.receiptMessage}</div>
             )}
-            <div className="receipt-footer border-t border-black/30 pt-1.5 mt-1 text-[8.5px] font-medium text-stone-500 leading-tight">
+            <div className="receipt-footer border-t-2 border-black pt-2 mt-2 text-[10px] font-bold text-black leading-tight">
               <p className="italic">{t("pos_receipt_powered_by")}</p>
               <p>{t("pos_receipt_contact")}</p>
             </div>
