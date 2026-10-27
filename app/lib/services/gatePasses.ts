@@ -35,6 +35,7 @@ export interface GatePassInput {
     qty: number;
     weight?: number;
     unit?: string;
+    isSelf?: boolean;
   }>;
 }
 
@@ -125,6 +126,7 @@ export const queueOfflineGatePass = (
       qty: Number(i.qty),
       weight: Number(i.weight || 0),
       unit: i.unit || "",
+      isSelf: Boolean(i.isSelf),
     })),
     date: nowIso,
     vehicleNo: gatePassData.vehicleNo || "",
@@ -138,7 +140,7 @@ export const queueOfflineGatePass = (
 
   savePendingGatePasses([...getPendingGatePasses(), newPass]);
 
-  // Update local product cache gudam stock
+  // Update local product cache gudam stock and shop stock
   const prodsKey = cacheKeys.products(ownerId);
   const cachedProds = getCachedEvenStale<Product[]>(prodsKey);
   if (cachedProds) {
@@ -146,9 +148,11 @@ export const queueOfflineGatePass = (
       const item = gatePassData.items.find((it) => it.productId === p.id);
       if (!item) return p;
       const currentGudam = p.gudamStock ?? 0;
-      const newGudam = Math.max(0, currentGudam - item.qty);
-      const newTotal = newGudam + (p.shopStock ?? p.stock ?? 0);
-      return { ...p, gudamStock: newGudam, stock: newTotal };
+      const currentShop = p.shopStock ?? p.stock ?? 0;
+      const newGudam = currentGudam - item.qty;
+      const newShop = item.isSelf ? currentShop : (currentShop + item.qty);
+      const newTotal = newGudam + newShop;
+      return { ...p, gudamStock: newGudam, shopStock: newShop, stock: newTotal };
     });
     setCached(prodsKey, updated);
   }
@@ -185,6 +189,7 @@ export const issueGatePass = async (
       qty: Number(i.qty),
       weight: Number(i.weight || 0),
       unit: i.unit || "",
+      isSelf: Boolean(i.isSelf),
     })),
     date: new Date().toISOString(),
     vehicleNo: gatePassData.vehicleNo || "",
@@ -213,11 +218,13 @@ export const issueGatePass = async (
           const currentShop = data.shopStock ?? data.stock ?? 0;
 
           const deductQty = item.qty;
-          const newGudam = Math.max(0, currentGudam - deductQty);
-          const newTotal = newGudam + currentShop;
+          const newGudam = currentGudam - deductQty;
+          const newShop = item.isSelf ? currentShop : (currentShop + deductQty);
+          const newTotal = newGudam + newShop;
 
           await updateDoc(doc(db, "products", item.productId), {
             gudamStock: newGudam,
+            shopStock: newShop,
             stock: newTotal,
             updatedAt: new Date().toISOString(),
           });
@@ -226,6 +233,24 @@ export const issueGatePass = async (
         console.warn("Could not deduct product gudam stock for gate pass:", err);
       }
     }
+  }
+
+  // Update local product cache
+  const prodsKey = cacheKeys.products(ownerId);
+  const cachedProds = getCachedEvenStale<Product[]>(prodsKey);
+  if (cachedProds && cachedProds.length > 0) {
+    const updated = cachedProds.map((p) => {
+      const it = gatePassData.items.find((item) => item.productId === p.id);
+      if (!it) return p;
+      const currentGudam = p.gudamStock ?? 0;
+      const currentShop = p.shopStock ?? p.stock ?? 0;
+      const deductQty = it.qty;
+      const newGudam = currentGudam - deductQty;
+      const newShop = it.isSelf ? currentShop : (currentShop + deductQty);
+      const newTotal = newGudam + newShop;
+      return { ...p, gudamStock: newGudam, shopStock: newShop, stock: newTotal };
+    });
+    setCached(prodsKey, updated);
   }
 
   if (gatePassData.saleId) {
@@ -272,11 +297,13 @@ export const syncPendingGatePasses = async (onProgress?: (remaining: number) => 
               const data = targetProd.data();
               const currentGudam = data.gudamStock ?? 0;
               const currentShop = data.shopStock ?? data.stock ?? 0;
-              const newGudam = Math.max(0, currentGudam - item.qty);
-              const newTotal = newGudam + currentShop;
+              const newGudam = currentGudam - item.qty;
+              const newShop = item.isSelf ? currentShop : (currentShop + item.qty);
+              const newTotal = newGudam + newShop;
 
               await updateDoc(doc(db, "products", item.productId), {
                 gudamStock: newGudam,
+                shopStock: newShop,
                 stock: newTotal,
                 updatedAt: new Date().toISOString(),
               });
@@ -337,10 +364,12 @@ export const deleteGatePass = async (passId: string, ownerId: string): Promise<v
             const currentShop = data.shopStock ?? data.stock ?? 0;
             const returnQty = item.qty || 0;
             const newGudam = currentGudam + returnQty;
-            const newTotal = newGudam + currentShop;
+            const newShop = item.isSelf ? currentShop : Math.max(0, currentShop - returnQty);
+            const newTotal = newGudam + newShop;
 
             await updateDoc(doc(db, "products", item.productId), {
               gudamStock: newGudam,
+              shopStock: newShop,
               stock: newTotal,
               updatedAt: new Date().toISOString(),
             });
@@ -358,10 +387,13 @@ export const deleteGatePass = async (passId: string, ownerId: string): Promise<v
       const updatedProds = cachedProds.map((p) => {
         const item = passData!.items.find((it) => it.productId === p.id);
         if (!item) return p;
+        const returnQty = item.qty || 0;
         const currentGudam = p.gudamStock ?? 0;
-        const newGudam = currentGudam + (item.qty || 0);
-        const newTotal = newGudam + (p.shopStock ?? p.stock ?? 0);
-        return { ...p, gudamStock: newGudam, stock: newTotal };
+        const currentShop = p.shopStock ?? p.stock ?? 0;
+        const newGudam = currentGudam + returnQty;
+        const newShop = item.isSelf ? currentShop : Math.max(0, currentShop - returnQty);
+        const newTotal = newGudam + newShop;
+        return { ...p, gudamStock: newGudam, shopStock: newShop, stock: newTotal };
       });
       setCached(prodsKey, updatedProds);
     }
@@ -424,6 +456,7 @@ export const updateGatePass = async (
     qty: Number(i.qty),
     weight: Number(i.weight || 0),
     unit: i.unit || "",
+    isSelf: Boolean(i.isSelf),
   }));
 
   // Adjust Gudam stock based on differences between old and new quantities
@@ -448,11 +481,19 @@ export const updateGatePass = async (
           const data = targetProd.data();
           const currentGudam = data.gudamStock ?? 0;
           const currentShop = data.shopStock ?? data.stock ?? 0;
-          const newGudam = Math.max(0, currentGudam + diff);
-          const newTotal = newGudam + currentShop;
+          const newGudam = currentGudam + diff;
+
+          const oldIsSelf = oldItem ? Boolean(oldItem.isSelf) : false;
+          const newIsSelf = newItem ? Boolean(newItem.isSelf) : false;
+          let shopDelta = 0;
+          if (!oldIsSelf) shopDelta -= oldQty;
+          if (!newIsSelf) shopDelta += newQty;
+          const newShop = Math.max(0, currentShop + shopDelta);
+          const newTotal = newGudam + newShop;
 
           await updateDoc(doc(db, "products", prodId), {
             gudamStock: newGudam,
+            shopStock: newShop,
             stock: newTotal,
             updatedAt: new Date().toISOString(),
           });
@@ -475,9 +516,18 @@ export const updateGatePass = async (
       const newQty = newItem ? newItem.qty : 0;
       const diff = oldQty - newQty;
       const currentGudam = p.gudamStock ?? 0;
-      const newGudam = Math.max(0, currentGudam + diff);
-      const newTotal = newGudam + (p.shopStock ?? p.stock ?? 0);
-      return { ...p, gudamStock: newGudam, stock: newTotal };
+      const currentShop = p.shopStock ?? p.stock ?? 0;
+      const newGudam = currentGudam + diff;
+
+      const oldIsSelf = oldItem ? Boolean(oldItem.isSelf) : false;
+      const newIsSelf = newItem ? Boolean(newItem.isSelf) : false;
+      let shopDelta = 0;
+      if (!oldIsSelf) shopDelta -= oldQty;
+      if (!newIsSelf) shopDelta += newQty;
+      const newShop = Math.max(0, currentShop + shopDelta);
+      const newTotal = newGudam + newShop;
+
+      return { ...p, gudamStock: newGudam, shopStock: newShop, stock: newTotal };
     });
     setCached(prodsKey, updatedProds);
   }

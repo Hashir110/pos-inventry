@@ -37,6 +37,7 @@ interface PassItem {
   weight: number;
   unit: string;
   maxGudamQty: number;
+  isSelf?: boolean;
 }
 
 export default function GatePassPage() {
@@ -64,6 +65,7 @@ export default function GatePassPage() {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [itemQty, setItemQty] = useState<number | "">(1);
   const [itemWeight, setItemWeight] = useState<number | "">(25);
+  const [itemIsSelf, setItemIsSelf] = useState<boolean>(false);
 
   const [isPartyOpen, setIsPartyOpen] = useState(false);
   const [partySearch, setPartySearch] = useState("");
@@ -96,6 +98,7 @@ export default function GatePassPage() {
     qty: number;
     weight: number;
     unit: string;
+    isSelf?: boolean;
   }>>([]);
   const [savingEdit, setSavingEdit] = useState(false);
 
@@ -103,6 +106,7 @@ export default function GatePassPage() {
   const [editAddProductId, setEditAddProductId] = useState("");
   const [editAddQty, setEditAddQty] = useState<number | "">(1);
   const [editAddWeight, setEditAddWeight] = useState<number | "">(25);
+  const [editAddIsSelf, setEditAddIsSelf] = useState<boolean>(false);
 
   useEffect(() => {
     if (!ownerId) return;
@@ -233,12 +237,6 @@ export default function GatePassPage() {
       return;
     }
 
-    const gudamStock = selectedProduct.gudamStock ?? 0;
-    if (gudamStock <= 0) {
-      toast.error(t("gatePass_toastOutOfStock", { name: selectedProduct.name }));
-      return;
-    }
-
     const qty = Number(itemQty) || 1;
     if (qty <= 0) {
       toast.warn(t("gatePass_toastValidQty"));
@@ -247,14 +245,7 @@ export default function GatePassPage() {
 
     const isWeight = selectedProduct.unitType === "weight";
     const weight = isWeight ? Number(itemWeight) || qty * 25 : 0;
-
-    const deductAmount = qty;
-    if (deductAmount > gudamStock) {
-      toast.warn(
-        t("gatePass_toastOnlyAvailable", { qty: gudamStock, unit: unitLabel(isWeight) })
-      );
-      return;
-    }
+    const gudamStock = selectedProduct.gudamStock ?? 0;
 
     setItems((prev) => [
       ...prev,
@@ -265,12 +256,14 @@ export default function GatePassPage() {
         weight,
         unit: isWeight ? "KG" : "Bags/Pcs",
         maxGudamQty: gudamStock,
+        isSelf: itemIsSelf,
       },
     ]);
 
     setSelectedProductId("");
     setItemQty(1);
     setItemWeight(25);
+    setItemIsSelf(false);
   };
 
   const handleRemoveItem = (index: number) => {
@@ -300,6 +293,7 @@ export default function GatePassPage() {
           qty: i.qty,
           weight: i.weight || 0,
           unit: i.unit || "",
+          isSelf: Boolean(i.isSelf),
         })),
       });
 
@@ -312,6 +306,7 @@ export default function GatePassPage() {
       setSelectedProductId("");
       setItemQty(1);
       setItemWeight(25);
+      setItemIsSelf(false);
     } catch (err: any) {
       toast.error(err.message || t("gatePass_toastFailed"));
     } finally {
@@ -348,11 +343,13 @@ export default function GatePassPage() {
         qty: i.qty,
         weight: i.weight || 0,
         unit: i.unit || "",
+        isSelf: Boolean(i.isSelf),
       }))
     );
     setEditAddProductId("");
     setEditAddQty(1);
     setEditAddWeight(25);
+    setEditAddIsSelf(false);
   };
 
   const handleEditAddProduct = () => {
@@ -375,7 +372,12 @@ export default function GatePassPage() {
       setEditItems((prev) =>
         prev.map((it, idx) =>
           idx === existingIndex
-            ? { ...it, qty: it.qty + qty, weight: isWeight ? it.weight + weight : 0 }
+            ? {
+                ...it,
+                qty: it.qty + qty,
+                weight: isWeight ? it.weight + weight : 0,
+                isSelf: editAddIsSelf,
+              }
             : it
         )
       );
@@ -388,6 +390,7 @@ export default function GatePassPage() {
           qty,
           weight,
           unit: prod.unitType === "weight" ? "Bags" : "Pcs",
+          isSelf: editAddIsSelf,
         },
       ]);
     }
@@ -395,6 +398,7 @@ export default function GatePassPage() {
     setEditAddProductId("");
     setEditAddQty(1);
     setEditAddWeight(25);
+    setEditAddIsSelf(false);
   };
 
   const handleSaveEditedGatePass = async (e: React.FormEvent) => {
@@ -418,7 +422,7 @@ export default function GatePassPage() {
           vehicleNo: editVehicleNo.trim(),
           driverName: editDriverName.trim(),
           notes: editNotes.trim(),
-          items: editItems,
+          items: editItems.map((i) => ({ ...i, isSelf: Boolean(i.isSelf) })),
         },
         ownerId
       );
@@ -675,8 +679,8 @@ export default function GatePassPage() {
                       <span>{t("gatePass_dispatchEntry")}</span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                      <div className={`sm:col-span-6 ${isProductOpen ? "relative z-30" : "relative z-10"}`}>
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                      <div className={`sm:col-span-5 ${isProductOpen ? "relative z-30" : "relative z-10"}`}>
                         <label className="block text-[11px] font-bold text-stone-600 mb-1">
                           {t("gatePass_itemProduct")} <span className="text-red-500">*</span>
                         </label>
@@ -857,7 +861,29 @@ export default function GatePassPage() {
                         />
                       </div>
 
-                      <div className="sm:col-span-3">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-stone-600 mb-1">
+                          Self
+                        </label>
+                        <label
+                          className={`flex items-center justify-center gap-1.5 h-[38px] px-2 rounded-xl border text-xs font-bold cursor-pointer transition select-none ${
+                            itemIsSelf
+                              ? "bg-amber-100 border-amber-300 text-amber-900 shadow-sm"
+                              : "bg-white border-stone-300 text-stone-600 hover:bg-stone-50"
+                          }`}
+                          title="Self: Sirf Gudam stock minus hoga, Shop par plus nahi hoga"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={itemIsSelf}
+                            onChange={(e) => setItemIsSelf(e.target.checked)}
+                            className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-stone-300 cursor-pointer"
+                          />
+                          <span className="truncate">{itemIsSelf ? "Self" : "Shop +"}</span>
+                        </label>
+                      </div>
+
+                      <div className="sm:col-span-2">
                         <label className="block text-[11px] font-bold text-stone-600 mb-1">
                           {t("gatePass_totalWtKg")}
                         </label>
@@ -893,6 +919,7 @@ export default function GatePassPage() {
                             <th className="p-3 text-center">#</th>
                             <th className="p-3">{t("gatePass_colItemName")}</th>
                             <th className="p-3 text-center">{t("gatePass_qtyBags")}</th>
+                            <th className="p-3 text-center">Type</th>
                             <th className="p-3 text-center">{t("gatePass_colTotalWeight")}</th>
                             <th className="p-3 text-right">{t("gatePass_colWarehouseStock")}</th>
                             <th className="p-3 text-center">{t("action")}</th>
@@ -906,11 +933,24 @@ export default function GatePassPage() {
                               <td className="p-3 text-center font-bold text-stone-800 tabular">
                                 {t("gatePass_bagsCount", { qty: String(it.qty).padStart(2, "0") })}
                               </td>
+                              <td className="p-3 text-center">
+                                {it.isSelf ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300">
+                                    Self
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-300">
+                                    Shop +
+                                  </span>
+                                )}
+                              </td>
                               <td className="p-3 text-center font-extrabold text-brand-700 tabular">
                                 {it.weight > 0 ? `${it.weight} kg` : "—"}
                               </td>
-                              <td className="p-3 text-right text-stone-500 tabular">
-                                {t("gatePass_left", { qty: it.maxGudamQty })}
+                              <td className="p-3 text-right tabular">
+                                <span className={it.maxGudamQty <= 0 ? "text-red-600 font-bold" : "text-stone-500"}>
+                                  {t("gatePass_left", { qty: it.maxGudamQty })}
+                                </span>
                               </td>
                               <td className="p-3 text-center">
                                 <button
@@ -1066,11 +1106,13 @@ export default function GatePassPage() {
               cell: (gp) => (
                 <span className="font-medium text-stone-700">
                   {gp.items
-                    .map((i) =>
-                      i.weight && i.weight > 0
-                        ? t("gatePass_historyItemWeight", { name: i.productName, qty: i.qty, weight: i.weight })
-                        : t("gatePass_historyItemUnit", { name: i.productName, qty: i.qty, unit: storedUnitLabel(i.unit) })
-                    )
+                    .map((i) => {
+                      const label =
+                        i.weight && i.weight > 0
+                          ? t("gatePass_historyItemWeight", { name: i.productName, qty: i.qty, weight: i.weight })
+                          : t("gatePass_historyItemUnit", { name: i.productName, qty: i.qty, unit: storedUnitLabel(i.unit) });
+                      return `${label}${i.isSelf ? " [Self]" : " [Shop+]"}`;
+                    })
                     .join(", ")}
                 </span>
               ),
@@ -1169,7 +1211,14 @@ export default function GatePassPage() {
                 <tbody className="divide-y divide-black/20">
                   {printPass.items.map((it, idx) => (
                     <tr key={idx} className="font-bold text-black">
-                      <td className="py-1.5 pl-1 font-black text-black">{it.productName}</td>
+                      <td className="py-1.5 pl-1 font-black text-black">
+                        {it.productName}
+                        {it.isSelf ? (
+                          <span className="ml-1 text-[9px] font-bold px-1 py-0.5 bg-stone-100 border border-stone-300 rounded">
+                            Self
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="py-1.5 text-center text-black font-bold">
                         {t("gatePass_bagsCount", { qty: it.qty })}
                       </td>
@@ -1372,6 +1421,30 @@ export default function GatePassPage() {
                           />
                         </div>
 
+                        <div className="w-20">
+                          <label className="block text-[9px] font-bold text-stone-400 uppercase">Self</label>
+                          <label
+                            className={`flex items-center justify-center gap-1 h-[29px] px-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition select-none ${
+                              item.isSelf
+                                ? "bg-amber-100 border-amber-300 text-amber-900"
+                                : "bg-white border-stone-200 text-stone-600 hover:bg-stone-50"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={Boolean(item.isSelf)}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setEditItems((prev) =>
+                                  prev.map((it, i) => (i === idx ? { ...it, isSelf: checked } : it))
+                                );
+                              }}
+                              className="w-3.5 h-3.5 rounded text-amber-600 focus:ring-amber-500 border-stone-300"
+                            />
+                            <span>{item.isSelf ? "Self" : "Shop+"}</span>
+                          </label>
+                        </div>
+
                         <div className="w-24">
                           <label className="block text-[9px] font-bold text-stone-400 uppercase">Weight (kg)</label>
                           <input
@@ -1404,8 +1477,9 @@ export default function GatePassPage() {
                 {/* Add Item to Gate Pass */}
                 <div className="p-3 bg-stone-50 border-t border-stone-200">
                   <div className="text-[11px] font-bold text-stone-700 mb-2">+ Add Another Product</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                    <div className="sm:col-span-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                    <div className="sm:col-span-4">
+                      <label className="block text-[9px] font-bold text-stone-400 uppercase mb-0.5">Product</label>
                       <select
                         value={editAddProductId}
                         onChange={(e) => {
@@ -1430,6 +1504,7 @@ export default function GatePassPage() {
                     </div>
 
                     <div className="sm:col-span-2">
+                      <label className="block text-[9px] font-bold text-stone-400 uppercase mb-0.5">Qty</label>
                       <input
                         type="number"
                         min="1"
@@ -1448,6 +1523,26 @@ export default function GatePassPage() {
                     </div>
 
                     <div className="sm:col-span-2">
+                      <label className="block text-[9px] font-bold text-stone-400 uppercase mb-0.5">Self</label>
+                      <label
+                        className={`flex items-center justify-center gap-1 h-[31px] px-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition select-none ${
+                          editAddIsSelf
+                            ? "bg-amber-100 border-amber-300 text-amber-900"
+                            : "bg-white border-stone-200 text-stone-600 hover:bg-stone-50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={editAddIsSelf}
+                          onChange={(e) => setEditAddIsSelf(e.target.checked)}
+                          className="w-3.5 h-3.5 rounded text-amber-600 focus:ring-amber-500 border-stone-300"
+                        />
+                        <span>{editAddIsSelf ? "Self" : "Shop+"}</span>
+                      </label>
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-[9px] font-bold text-stone-400 uppercase mb-0.5">Weight</label>
                       <input
                         type="number"
                         step="any"
@@ -1463,7 +1558,7 @@ export default function GatePassPage() {
                       <button
                         type="button"
                         onClick={handleEditAddProduct}
-                        className="btn-primary w-full !py-1 text-xs font-bold flex items-center justify-center gap-1"
+                        className="btn-primary w-full !py-1.5 text-xs font-bold flex items-center justify-center gap-1"
                       >
                         <Plus size={14} /> Add
                       </button>

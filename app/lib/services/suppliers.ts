@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { addStock } from "../stock";
-import type { Supplier, SupplierPurchase, SupplierPayment } from "../../types";
+import type { Supplier, SupplierPurchase, SupplierPayment, Product } from "../../types";
 import {
   cacheKeys,
   getCached,
@@ -189,7 +189,7 @@ export const addSupplierPurchase = async (
       const targetProd = prodSnap.docs.find((d) => d.id === item.productId);
       if (targetProd) {
         const data = targetProd.data();
-        const dest = item.destination || purchase.destination || "gudam";
+        const dest = (item as any).destinationLocation || (item as any).destination || (purchase as any).destination || "gudam";
         const currentShop = data.shopStock ?? 0;
         const currentGudam = data.gudamStock ?? 0;
         const { shopStock: newShop, gudamStock: newGudam } = addStock(
@@ -208,6 +208,30 @@ export const addSupplierPurchase = async (
         });
       }
     }
+  }
+
+  // Update local product cache
+  const prodsKey = cacheKeys.products(ownerId);
+  const cachedProds = getCachedEvenStale<Product[]>(prodsKey);
+  if (cachedProds) {
+    const updated = cachedProds.map((p) => {
+      const it = purchase.items.find((pi) => pi.productId === p.id);
+      if (!it) return p;
+      const dest = (it as any).destinationLocation || (it as any).destination || (purchase as any).destination || "gudam";
+      const { shopStock: newShop, gudamStock: newGudam } = addStock(
+        { shopStock: p.shopStock ?? 0, gudamStock: p.gudamStock ?? 0 },
+        it.qty,
+        dest === "shop" ? "shop" : "gudam"
+      );
+      return {
+        ...p,
+        stock: newShop + newGudam,
+        shopStock: newShop,
+        gudamStock: newGudam,
+        buyingPrice: it.buyingPrice,
+      };
+    });
+    setCached(prodsKey, updated);
   }
 
   return purchaseRef.id;

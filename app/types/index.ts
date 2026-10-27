@@ -170,6 +170,7 @@ export interface GatePass {
     qty: number;
     weight?: number;
     unit?: string;
+    isSelf?: boolean;
   }>;
   date: string;
   vehicleNo?: string;

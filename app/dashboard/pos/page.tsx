@@ -419,6 +419,26 @@ export default function POSPage() {
         }));
     };
 
+    const updateLineTotal = (index: number, totalValue: string | number) => {
+        setCart(prev => prev.map((item, i) => {
+            if (i !== index) return item;
+            let total = parseFloat(String(totalValue));
+            if (isNaN(total) || total < 0) total = 0;
+
+            const isWeight = item.type === "weight";
+            const currentWeight = item.totalWeight ?? (item.qty * (item.weightPerBag || 25));
+            const divisor = isWeight ? currentWeight : item.qty;
+            const newPrice = divisor > 0 ? Math.round((total / divisor) * 100) / 100 : item.price;
+
+            return {
+                ...item,
+                price: newPrice,
+                sellingPrice: newPrice,
+                total,
+            };
+        }));
+    };
+
     return (
         <div className="flex flex-col lg:flex-row-reverse h-[calc(100vh-96px)] lg:h-[calc(100vh-112px)] gap-4 relative">
             <div className="card flex h-full min-w-0 flex-1 flex-col overflow-hidden lg:w-[380px] lg:flex-none xl:w-[420px]">
@@ -672,9 +692,15 @@ export default function POSPage() {
                                             title={isWeight ? t("pos_rate_per_kg") : t("pos_rate_per_piece")}
                                         />
 
-                                        <span className="tabular text-right text-sm font-extrabold text-stone-900">
-                                            {Math.round(item.total).toLocaleString()}
-                                        </span>
+                                        <input
+                                            type="number"
+                                            step="any"
+                                            min="0"
+                                            className="tabular w-full rounded-lg border border-stone-200 bg-stone-50 px-2 py-1.5 text-right text-sm font-extrabold text-stone-900 outline-none focus:border-brand-500 focus:bg-white"
+                                            value={item.total}
+                                            onChange={(e) => updateLineTotal(index, e.target.value)}
+                                            title={t("total")}
+                                        />
 
                                         <button
                                             onClick={() => removeFromCart(index)}

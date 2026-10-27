@@ -374,63 +374,6 @@ export default function DailyClosingPage() {
         <StatCard title={t("closing_cashInHand")} value={signed(totals.cashInHand)} subtitle={t("closing_cashFormula")} icon={Wallet} theme="purple" isPrivate loading={loading} />
       </div>
 
-      <DataTable
-        data={sales}
-        rowKey={(s) => s.id}
-        loading={loading}
-        emptyText={t("closing_noSales")}
-        paginate={sales.length > 10}
-        toolbarLeft={<h3 className="text-base font-bold text-stone-900">{t("closing_salesHeading", { count: sales.length })}</h3>}
-        columns={[
-          { key: "time", header: t("closing_colTime"), className: "whitespace-nowrap", cell: (s) => <span className="text-stone-500">{timeOf(s.date)}</span> },
-          { key: "inv", header: t("closing_colInvoice"), cell: (s) => <span className="font-mono text-xs font-bold text-brand-700">#{s.invoiceNo || "-"}</span> },
-          { key: "cust", header: t("customer"), cell: (s) => <span className="font-semibold text-stone-900">{customerLabel(s.customerName)}</span> },
-          {
-            key: "items",
-            header: t("items"),
-            cell: (s) => (
-              <>
-                <p className="max-w-[260px] truncate text-stone-800">{s.items.map((i) => i.name).join(", ")}</p>
-                <p className="text-xs text-stone-400">{qtySummary(s)}</p>
-              </>
-            ),
-          },
-          {
-            key: "pay",
-            header: t("closing_colPayment"),
-            cell: (s) => {
-              const current = paymentOf(s);
-              return (
-                <select
-                  value={current}
-                  onChange={(e) => handlePaymentChange(s, e.target.value as PaymentMethod)}
-                  className={`field !w-28 !py-1.5 text-xs font-bold ${PAYMENT_TONE[current]}`}
-                >
-                  <option value="Cash">{paymentLabel("Cash")}</option>
-                  <option value="Bank Account">{paymentLabel("Bank Account")}</option>
-                  <option value="Udhar">{paymentLabel("Udhar")}</option>
-                </select>
-              );
-            },
-          },
-          { key: "amount", header: t("amount"), align: "right", cell: (s) => <span className="tabular font-extrabold text-stone-900">{formatMoney(saleNetAmount(s))}</span> },
-          {
-            key: "edit",
-            header: "",
-            align: "right",
-            cell: (s) => (
-              <button
-                onClick={() => setEditSale(s)}
-                className="rounded-lg p-2 text-stone-500 transition hover:bg-brand-50 hover:text-brand-700"
-                title={t("closing_editBill")}
-              >
-                <Pencil size={17} />
-              </button>
-            ),
-          },
-        ]}
-      />
-
       <div>
         <h2 className="mb-3 text-lg font-extrabold text-stone-900">{t("closing_sectionTitle")}</h2>
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
@@ -502,6 +445,63 @@ export default function DailyClosingPage() {
                 {r.kind === "amad" ? "+ " : "− "}
                 {formatMoney(r.amount)}
               </span>
+            ),
+          },
+        ]}
+      />
+
+      <DataTable
+        data={sales}
+        rowKey={(s) => s.id}
+        loading={loading}
+        emptyText={t("closing_noSales")}
+        paginate={sales.length > 10}
+        toolbarLeft={<h3 className="text-base font-bold text-stone-900">{t("closing_salesHeading", { count: sales.length })}</h3>}
+        columns={[
+          { key: "time", header: t("closing_colTime"), className: "whitespace-nowrap", cell: (s) => <span className="text-stone-500">{timeOf(s.date)}</span> },
+          { key: "inv", header: t("closing_colInvoice"), cell: (s) => <span className="font-mono text-xs font-bold text-brand-700">#{s.invoiceNo || "-"}</span> },
+          { key: "cust", header: t("customer"), cell: (s) => <span className="font-semibold text-stone-900">{customerLabel(s.customerName)}</span> },
+          {
+            key: "items",
+            header: t("items"),
+            cell: (s) => (
+              <>
+                <p className="max-w-[260px] truncate text-stone-800">{s.items.map((i) => i.name).join(", ")}</p>
+                <p className="text-xs text-stone-400">{qtySummary(s)}</p>
+              </>
+            ),
+          },
+          {
+            key: "pay",
+            header: t("closing_colPayment"),
+            cell: (s) => {
+              const current = paymentOf(s);
+              return (
+                <select
+                  value={current}
+                  onChange={(e) => handlePaymentChange(s, e.target.value as PaymentMethod)}
+                  className={`field !w-28 !py-1.5 text-xs font-bold ${PAYMENT_TONE[current]}`}
+                >
+                  <option value="Cash">{paymentLabel("Cash")}</option>
+                  <option value="Bank Account">{paymentLabel("Bank Account")}</option>
+                  <option value="Udhar">{paymentLabel("Udhar")}</option>
+                </select>
+              );
+            },
+          },
+          { key: "amount", header: t("amount"), align: "right", cell: (s) => <span className="tabular font-extrabold text-stone-900">{formatMoney(saleNetAmount(s))}</span> },
+          {
+            key: "edit",
+            header: "",
+            align: "right",
+            cell: (s) => (
+              <button
+                onClick={() => setEditSale(s)}
+                className="rounded-lg p-2 text-stone-500 transition hover:bg-brand-50 hover:text-brand-700"
+                title={t("closing_editBill")}
+              >
+                <Pencil size={17} />
+              </button>
             ),
           },
         ]}

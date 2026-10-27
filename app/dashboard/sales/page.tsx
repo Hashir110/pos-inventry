@@ -20,6 +20,7 @@ import {
 import { toast } from "react-toastify";
 import {
   listRecentSales,
+  listSales,
   updateSaleFull,
   deleteSale,
 } from "../../lib/services/sales";
@@ -53,6 +54,24 @@ type PayFilter = "all" | "Cash" | "Bank Account" | "Split" | "Udhar";
 type SortKey = "new" | "old" | "high";
 
 const money = (n: number) => `Rs. ${Math.round(n || 0).toLocaleString()}`;
+
+const dayKey = (iso: string) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+const todayStr = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleString("en-US", {
@@ -141,6 +160,7 @@ export default function SalesHistoryPage() {
   const [search, setSearch] = useState("");
   const [payFilter, setPayFilter] = useState<PayFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("new");
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr());
 
   // Selected sale for detail modal
   const [selectedSale, setSelectedSale] = useState<SaleRow | null>(null);
@@ -392,7 +412,7 @@ export default function SalesHistoryPage() {
       if (!currentUser) return;
       if (force) setRefreshing(true);
       try {
-        const recent = await listRecentSales(currentUser.uid, 50, force);
+        const recent = await listSales(currentUser.uid, force);
         setSales(recent);
         if (force) toast.success("Sales updated");
       } catch (error) {
@@ -410,17 +430,13 @@ export default function SalesHistoryPage() {
     fetchSales();
   }, [fetchSales]);
 
-  const stats = useMemo(
-    () => ({
-      totalRevenue: sales.reduce((s, x) => s + saleNetAmount(x), 0),
-      totalOrders: sales.length,
-    }),
-    [sales]
-  );
-
   const visibleSales = useMemo(() => {
     const term = search.trim().toLowerCase();
     const list = sales.filter((s) => {
+      if (selectedDate) {
+        const saleDay = dayKey(s.date);
+        if (saleDay !== selectedDate) return false;
+      }
       if (payFilter !== "all" && (s.paymentMethod || "Cash") !== payFilter)
         return false;
       if (!term) return true;
@@ -434,7 +450,15 @@ export default function SalesHistoryPage() {
       if (sortKey === "high") return saleNetAmount(b) - saleNetAmount(a);
       return b.date.localeCompare(a.date);
     });
-  }, [sales, search, payFilter, sortKey]);
+  }, [sales, search, payFilter, sortKey, selectedDate]);
+
+  const stats = useMemo(
+    () => ({
+      totalRevenue: visibleSales.reduce((s, x) => s + saleNetAmount(x), 0),
+      totalOrders: visibleSales.length,
+    }),
+    [visibleSales]
+  );
 
   return (
     <div>
@@ -463,15 +487,16 @@ export default function SalesHistoryPage() {
         <StatCard
           title={t("totalSales")}
           value={money(stats.totalRevenue)}
-          subtitle={t("afterRefunds")}
+          subtitle={selectedDate ? (selectedDate === todayStr() ? t("today") || "Today" : selectedDate) : t("afterRefunds")}
           icon={TrendingUp}
           theme="blue"
           loading={loading}
+          isPrivate
         />
         <StatCard
           title={t("totalOrders")}
           value={stats.totalOrders}
-          subtitle={t("invoices")}
+          subtitle={selectedDate ? (selectedDate === todayStr() ? t("today") || "Today" : selectedDate) : t("invoices")}
           icon={ShoppingBag}
           theme="amber"
           loading={loading}
@@ -500,6 +525,47 @@ export default function SalesHistoryPage() {
         }
         toolbarRight={
           <>
+            <div className="flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-2.5 py-1.5 shadow-sm">
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="border-0 bg-transparent p-0 text-xs font-bold text-stone-700 outline-none focus:ring-0 cursor-pointer"
+                title="Filter by date"
+              />
+              {selectedDate ? (
+                <div className="flex items-center gap-1">
+                  {selectedDate !== todayStr() && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDate(todayStr())}
+                      className="rounded px-1.5 py-0.5 text-[10px] font-bold text-brand-600 hover:bg-brand-50 transition"
+                      title="Show Today"
+                    >
+                      {t("today") || "Today"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate("")}
+                    className="rounded px-1.5 py-0.5 text-[10px] font-bold text-stone-400 hover:bg-stone-100 hover:text-stone-700 transition"
+                    title="Show All Dates"
+                  >
+                    {t("all") || "All"}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(todayStr())}
+                  className="rounded px-1.5 py-0.5 text-[10px] font-bold text-brand-600 hover:bg-brand-50 transition"
+                  title="Show Today"
+                >
+                  {t("today") || "Today"}
+                </button>
+              )}
+            </div>
+
             <select
               value={payFilter}
               onChange={(e) => setPayFilter(e.target.value as PayFilter)}

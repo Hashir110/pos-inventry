@@ -120,6 +120,7 @@ export interface PendingGatePassItem {
   qty: number;
   weight?: number;
   unit?: string;
+  isSelf?: boolean;
 }
 
 export interface PendingGatePass {
