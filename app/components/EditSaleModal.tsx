@@ -5,6 +5,7 @@ import { Loader2, Plus, Trash2, X } from "lucide-react";
 import { toast } from "react-toastify";
 import FormField from "./FormField";
 import { useLanguage } from "../store/useLanguage";
+import { onEnter } from "../lib/keys";
 import { useStore } from "../store/useStore";
 import { customerLabel, formatMoney } from "../lib/format";
 import { updateSaleFull } from "../lib/services/sales";
@@ -212,7 +213,10 @@ export default function EditSaleModal({ sale, onClose, onSaved }: EditSaleModalP
           </button>
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+        <div
+          className="flex-1 space-y-4 overflow-y-auto p-5"
+          onKeyDown={onEnter(() => { if (!saving && !hasReturns) handleSave(); })}
+        >
           {hasReturns && (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
               {t("editSale_returned")}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2, X } from "lucide-react";
 import CustomerSelect from "./CustomerSelect";
 import { useLanguage } from "../store/useLanguage";
+import { onEnter } from "../lib/keys";
 import type { Customer } from "../types";
 
 interface ChooseCustomerModalProps {
@@ -51,7 +52,10 @@ export default function ChooseCustomerModal({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-stone-900/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-pop">
+      <div
+        className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-pop"
+        onKeyDown={onEnter(() => { if (selected && !busy) submit(); })}
+      >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-extrabold text-stone-900">{title}</h3>

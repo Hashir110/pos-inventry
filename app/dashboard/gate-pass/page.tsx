@@ -852,6 +852,7 @@ export default function GatePassPage() {
                           placeholder={t("gatePass_qtyPlaceholder")}
                           value={itemQty}
                           onChange={(e) => handleQtyChange(e.target.value === "" ? "" : Number(e.target.value))}
+                          onKeyDown={(e) => { if (e.key === "Enter" && selectedProduct) { e.preventDefault(); handleAddItem(); } }}
                           className="field w-full text-xs font-bold tabular !py-2"
                         />
                       </div>
@@ -866,6 +867,7 @@ export default function GatePassPage() {
                           placeholder={t("gatePass_weightPlaceholder")}
                           value={itemWeight}
                           onChange={(e) => setItemWeight(e.target.value === "" ? "" : Number(e.target.value))}
+                          onKeyDown={(e) => { if (e.key === "Enter" && selectedProduct) { e.preventDefault(); handleAddItem(); } }}
                           disabled={selectedProduct?.unitType === "count"}
                           className="field w-full text-xs font-bold tabular !py-2 disabled:bg-stone-100 disabled:text-stone-400"
                         />
@@ -1452,6 +1454,7 @@ export default function GatePassPage() {
                         placeholder="Weight"
                         value={editAddWeight}
                         onChange={(e) => setEditAddWeight(parseFloat(e.target.value) || 0)}
+                        onKeyDown={(e) => { if (e.key === "Enter" && editAddProductId) { e.preventDefault(); handleEditAddProduct(); } }}
                         className="field w-full !py-1 text-xs font-bold text-center"
                       />
                     </div>

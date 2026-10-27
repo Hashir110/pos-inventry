@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { createOnlineSale, queueOfflineSale } from "../../lib/services/sales";
 import { subscribeProducts } from "../../lib/services/products";
@@ -314,6 +314,27 @@ export default function POSPage() {
         setCheckoutLoading(false);
     };
 
+    const [autoPrint, setAutoPrint] = useState(false);
+    const finalizeRef = useRef(handleFinalizeSale);
+    finalizeRef.current = handleFinalizeSale;
+
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key !== "Enter" || e.repeat || e.defaultPrevented || e.isComposing) return;
+            if (cart.length === 0 || checkoutLoading || showReceipt) return;
+            if (document.querySelector(".fixed.inset-0.backdrop-blur-sm")) return;
+            const el = e.target as HTMLElement;
+            const tag = el.tagName;
+            const isNumberInput = tag === "INPUT" && (el as HTMLInputElement).type === "number";
+            if (tag !== "BODY" && !isNumberInput) return;
+            e.preventDefault();
+            setAutoPrint(true);
+            finalizeRef.current();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [cart.length, checkoutLoading, showReceipt]);
+
     const categories = useMemo(() => {
         const set = new Set<string>();
         products.forEach(p => set.add(p.category?.trim() || OTHER_CATEGORY));
@@ -450,7 +471,8 @@ export default function POSPage() {
                                     <button
                                         key={product.id}
                                         type="button"
-                                        onClick={() => handleProductClick(product)}
+                                        onClick={(e) => { e.currentTarget.blur(); handleProductClick(product); }}
+                                        onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
                                         className={`relative flex flex-col gap-1 rounded-lg border bg-white p-2 text-left transition-all ${inCartQty > 0
                                             ? 'border-brand-500 ring-2 ring-brand-500/20 active:scale-[0.98]'
                                             : 'border-stone-200 hover:border-brand-400 hover:shadow-pop active:scale-[0.98]'
@@ -905,7 +927,7 @@ export default function POSPage() {
                     )}
 
                     <button
-                        onClick={handleFinalizeSale}
+                        onClick={() => { setAutoPrint(false); handleFinalizeSale(); }}
                         disabled={cart.length === 0 || checkoutLoading}
                         className="btn-primary w-full !py-2 !text-xs font-bold shadow-sm min-h-[36px] flex items-center justify-center"
                     >
@@ -947,6 +969,7 @@ export default function POSPage() {
                     bankName={lastSaleMeta?.bankName}
                     printLabel={t("printSlip")}
                     closeLabel={t("clearCart")}
+                    autoPrint={autoPrint}
                     onClose={() => {
                         setShowReceipt(false);
                         setCart([]);

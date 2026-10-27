@@ -25,6 +25,7 @@ interface SaleReceiptProps {
   bankName?: string;
   printLabel: string;
   closeLabel: string;
+  autoPrint?: boolean;
   onClose: () => void;
 }
 
@@ -44,6 +45,7 @@ export default function SaleReceipt({
   bankName,
   printLabel,
   closeLabel,
+  autoPrint = false,
   onClose,
 }: SaleReceiptProps) {
   const { t } = useLanguage();
@@ -114,8 +116,9 @@ export default function SaleReceipt({
   };
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      handleCopySlip(false);
+    const timer = setTimeout(async () => {
+      await handleCopySlip(false);
+      if (autoPrint) handlePrint();
     }, 400);
     return () => clearTimeout(timer);
   }, []);
