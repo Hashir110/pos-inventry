@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { tr } from "../i18n/translate";
+import { deductStock } from "../stock";
 import type {
   BankAccount,
   BankTransaction,
@@ -194,9 +195,6 @@ export const createOnlineSale = async (
 
     for (const { snapshot, item } of reads) {
       if (!snapshot.exists()) throw new Error(tr("sales_errProductNotFound", { name: item.name }));
-      const stock = (snapshot.data() as Product).stock;
-      const deductQty = item.qty;
-      if (stock < deductQty) throw new Error(tr("sales_errStockLow", { name: item.name, stock }));
     }
 
     const shopDefaults = shopSnap.exists() ? {} : {
@@ -257,18 +255,9 @@ export const createOnlineSale = async (
     for (const { snapshot, item } of reads) {
       const prod = snapshot.data() as Product;
       const deductQty = item.qty;
-      const currentShop = prod.shopStock ?? 0;
-      const currentGudam = prod.gudamStock ?? 0;
-      let newShop = currentShop;
-      let newGudam = currentGudam;
-
-      if (currentShop >= deductQty) {
-        newShop = currentShop - deductQty;
-      } else {
-        const remaining = deductQty - currentShop;
-        newShop = 0;
-        newGudam = Math.max(0, currentGudam - remaining);
-      }
+      const levels = deductStock({ shopStock: prod.shopStock ?? 0, gudamStock: prod.gudamStock ?? 0 }, deductQty);
+      const newShop = levels.shopStock;
+      const newGudam = levels.gudamStock;
       const newTotal = newShop + newGudam;
 
       transaction.update(snapshot.ref, {
@@ -328,8 +317,8 @@ export const createOnlineSale = async (
     const updatedProds = currentProds.map((p) => {
       const cartItem = cart.find((c) => c.id === p.id);
       if (!cartItem) return p;
-      const newStock = Math.max(0, (p.stock || 0) - cartItem.qty);
-      const newShop = Math.max(0, (p.shopStock ?? p.stock ?? 0) - cartItem.qty);
+      const newStock = (p.stock || 0) - cartItem.qty;
+      const newShop = (p.shopStock ?? p.stock ?? 0) - cartItem.qty;
       return { ...p, stock: newStock, shopStock: newShop };
     });
     setCached(prodsKey, updatedProds);
@@ -347,9 +336,8 @@ export const queueOfflineSale = (
 ): string => {
   for (const item of cart) {
     const p = localProducts.find((pr) => pr.id === item.id);
-    const deductQty = item.qty;
-    if (!p || p.stock < deductQty) {
-      throw new Error(tr("sales_errStockLow", { name: item.name, stock: p ? p.stock : 0 }));
+    if (!p) {
+      throw new Error(tr("sales_errProductNotFound", { name: item.name }));
     }
   }
 
@@ -383,8 +371,8 @@ export const queueOfflineSale = (
     const updatedProds = currentProds.map((p) => {
       const cartItem = cart.find((c) => c.id === p.id);
       if (!cartItem) return p;
-      const newStock = Math.max(0, (p.stock || 0) - cartItem.qty);
-      const newShop = Math.max(0, (p.shopStock ?? p.stock ?? 0) - cartItem.qty);
+      const newStock = (p.stock || 0) - cartItem.qty;
+      const newShop = (p.shopStock ?? p.stock ?? 0) - cartItem.qty;
       return { ...p, stock: newStock, shopStock: newShop };
     });
     setCached(prodsKey, updatedProds);
@@ -421,18 +409,9 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
         if (!snapshot.exists()) continue;
         const prod = snapshot.data() as Product;
         const deductQty = item.qty;
-        const currentShop = prod.shopStock ?? 0;
-        const currentGudam = prod.gudamStock ?? 0;
-        let newShop = currentShop;
-        let newGudam = currentGudam;
-
-        if (currentShop >= deductQty) {
-          newShop = currentShop - deductQty;
-        } else {
-          const remaining = deductQty - currentShop;
-          newShop = 0;
-          newGudam = Math.max(0, currentGudam - remaining);
-        }
+        const levels = deductStock({ shopStock: prod.shopStock ?? 0, gudamStock: prod.gudamStock ?? 0 }, deductQty);
+        const newShop = levels.shopStock;
+        const newGudam = levels.gudamStock;
         const newTotal = newShop + newGudam;
 
         transaction.update(snapshot.ref, {
@@ -680,13 +659,9 @@ export const updateSaleItems = async (
       let newGudam = gudam;
 
       if (diff > 0) {
-        if (prod.stock < diff) throw new Error(tr("sales_errStockLow", { name, stock: prod.stock }));
-        if (shop >= diff) {
-          newShop = shop - diff;
-        } else {
-          newGudam = Math.max(0, gudam - (diff - shop));
-          newShop = 0;
-        }
+        const levels = deductStock({ shopStock: shop, gudamStock: gudam }, diff);
+        newShop = levels.shopStock;
+        newGudam = levels.gudamStock;
       } else {
         newShop = shop - diff;
       }
@@ -884,16 +859,9 @@ export const updateSaleFull = async (
         let newGudam = gudam;
 
         if (diff > 0) {
-          if (prod.stock < diff) {
-            const prodName = newItems.find((it) => (it.productId || it.id) === prodId)?.name || prod.name;
-            throw new Error(tr("sales_errStockLow", { name: prodName, stock: prod.stock }));
-          }
-          if (shop >= diff) {
-            newShop = shop - diff;
-          } else {
-            newGudam = Math.max(0, gudam - (diff - shop));
-            newShop = 0;
-          }
+          const levels = deductStock({ shopStock: shop, gudamStock: gudam }, diff);
+          newShop = levels.shopStock;
+          newGudam = levels.gudamStock;
         } else {
           newShop = shop - diff;
         }
@@ -992,8 +960,8 @@ export const updateSaleFull = async (
         cachedProds.map((p) => {
           const ch = stockChanges.find((c) => c.prodId === p.id);
           if (!ch) return p;
-          const newStock = Math.max(0, (p.stock || 0) - ch.diff);
-          const newShop = Math.max(0, (p.shopStock ?? p.stock ?? 0) - ch.diff);
+          const newStock = (p.stock || 0) - ch.diff;
+          const newShop = (p.shopStock ?? p.stock ?? 0) - ch.diff;
           return { ...p, stock: newStock, shopStock: newShop };
         })
       );

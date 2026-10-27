@@ -10,6 +10,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { addStock } from "../stock";
 import type { Supplier, SupplierPurchase, SupplierPayment } from "../../types";
 import {
   cacheKeys,
@@ -191,8 +192,11 @@ export const addSupplierPurchase = async (
         const dest = item.destination || purchase.destination || "gudam";
         const currentShop = data.shopStock ?? 0;
         const currentGudam = data.gudamStock ?? 0;
-        const newShop = dest === "shop" ? currentShop + item.qty : currentShop;
-        const newGudam = dest === "gudam" ? currentGudam + item.qty : currentGudam;
+        const { shopStock: newShop, gudamStock: newGudam } = addStock(
+          { shopStock: currentShop, gudamStock: currentGudam },
+          item.qty,
+          dest === "shop" ? "shop" : "gudam"
+        );
         const newTotal = newShop + newGudam;
 
         await updateDoc(doc(db, "products", item.productId), {

@@ -450,13 +450,10 @@ export default function POSPage() {
                                     <button
                                         key={product.id}
                                         type="button"
-                                        disabled={isOutOfStock}
                                         onClick={() => handleProductClick(product)}
-                                        className={`relative flex flex-col gap-1 rounded-lg border bg-white p-2 text-left transition-all ${isOutOfStock
-                                            ? 'cursor-not-allowed border-stone-200 opacity-60'
-                                            : inCartQty > 0
-                                                ? 'border-brand-500 ring-2 ring-brand-500/20 active:scale-[0.98]'
-                                                : 'border-stone-200 hover:border-brand-400 hover:shadow-pop active:scale-[0.98]'
+                                        className={`relative flex flex-col gap-1 rounded-lg border bg-white p-2 text-left transition-all ${inCartQty > 0
+                                            ? 'border-brand-500 ring-2 ring-brand-500/20 active:scale-[0.98]'
+                                            : 'border-stone-200 hover:border-brand-400 hover:shadow-pop active:scale-[0.98]'
                                             }`}
                                     >
                                         {inCartQty > 0 && (
@@ -480,7 +477,7 @@ export default function POSPage() {
                                                     ? 'bg-amber-100 text-amber-800'
                                                     : 'bg-stone-100 text-stone-600'
                                                 }`}>
-                                                {isOutOfStock ? t("pos_out_of_stock") : `${product.stock} ${stockUnit}`}
+                                                {product.stock < 0 ? `${product.stock} ${stockUnit}` : isOutOfStock ? t("pos_out_of_stock") : `${product.stock} ${stockUnit}`}
                                             </span>
                                         </div>
                                     </button>

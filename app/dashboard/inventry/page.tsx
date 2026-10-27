@@ -254,7 +254,7 @@ export default function InventoryList() {
                     out ? "bg-red-100 text-red-700" : low ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
                   }`}
                 >
-                  {out ? t("outOfStock") : `${item.stock} ${unit}`}
+                  {item.stock < 0 ? `${item.stock} ${unit}` : out ? t("outOfStock") : `${item.stock} ${unit}`}
                 </span>
               );
             },

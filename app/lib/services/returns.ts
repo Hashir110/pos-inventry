@@ -38,7 +38,8 @@ export const processReturn = async (
     if (isNaN(refundAmount)) throw new Error(tr("returns_err_priceCalc"));
 
     if (productSnap.exists()) {
-      transaction.update(productRef, { stock: (productSnap.data() as Product).stock + returnQty });
+      const prod = productSnap.data() as Product;
+      transaction.update(productRef, { stock: prod.stock + returnQty, shopStock: (prod.shopStock ?? 0) + returnQty });
     }
 
     if (customerRef && customerSnap?.exists()) {
