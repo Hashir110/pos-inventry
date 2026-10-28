@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { History, Plus, RefreshCw, Search, Users, Wallet, Loader2, Pencil, Trash2, X, AlertTriangle } from "lucide-react";
+import { History, Plus, RefreshCw, Search, Users, Wallet, ArrowUpRight, Loader2, Pencil, Trash2, X, AlertTriangle } from "lucide-react";
 import { toast } from "react-toastify";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
@@ -11,6 +11,7 @@ import PageHeader from "../../components/PageHeader";
 import DataTable from "../../components/DataTable";
 import SummaryBox from "../../components/SummaryBox";
 import ReceivePaymentModal from "../../components/ReceivePaymentModal";
+import CustomerWithdrawModal from "../../components/CustomerWithdrawModal";
 import { formatMoney } from "../../lib/format";
 import { addCustomer, listCustomers, updateCustomer, deleteCustomer } from "../../lib/services/customers";
 import type { Customer } from "../../types";
@@ -28,6 +29,7 @@ export default function UdharPage() {
   const [adding, setAdding] = useState(false);
 
   const [payFor, setPayFor] = useState<Customer | null>(null);
+  const [withdrawFor, setWithdrawFor] = useState<Customer | null>(null);
 
   // Edit party state
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -65,10 +67,18 @@ export default function UdharPage() {
   const debtors = useMemo(() => customers.filter((c) => c.balance > 0).length, [customers]);
 
   const filtered = useMemo(() => {
-    const term = search.toLowerCase();
-    return customers.filter(
+    const term = search.trim().toLowerCase();
+    const list = customers.filter(
       (c) => c.name.toLowerCase().includes(term) || (c.phone ?? "").includes(term)
     );
+    return [...list].sort((a, b) => {
+      const balA = a.balance ?? 0;
+      const balB = b.balance ?? 0;
+      if (balB !== balA) {
+        return balB - balA;
+      }
+      return a.name.localeCompare(b.name);
+    });
   }, [customers, search]);
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -228,7 +238,13 @@ export default function UdharPage() {
             key: "balance",
             header: t("balanceCol"),
             cell: (c) => (
-              <span className={`font-bold ${c.balance > 0 ? "text-red-600" : "text-emerald-600"}`}>{formatMoney(c.balance)}</span>
+              c.balance < 0 ? (
+                <span className="font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-xs">
+                  Advance: {formatMoney(Math.abs(c.balance))}
+                </span>
+              ) : (
+                <span className={`font-bold ${c.balance > 0 ? "text-red-600" : "text-stone-500"}`}>{formatMoney(c.balance)}</span>
+              )
             ),
           },
           {
@@ -246,11 +262,19 @@ export default function UdharPage() {
                 </Link>
                 <button
                   onClick={() => setPayFor(c)}
-                  disabled={c.balance <= 0}
-                  className="px-2.5 py-1.5 bg-emerald-100 text-emerald-700 rounded-md hover:bg-emerald-200 text-xs font-bold flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="px-2.5 py-1.5 bg-emerald-100 text-emerald-700 rounded-md hover:bg-emerald-200 text-xs font-bold flex items-center gap-1"
                 >
                   <Wallet size={14} /> {t("credit_collect")}
                 </button>
+                {Math.abs(c.balance || 0) > 0.001 && (
+                  <button
+                    onClick={() => setWithdrawFor(c)}
+                    className="px-2.5 py-1.5 bg-amber-100 text-amber-800 rounded-md hover:bg-amber-200 text-xs font-bold flex items-center gap-1"
+                    title={t("credit_withdrawTitle")}
+                  >
+                    <ArrowUpRight size={14} /> {t("credit_withdraw")}
+                  </button>
+                )}
                 <button
                   onClick={() => startEdit(c)}
                   className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
@@ -272,6 +296,7 @@ export default function UdharPage() {
       />
 
       <ReceivePaymentModal customer={payFor} onClose={() => setPayFor(null)} onSuccess={fetchCustomers} />
+      <CustomerWithdrawModal customer={withdrawFor} onClose={() => setWithdrawFor(null)} onSuccess={fetchCustomers} />
 
       {/* Edit Party Modal */}
       {editingCustomer && (

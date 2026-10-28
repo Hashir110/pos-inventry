@@ -78,15 +78,22 @@ export default function PartyAmountList({
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-bold text-stone-900">{p.name}</p>
-                    <span className={`tabular mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${colors.badge}`}>
-                      {t("settle_balance", { amount: formatMoney(p.balance) })}
-                    </span>
+                    {p.balance < 0 ? (
+                      <span className="tabular mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                        Advance: {formatMoney(Math.abs(p.balance))}
+                      </span>
+                    ) : (
+                      <span className={`tabular mt-0.5 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${colors.badge}`}>
+                        {t("settle_balance", { amount: formatMoney(p.balance) })}
+                      </span>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => onChange(p.id, String(p.balance))}
-                      className="rounded-lg border border-stone-200 px-2 py-1 text-[11px] font-bold text-stone-500 hover:bg-stone-100"
+                      disabled={p.balance <= 0}
+                      onClick={() => onChange(p.id, p.balance > 0 ? String(p.balance) : "")}
+                      className="rounded-lg border border-stone-200 px-2 py-1 text-[11px] font-bold text-stone-500 hover:bg-stone-100 disabled:opacity-40 disabled:cursor-not-allowed"
                       title={t("settle_fullTitle")}
                     >
                       {t("settle_full")}
@@ -106,11 +113,13 @@ export default function PartyAmountList({
                   <p className={`tabular mt-2 text-xs font-semibold ${over ? "text-red-600" : colors.text}`}>
                     {over
                       ? t("settle_overBalance", { amount: formatMoney(p.balance) })
-                      : t("settle_remaining", {
-                          balance: formatMoney(p.balance),
-                          value: formatMoney(value),
-                          remaining: formatMoney(remaining),
-                        })}
+                      : remaining < 0
+                        ? `Balance: ${formatMoney(p.balance)} − ${formatMoney(value)} = Advance: ${formatMoney(Math.abs(remaining))}`
+                        : t("settle_remaining", {
+                            balance: formatMoney(p.balance),
+                            value: formatMoney(value),
+                            remaining: formatMoney(remaining),
+                          })}
                   </p>
                 )}
               </div>

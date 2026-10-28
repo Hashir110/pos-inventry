@@ -158,10 +158,6 @@ export const addSupplierPurchase = async (
 
 
 ): Promise<string> => {
-  if (purchase.paidAmount && purchase.paidAmount > purchase.totalAmount) {
-    throw new Error("Paid/Advance amount cannot exceed total purchase amount");
-  }
-
   const purchaseRef = await addDoc(collection(db, "supplier_purchases"), {
     ownerId,
     ...purchase,
@@ -177,9 +173,20 @@ export const addSupplierPurchase = async (
     const targetSupplier = suppliersSnap.docs.find((d) => d.id === purchase.supplierId);
     if (targetSupplier) {
       const currentBalance = targetSupplier.data().balance || 0;
+      const newBal = Math.round((currentBalance + unpaid) * 100) / 100;
       await updateDoc(doc(db, "suppliers", purchase.supplierId), {
-        balance: currentBalance + unpaid,
+        balance: newBal,
       });
+
+      // Update local supplier cache
+      const cacheKey = cacheKeys.suppliers(ownerId);
+      const current = getCachedEvenStale<Supplier[]>(cacheKey);
+      if (current) {
+        setCached(
+          cacheKey,
+          current.map((s) => (s.id === purchase.supplierId ? { ...s, balance: newBal } : s))
+        );
+      }
     }
   }
 
@@ -260,15 +267,7 @@ export const addSupplierPayment = async (
   if (!targetSupplier) throw new Error("Supplier not found");
 
   const currentBalance = targetSupplier.data().balance || 0;
-  if (currentBalance <= 0) {
-    throw new Error("This supplier has no outstanding balance to pay");
-  }
-
-  if (payment.amount > currentBalance + 0.01) {
-    throw new Error(
-      `Payment amount (Rs. ${payment.amount}) cannot exceed supplier balance (Rs. ${currentBalance})`
-    );
-  }
+  const newBalance = Math.round((currentBalance - payment.amount) * 100) / 100;
 
   const ref = await addDoc(collection(db, "supplier_payments"), {
     ownerId,
@@ -276,7 +275,6 @@ export const addSupplierPayment = async (
     date: new Date().toISOString(),
   });
 
-  const newBalance = Math.max(0, Math.round((currentBalance - payment.amount) * 100) / 100);
   await updateDoc(doc(db, "suppliers", payment.supplierId), {
     balance: newBalance,
   });

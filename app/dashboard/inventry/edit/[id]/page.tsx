@@ -38,6 +38,7 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           gudamStock: found.gudamStock ?? 0,
           shopStock: found.shopStock ?? found.stock ?? 0,
           unitType: found.unitType,
+          weightPerBag: found.weightPerBag,
           category: found.category ?? "",
         });
       } catch (error) {

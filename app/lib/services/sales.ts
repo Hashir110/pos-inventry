@@ -670,7 +670,7 @@ export const updateSaleItems = async (
 
     if (customerRef && customerSnap?.exists() && newTotal !== oldTotal) {
       const balance = (customerSnap.data() as Customer).balance || 0;
-      transaction.update(customerRef, { balance: Math.max(0, roundMoney(balance + newTotal - oldTotal)) });
+      transaction.update(customerRef, { balance: roundMoney(balance + newTotal - oldTotal) });
     }
 
     transaction.update(saleRef, stripUndefined({ items: newItems.map(cleanSaleItem), totalAmount: newTotal, extraCharges: extra, editedAt: new Date().toISOString() }));
@@ -707,7 +707,7 @@ export const updateSalePayment = async (
 
     if (oldRef && oldSnap?.exists()) {
       const balance = (oldSnap.data() as Customer).balance || 0;
-      transaction.update(oldRef, { balance: Math.max(0, roundMoney(balance - net)) });
+      transaction.update(oldRef, { balance: roundMoney(balance - net) });
     }
     if (newRef && newSnap) {
       const data = newSnap.data() as Customer;
@@ -881,7 +881,7 @@ export const updateSaleFull = async (
       const oldCustSnap = await transaction.get(oldCustRef);
       if (oldCustSnap.exists()) {
         const bal = (oldCustSnap.data() as Customer).balance || 0;
-        transaction.update(oldCustRef, { balance: Math.max(0, roundMoney(bal - oldTotal)) });
+        transaction.update(oldCustRef, { balance: roundMoney(bal - oldTotal) });
       }
     } else if (oldMethod !== "Udhar" && newMethod === "Udhar" && newCustId) {
       const newCustRef = doc(db, "customers", newCustId);
@@ -896,7 +896,7 @@ export const updateSaleFull = async (
         const custSnap = await transaction.get(custRef);
         if (custSnap.exists()) {
           const bal = (custSnap.data() as Customer).balance || 0;
-          transaction.update(custRef, { balance: Math.max(0, roundMoney(bal + newTotal - oldTotal)) });
+          transaction.update(custRef, { balance: roundMoney(bal + newTotal - oldTotal) });
         }
       } else if (oldCustId !== newCustId) {
         if (oldCustId) {
@@ -904,7 +904,7 @@ export const updateSaleFull = async (
           const oldSnap = await transaction.get(oldRef);
           if (oldSnap.exists()) {
             const bal = (oldSnap.data() as Customer).balance || 0;
-            transaction.update(oldRef, { balance: Math.max(0, roundMoney(bal - oldTotal)) });
+            transaction.update(oldRef, { balance: roundMoney(bal - oldTotal) });
           }
         }
         if (newCustId) {
@@ -1015,7 +1015,7 @@ export const deleteSale = async (saleId: string, ownerId: string): Promise<void>
             ? (sale.totalAmount || 0)
             : Math.max(0, (sale.totalAmount || 0) - (sale.cashAmount || 0) - (sale.bankAmount || 0));
         const net = roundMoney(Math.max(0, udharOnSale - (sale.refundedAmount || 0)));
-        transaction.update(custRef, { balance: Math.max(0, roundMoney(bal - net)) });
+        transaction.update(custRef, { balance: roundMoney(bal - net) });
       }
     }
 

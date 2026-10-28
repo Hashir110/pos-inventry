@@ -34,7 +34,7 @@ export default function ReceivePaymentModal({ customer, onClose, onSuccess }: Re
 
   useEffect(() => {
     if (customer) {
-      setAmount(String(customer.balance));
+      setAmount(customer.balance > 0 ? String(customer.balance) : "");
       setMethod("Cash");
       setNote("");
     }
@@ -72,7 +72,13 @@ export default function ReceivePaymentModal({ customer, onClose, onSuccess }: Re
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-lg font-bold text-stone-800">{customer.name}</h3>
-                <p className="text-sm text-stone-500">{t("receivePay_creditBalance", { amount: formatMoney(customer.balance) })}</p>
+                <p className="text-sm font-semibold">
+                  {customer.balance < 0 ? (
+                    <span className="text-emerald-700">Advance: {formatMoney(Math.abs(customer.balance))}</span>
+                  ) : (
+                    <span className="text-stone-500">{t("receivePay_creditBalance", { amount: formatMoney(customer.balance) })}</span>
+                  )}
+                </p>
               </div>
               <button type="button" onClick={onClose} className="p-1 text-stone-400 hover:text-stone-700">
                 <X size={20} />
@@ -85,7 +91,6 @@ export default function ReceivePaymentModal({ customer, onClose, onSuccess }: Re
                 type="number"
                 required
                 min="1"
-                max={customer.balance}
                 step="0.01"
                 autoFocus
                 value={amount}

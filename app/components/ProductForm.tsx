@@ -71,7 +71,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
         gudamStock: gudam,
         shopStock: shop,
         unitType: isCount ? "count" : "weight",
-        weightPerBag: isCount ? undefined : weightPerBag,
+        ...(isCount ? {} : { weightPerBag }),
         category: form.category.trim(),
       });
     } finally {

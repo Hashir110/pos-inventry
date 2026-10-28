@@ -325,23 +325,6 @@ export default function SuppliersPage() {
     }
     const sup = suppliers.find((s) => s.id === paymentSupId);
     if (!sup) return;
-
-    const currentBalance = sup.balance || 0;
-    if (currentBalance <= 0) {
-      toast.error(t("suppliers_err_no_balance"));
-      return;
-    }
-
-    if (payAmt > currentBalance) {
-      toast.error(
-        t("suppliers_err_excess_payment", {
-          amount: payAmt.toLocaleString(),
-          balance: currentBalance.toLocaleString(),
-        })
-      );
-      return;
-    }
-
     try {
       setSavingPayment(true);
       await addSupplierPayment(ownerId, {
@@ -476,7 +459,15 @@ export default function SuppliersPage() {
             key: "balance",
             header: t("suppliers_col_balance"),
             align: "right",
-            cell: (s) => <span className="font-black text-amber-700">Rs. {(s.balance || 0).toLocaleString()}</span>,
+            cell: (s) => (
+              (s.balance || 0) < 0 ? (
+                <span className="font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-xs">
+                  Advance: Rs. {Math.abs(s.balance).toLocaleString()}
+                </span>
+              ) : (
+                <span className="font-black text-amber-700">Rs. {(s.balance || 0).toLocaleString()}</span>
+              )
+            ),
           },
           {
             key: "actions",
@@ -632,7 +623,9 @@ export default function SuppliersPage() {
                   <option value="">{t("suppliers_select_supplier")}</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {t("suppliers_option_balance", { name: s.name, amount: s.balance || 0 })}
+                      {s.balance < 0
+                        ? `${s.name} (Advance: Rs. ${Math.abs(s.balance).toLocaleString()})`
+                        : t("suppliers_option_balance", { name: s.name, amount: s.balance || 0 })}
                     </option>
                   ))}
                 </select>
@@ -890,7 +883,9 @@ export default function SuppliersPage() {
                   <option value="">{t("suppliers_select_supplier")}</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {t("suppliers_option_payable", { name: s.name, amount: s.balance || 0 })}
+                      {s.balance < 0
+                        ? `${s.name} (Advance: Rs. ${Math.abs(s.balance).toLocaleString()})`
+                        : t("suppliers_option_payable", { name: s.name, amount: s.balance || 0 })}
                     </option>
                   ))}
                 </select>
@@ -901,20 +896,22 @@ export default function SuppliersPage() {
                   <label className="text-xs font-bold text-stone-700">
                     {t("suppliers_label_payment_amount")}
                   </label>
-                  {paymentSupId && (
-                    <span className="text-[11px] font-semibold text-stone-500">
-                      We Owe:{" "}
-                      <span className={`font-bold ${(suppliers.find((s) => s.id === paymentSupId)?.balance || 0) > 0 ? "text-red-600" : "text-emerald-600"}`}>
-                        Rs. {(suppliers.find((s) => s.id === paymentSupId)?.balance || 0).toLocaleString()}
+                  {paymentSupId && (() => {
+                    const bal = suppliers.find((s) => s.id === paymentSupId)?.balance || 0;
+                    return (
+                      <span className="text-[11px] font-semibold text-stone-500">
+                        {bal < 0 ? "Advance with Supplier: " : "We Owe: "}
+                        <span className={`font-bold ${bal > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                          Rs. {Math.abs(bal).toLocaleString()}
+                        </span>
                       </span>
-                    </span>
-                  )}
+                    );
+                  })()}
                 </div>
                 <div className="relative">
                   <input
                     type="number"
                     min="1"
-                    max={suppliers.find((s) => s.id === paymentSupId)?.balance || undefined}
                     placeholder="0"
                     value={paymentAmount}
                     onChange={(e) => setPaymentAmount(e.target.value === "" ? "" : Number(e.target.value))}
@@ -997,8 +994,12 @@ export default function SuppliersPage() {
                 <h3 className="font-extrabold text-stone-900 text-sm">
                   {t("suppliers_history_title", { name: showHistoryModal.name })}
                 </h3>
-                <p className="text-xs text-amber-700 font-bold">
-                  {t("suppliers_history_balance", { amount: (showHistoryModal.balance || 0).toLocaleString() })}
+                <p className="text-xs font-bold">
+                  {(showHistoryModal.balance || 0) < 0 ? (
+                    <span className="text-emerald-700">Advance: Rs. {Math.abs(showHistoryModal.balance || 0).toLocaleString()}</span>
+                  ) : (
+                    <span className="text-amber-700">{t("suppliers_history_balance", { amount: (showHistoryModal.balance || 0).toLocaleString() })}</span>
+                  )}
                 </p>
               </div>
               <button

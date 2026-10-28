@@ -15,6 +15,12 @@ const en = {
   credit_deleteBalanceWarning: "Warning: This customer has an outstanding balance of {balance}.",
   credit_deleteSuccess: "Party deleted successfully",
   credit_deleteFailed: "Failed to delete party",
+  credit_withdraw: "Withdraw",
+  credit_withdrawTitle: "Withdraw from Ledger",
+  credit_withdrawSuccess: "Withdrawal of Rs. {amount} recorded successfully",
+  credit_withdrawFailed: "Failed to record withdrawal",
+  credit_withdrawVoucher: "Withdrawal Voucher",
+  credit_withdrawReceiptTitle: "WITHDRAWAL VOUCHER",
 };
 
 const ur: Record<keyof typeof en, string> = {
@@ -34,6 +40,12 @@ const ur: Record<keyof typeof en, string> = {
   credit_deleteBalanceWarning: "انتباہ: اس کسٹمر کا بقایا بیلنس {balance} ہے۔",
   credit_deleteSuccess: "پارٹی حذف کر دی گئی",
   credit_deleteFailed: "پارٹی حذف نہیں ہو سکی",
+  credit_withdraw: "رقم نکالیں",
+  credit_withdrawTitle: "کھاتہ سے رقم نکالیں",
+  credit_withdrawSuccess: "Rs. {amount} رقم نکالنے کا اندراج کامیابی سے ہو گیا",
+  credit_withdrawFailed: "رقم نکالنے کا اندراج نہیں ہو سکا",
+  credit_withdrawVoucher: "رقم نکالنے کا واؤچر",
+  credit_withdrawReceiptTitle: "رقم نکالنے کی رسید",
 };
 
 export const credit = { en, ur };

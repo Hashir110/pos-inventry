@@ -145,8 +145,26 @@ export default function DailyClosingPage() {
     load();
   }, [load]);
 
-  const debtors = useMemo(() => customers.filter((c) => c.balance > 0), [customers]);
-  const payables = useMemo(() => suppliers.filter((s) => s.balance > 0), [suppliers]);
+  const customerParties = useMemo(
+    () =>
+      [...customers].sort((a, b) => {
+        const balA = a.balance || 0;
+        const balB = b.balance || 0;
+        if (balB !== balA) return balB - balA;
+        return a.name.localeCompare(b.name);
+      }),
+    [customers]
+  );
+  const supplierParties = useMemo(
+    () =>
+      [...suppliers].sort((a, b) => {
+        const balA = a.balance || 0;
+        const balB = b.balance || 0;
+        if (balB !== balA) return balB - balA;
+        return a.name.localeCompare(b.name);
+      }),
+    [suppliers]
+  );
 
   const dayPayments = useMemo(() => payments.filter((p) => dayKey(p.date) === date), [payments, date]);
   const daySupplierPayments = useMemo(() => supplierPayments.filter((p) => dayKey(p.date) === date), [supplierPayments, date]);
@@ -508,8 +526,7 @@ export default function DailyClosingPage() {
             subtitle={t("closing_receivedSubtitle")}
             icon={<ArrowDownLeft size={20} />}
             tone="emerald"
-            parties={debtors}
-            capToBalance
+            parties={customerParties}
             allowSplit
             banks={banks}
             noteLabel={t("closing_note")}
@@ -523,7 +540,7 @@ export default function DailyClosingPage() {
             subtitle={t("closing_paidSubtitle")}
             icon={<ArrowUpRight size={20} />}
             tone="amber"
-            parties={payables}
+            parties={supplierParties}
             allowSplit
             noteLabel={t("closing_reasonLabel")}
             notePlaceholder={t("closing_reasonPlaceholder")}

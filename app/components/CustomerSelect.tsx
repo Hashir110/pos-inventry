@@ -94,8 +94,12 @@ export default function CustomerSelect({
                   <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">
                     {t("pos_select_due", { amount: Math.round(selectedCustomer.balance).toLocaleString() })}
                   </span>
+                ) : selectedCustomer.balance < 0 ? (
+                  <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded shrink-0">
+                    Advance: Rs. {Math.abs(Math.round(selectedCustomer.balance)).toLocaleString()}
+                  </span>
                 ) : (
-                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded shrink-0">
+                  <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded shrink-0">
                     Rs. 0
                   </span>
                 )}
@@ -217,8 +221,13 @@ export default function CustomerSelect({
                           <Wallet size={11} />
                           Rs. {Math.round(c.balance).toLocaleString()}
                         </span>
+                      ) : c.balance < 0 ? (
+                        <span className="text-[11px] font-bold tabular text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Wallet size={11} />
+                          Adv: Rs. {Math.abs(Math.round(c.balance)).toLocaleString()}
+                        </span>
                       ) : (
-                        <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                        <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded">
                           Rs. 0
                         </span>
                       )}

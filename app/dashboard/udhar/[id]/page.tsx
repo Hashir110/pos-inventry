@@ -11,6 +11,7 @@ import PageHeader from "../../../components/PageHeader";
 import DataTable from "../../../components/DataTable";
 import SummaryBox from "../../../components/SummaryBox";
 import ReceivePaymentModal from "../../../components/ReceivePaymentModal";
+import CustomerWithdrawModal from "../../../components/CustomerWithdrawModal";
 import { formatDate, formatMoney } from "../../../lib/format";
 import { saleNetAmount } from "../../../lib/calc";
 import { getCustomer, listCustomerCreditSales, listPayments } from "../../../lib/services/customers";
@@ -39,6 +40,7 @@ export default function CustomerLedgerPage() {
   const [payments, setPayments] = useState<CustomerPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [payFor, setPayFor] = useState<Customer | null>(null);
+  const [withdrawFor, setWithdrawFor] = useState<Customer | null>(null);
 
   const loadLedger = useCallback(async () => {
     if (!currentUser || !id) return;
@@ -65,14 +67,21 @@ export default function CustomerLedgerPage() {
 
   const entries = useMemo<LedgerEntry[]>(() => {
     const raw = [
-      ...sales.map((s) => ({
-        id: s.id,
-        date: s.date,
-        kind: "sale" as const,
-        title: `${t("maalGiven")} • #${s.invoiceNo}`,
-        details: describeItems(s) + (s.refundedAmount ? ` ${t("credit_returnNote", { amount: formatMoney(s.refundedAmount) })}` : ""),
-        amount: saleNetAmount(s),
-      })),
+      ...sales.map((s) => {
+        const isWithdrawal = s.items.some((i) => i.id === "withdrawal");
+        return {
+          id: s.id,
+          date: s.date,
+          kind: "sale" as const,
+          title: isWithdrawal
+            ? `${t("credit_withdraw")} • #${s.invoiceNo}`
+            : `${t("maalGiven")} • #${s.invoiceNo}`,
+          details: isWithdrawal
+            ? (s.description || "Cash Withdrawal from Ledger")
+            : describeItems(s) + (s.refundedAmount ? ` ${t("credit_returnNote", { amount: formatMoney(s.refundedAmount) })}` : ""),
+          amount: saleNetAmount(s),
+        };
+      }),
       ...payments.map((p) => ({
         id: p.id,
         date: p.date,
@@ -87,7 +96,7 @@ export default function CustomerLedgerPage() {
     return raw
       .map((e) => {
         running += e.kind === "sale" ? e.amount : -e.amount;
-        return { ...e, balance: Math.max(0, Math.round(running * 100) / 100) };
+        return { ...e, balance: Math.round(running * 100) / 100 };
       })
       .reverse();
   }, [sales, payments, t]);
@@ -121,18 +130,30 @@ export default function CustomerLedgerPage() {
         actions={
           <>
             <SummaryBox label={t("totalReceived")} value={formatMoney(totalReceived)} />
-            <SummaryBox label={t("remainingBalance")} value={formatMoney(customer.balance)} tone="amber" />
+            {customer.balance < 0 ? (
+              <SummaryBox label="Advance Balance" value={formatMoney(Math.abs(customer.balance))} tone="emerald" />
+            ) : (
+              <SummaryBox label={t("remainingBalance")} value={formatMoney(customer.balance)} tone="amber" />
+            )}
             <button
               onClick={() => setPayFor(customer)}
-              disabled={customer.balance <= 0}
-              className="btn-primary flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="btn-primary flex items-center gap-2"
             >
               <Wallet size={18} /> {t("receivePayment")}
             </button>
+            {Math.abs(customer.balance || 0) > 0.001 && (
+              <button
+                onClick={() => setWithdrawFor(customer)}
+                className="btn-secondary !border-amber-300 !bg-amber-50 text-amber-800 hover:!bg-amber-100 flex items-center gap-2 font-bold"
+              >
+                <ArrowUpRight size={18} /> {t("credit_withdraw")}
+              </button>
+            )}
           </>
         }
       />
       <ReceivePaymentModal customer={payFor} onClose={() => setPayFor(null)} onSuccess={loadLedger} />
+      <CustomerWithdrawModal customer={withdrawFor} onClose={() => setWithdrawFor(null)} onSuccess={loadLedger} />
 
       <DataTable
         data={entries}
@@ -171,7 +192,15 @@ export default function CustomerLedgerPage() {
             header: t("runningBalanceCol"),
             align: "right",
             className: "whitespace-nowrap",
-            cell: (e) => <span className="font-bold text-stone-800">{formatMoney(e.balance)}</span>,
+            cell: (e) => (
+              e.balance < 0 ? (
+                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full text-xs">
+                  Adv: {formatMoney(Math.abs(e.balance))}
+                </span>
+              ) : (
+                <span className={`font-bold ${e.balance > 0 ? "text-stone-800" : "text-stone-500"}`}>{formatMoney(e.balance)}</span>
+              )
+            ),
           },
         ]}
       />

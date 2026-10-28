@@ -181,9 +181,6 @@ export const receivePayment = async (
     const bankSnap = bankRef ? await transaction.get(bankRef) : null;
     if (!snap.exists()) throw new Error(tr("closing_errCustomerNotFound"));
     const customer = snap.data() as Customer;
-    if (amount > customer.balance + 0.001) {
-      throw new Error(tr("closing_errCreditLimit", { amount: customer.balance }));
-    }
 
     const newBalance = Math.round((customer.balance - amount) * 100) / 100;
     const now = new Date().toISOString();
@@ -235,7 +232,7 @@ export const receivePayment = async (
     setCached(
       cacheKey,
       current.map((c) =>
-        c.id === customerId ? { ...c, balance: Math.max(0, Math.round((c.balance - amount) * 100) / 100) } : c
+        c.id === customerId ? { ...c, balance: Math.round((c.balance - amount) * 100) / 100 } : c
       )
     );
   }
@@ -311,4 +308,101 @@ export const listPayments = async (ownerId: string, customerId: string): Promise
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() }) as CustomerPayment)
     .sort((a, b) => b.date.localeCompare(a.date));
+};
+
+export const recordCustomerWithdrawal = async (
+  ownerId: string,
+  customerId: string,
+  amount: number,
+  note = ""
+): Promise<{ invoiceNo: string; newBalance: number; date: string }> => {
+  if (!(amount > 0)) throw new Error(tr("closing_errAmountPositive") || "Amount must be greater than zero");
+
+  const customerRef = doc(db, "customers", customerId);
+  const shopRef = doc(db, "users", ownerId);
+  const saleRef = doc(collection(db, "sales"));
+  let invoiceNo = "";
+  let newBalance = 0;
+  const now = new Date().toISOString();
+
+  await runTransaction(db, async (transaction) => {
+    const customerSnap = await transaction.get(customerRef);
+    if (!customerSnap.exists()) throw new Error(tr("closing_errCustomerNotFound") || "Customer not found");
+    const customer = customerSnap.data() as Customer;
+
+    const shopSnap = await transaction.get(shopRef);
+    const nextInvoice = ((shopSnap.data()?.invoiceCounter as number | undefined) || 0) + 1;
+    invoiceNo = String(nextInvoice).padStart(6, "0");
+
+    newBalance = Math.round(((customer.balance || 0) + amount) * 100) / 100;
+
+    transaction.update(customerRef, { balance: newBalance });
+    transaction.set(shopRef, { invoiceCounter: nextInvoice }, { merge: true });
+
+    const cleanItem = {
+      id: "withdrawal",
+      name: note.trim() || "Cash Withdrawal",
+      qty: 1,
+      price: amount,
+      buyingPrice: 0,
+      total: amount,
+    };
+
+    const saleData = {
+      ownerId,
+      items: [cleanItem],
+      totalAmount: amount,
+      date: now,
+      customerName: customer.name,
+      customerId: customer.id,
+      description: note.trim() || "Cash Withdrawal from Ledger",
+      invoiceNo,
+      paymentMethod: "Udhar" as const,
+    };
+
+    transaction.set(saleRef, saleData);
+  });
+
+  // Update customer balance in cache
+  const cacheKey = cacheKeys.customers(ownerId);
+  const current = getCachedEvenStale<Customer[]>(cacheKey);
+  if (current) {
+    setCached(
+      cacheKey,
+      current.map((c) =>
+        c.id === customerId ? { ...c, balance: newBalance } : c
+      )
+    );
+  }
+
+  // Update sales cache optimistically
+  const salesKey = cacheKeys.sales(ownerId);
+  const currentSales = getCachedEvenStale<Sale[]>(salesKey);
+  if (currentSales) {
+    const customerSnap = current?.find((c) => c.id === customerId);
+    const saleRecord: Sale = {
+      id: saleRef.id,
+      ownerId,
+      items: [{
+        id: "withdrawal",
+        name: note.trim() || "Cash Withdrawal",
+        qty: 1,
+        price: amount,
+        buyingPrice: 0,
+        total: amount,
+      }],
+      totalAmount: amount,
+      date: now,
+      customerName: customerSnap?.name || "Customer",
+      customerId,
+      description: note.trim() || "Cash Withdrawal from Ledger",
+      invoiceNo,
+      paymentMethod: "Udhar",
+    };
+    setCached(salesKey, [saleRecord, ...currentSales]);
+  } else {
+    invalidateCache(salesKey);
+  }
+
+  return { invoiceNo, newBalance, date: now };
 };

@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -95,15 +96,25 @@ export const addProduct = async (ownerId: string, input: ProductInput): Promise<
   const totalStock = gudamStock + shopStock;
   const createdAt = new Date().toISOString();
 
-  const ref = await addDoc(collection(db, "products"), {
-    ...input,
+  const isWeight = input.unitType === "weight";
+  const docData: Record<string, any> = {
+    name: input.name.trim(),
+    buyingPrice: Number(input.buyingPrice) || 0,
+    sellingPrice: Number(input.sellingPrice) || 0,
+    unitType: isWeight ? "weight" : "count",
     gudamStock,
     shopStock,
     stock: totalStock,
     category: input.category?.trim() || "",
     ownerId,
     createdAt,
-  });
+  };
+
+  if (isWeight && input.weightPerBag !== undefined && input.weightPerBag !== null) {
+    docData.weightPerBag = Number(input.weightPerBag);
+  }
+
+  const ref = await addDoc(collection(db, "products"), docData);
 
   // Optimistically update cache
   const cacheKey = cacheKeys.products(ownerId);
@@ -111,12 +122,18 @@ export const addProduct = async (ownerId: string, input: ProductInput): Promise<
   const newProduct: Product = {
     id: ref.id,
     ownerId,
-    ...input,
+    name: input.name.trim(),
+    buyingPrice: Number(input.buyingPrice) || 0,
+    sellingPrice: Number(input.sellingPrice) || 0,
+    unitType: isWeight ? "weight" : "count",
     gudamStock,
     shopStock,
     stock: totalStock,
     category: input.category?.trim() || "",
     createdAt,
+    ...(isWeight && input.weightPerBag !== undefined && input.weightPerBag !== null
+      ? { weightPerBag: Number(input.weightPerBag) }
+      : {}),
   };
   setCached(cacheKey, [newProduct, ...current]);
 
@@ -143,14 +160,26 @@ export const updateProduct = async (id: string, input: ProductInput, ownerId?: s
     }
   }
 
-  await updateDoc(productRef, {
-    ...input,
+  const isWeight = input.unitType === "weight";
+  const updateData: Record<string, any> = {
+    name: input.name.trim(),
+    buyingPrice: Number(input.buyingPrice) || 0,
+    sellingPrice: Number(input.sellingPrice) || 0,
+    unitType: isWeight ? "weight" : "count",
     gudamStock,
     shopStock,
     stock: totalStock,
     category: input.category?.trim() || "",
     updatedAt,
-  });
+  };
+
+  if (isWeight && input.weightPerBag !== undefined && input.weightPerBag !== null) {
+    updateData.weightPerBag = Number(input.weightPerBag);
+  } else if (!isWeight) {
+    updateData.weightPerBag = deleteField();
+  }
+
+  await updateDoc(productRef, updateData);
 
   if (resolvedOwnerId) {
     const cacheKey = cacheKeys.products(resolvedOwnerId);
@@ -158,12 +187,18 @@ export const updateProduct = async (id: string, input: ProductInput, ownerId?: s
     const updatedProduct = {
       id,
       ownerId: resolvedOwnerId,
-      ...input,
+      name: input.name.trim(),
+      buyingPrice: Number(input.buyingPrice) || 0,
+      sellingPrice: Number(input.sellingPrice) || 0,
+      unitType: isWeight ? "weight" : "count",
       gudamStock,
       shopStock,
       stock: totalStock,
       category: input.category?.trim() || "",
       updatedAt,
+      ...(isWeight && input.weightPerBag !== undefined && input.weightPerBag !== null
+        ? { weightPerBag: Number(input.weightPerBag) }
+        : {}),
     } as Product;
 
     const exists = current.some((p) => p.id === id);
