@@ -28,6 +28,14 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
   const { t } = useLanguage();
   const [submitting, setSubmitting] = useState(false);
 
+  const getInitialSellingType = () => {
+    if (initial?.unitType === "count") return "count";
+    if (initial?.weightPerBag === 50) return "weight_50";
+    return "weight_25";
+  };
+
+  const [sellingType, setSellingType] = useState<string>(getInitialSellingType);
+
   const [form, setForm] = useState<FormValues>({
     name: initial?.name ?? "",
     sellingPrice: initial ? String(initial.sellingPrice) : "",
@@ -40,12 +48,19 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
   const set = <K extends keyof FormValues>(key: K, value: FormValues[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
+  const handleSellingTypeChange = (val: string) => {
+    setSellingType(val);
+    set("unitType", val === "count" ? "count" : "weight");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     const gudam = parseFloat(form.gudamStock) || 0;
     const shop = parseFloat(form.shopStock) || 0;
     const total = gudam + shop;
+    const isCount = sellingType === "count";
+    const weightPerBag = sellingType === "weight_50" ? 50 : 25;
 
     try {
       await onSubmit({
@@ -55,7 +70,8 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
         stock: total,
         gudamStock: gudam,
         shopStock: shop,
-        unitType: form.unitType,
+        unitType: isCount ? "count" : "weight",
+        weightPerBag: isCount ? undefined : weightPerBag,
         category: form.category.trim(),
       });
     } finally {
@@ -110,11 +126,12 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
                 {t("productForm_unitType")} <span className="text-red-500">*</span>
               </label>
               <select
-                value={form.unitType}
-                onChange={(e) => set("unitType", e.target.value as UnitType)}
-                className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-stone-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                value={sellingType}
+                onChange={(e) => handleSellingTypeChange(e.target.value)}
+                className="input-field cursor-pointer !py-2 text-xs font-medium"
               >
-                <option value="weight">{t("productForm_byWeight")}</option>
+                <option value="weight_25">{t("productForm_byWeight")}</option>
+                <option value="weight_50">{t("productForm_byWeight50")}</option>
                 <option value="count">{t("productForm_byCount")}</option>
               </select>
             </div>

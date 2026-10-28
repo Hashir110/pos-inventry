@@ -379,6 +379,7 @@ export default function BankAccountsPage() {
           icon={Landmark}
           theme="blue"
           loading={loading}
+          isPrivate
         />
         <StatCard
           title="Active Accounts"

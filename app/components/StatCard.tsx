@@ -12,8 +12,9 @@ export interface StatCardProps {
     theme: string;
     loading: boolean;
     isPrivate?: boolean;
+    action?: React.ReactNode;
 }
-export default function StatCard({ title, value, subtitle, icon: Icon, theme, loading, isPrivate }: StatCardProps) {
+export default function StatCard({ title, value, subtitle, icon: Icon, theme, loading, isPrivate, action }: StatCardProps) {
     const { t } = useLanguage();
     const [isVisible, setIsVisible] = useState(false);
     const chips: Record<string, string> = {
@@ -24,6 +25,7 @@ export default function StatCard({ title, value, subtitle, icon: Icon, theme, lo
         orange: "bg-orange-100 text-orange-700",
         amber: "bg-amber-100 text-amber-700",
         purple: "bg-violet-100 text-violet-700",
+        indigo: "bg-indigo-100 text-indigo-700",
         cyan: "bg-sky-100 text-sky-700",
     };
     const chip = chips[theme] ?? chips.blue;
@@ -45,6 +47,7 @@ export default function StatCard({ title, value, subtitle, icon: Icon, theme, lo
                                     {isVisible ? <Eye size={16} /> : <EyeOff size={16} />}
                                 </button>
                             )}
+                            {action}
                         </div>
                     )}
                 </div>
@@ -52,7 +55,7 @@ export default function StatCard({ title, value, subtitle, icon: Icon, theme, lo
                     <Icon size={20} />
                 </div>
             </div>
-            <p className="truncate text-xs font-medium text-stone-500">{subtitle}</p>
+            <p className="truncate text-xs font-medium text-stone-500" title={typeof subtitle === "string" ? subtitle : undefined}>{subtitle}</p>
         </div>
     );
 }

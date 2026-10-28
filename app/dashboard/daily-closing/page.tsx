@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, Banknote, CheckCircle2, CreditCard, HandCoins, Loader2, Lock, Pencil, ReceiptText, RefreshCw, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Banknote, CheckCircle2, CreditCard, HandCoins, Loader2, Lock, Pencil, ReceiptText, RefreshCw, Vault, Wallet } from "lucide-react";
 
 import { toast } from "react-toastify";
 import { useStore } from "../../store/useStore";
@@ -91,8 +91,15 @@ export default function DailyClosingPage() {
   const [banks, setBanks] = useState<BankAccount[]>([]);
   const [editSale, setEditSale] = useState<Sale | null>(null);
   const [partyForSale, setPartyForSale] = useState<Sale | null>(null);
+  const [customOpening, setCustomOpening] = useState<number | null>(null);
+  const [editOpeningOpen, setEditOpeningOpen] = useState(false);
+  const [openingInput, setOpeningInput] = useState("");
 
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    setCustomOpening(null);
+  }, [date]);
 
   const load = useCallback(async (force = false) => {
     if (!ownerId) return;
@@ -138,12 +145,26 @@ export default function DailyClosingPage() {
     load();
   }, [load]);
 
-
   const debtors = useMemo(() => customers.filter((c) => c.balance > 0), [customers]);
   const payables = useMemo(() => suppliers.filter((s) => s.balance > 0), [suppliers]);
 
   const dayPayments = useMemo(() => payments.filter((p) => dayKey(p.date) === date), [payments, date]);
   const daySupplierPayments = useMemo(() => supplierPayments.filter((p) => dayKey(p.date) === date), [supplierPayments, date]);
+
+  const previousClosing = useMemo(() => {
+    const before = dayClosings.filter((c) => c.date < date);
+    if (!before.length) return null;
+    return [...before].sort((a, b) => b.date.localeCompare(a.date))[0];
+  }, [dayClosings, date]);
+
+  const saved = useMemo(() => dayClosings.find((c) => c.date === date) ?? null, [dayClosings, date]);
+
+  const openingBalance = useMemo(() => {
+    if (customOpening !== null) return customOpening;
+    if (saved?.openingBalance !== undefined) return saved.openingBalance;
+    if (previousClosing) return previousClosing.cashInHand;
+    return 0;
+  }, [customOpening, saved, previousClosing]);
 
   const totals = useMemo(() => {
     let cash = 0;
@@ -171,28 +192,47 @@ export default function DailyClosingPage() {
 
     const amad = dayPayments.reduce((sum, p) => sum + p.amount, 0);
     const amadCash = dayPayments.filter((p) => p.method === "Cash").reduce((sum, p) => sum + p.amount, 0);
+    const amadBank = dayPayments.filter((p) => p.method !== "Cash").reduce((sum, p) => sum + p.amount, 0);
+
     const jamad = daySupplierPayments.reduce((sum, p) => sum + p.amount, 0);
     const jamadCash = daySupplierPayments.filter((p) => p.method === "Cash").reduce((sum, p) => sum + p.amount, 0);
+    const jamadBank = daySupplierPayments.filter((p) => p.method !== "Cash").reduce((sum, p) => sum + p.amount, 0);
+
     const expenseSum = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    const todayCashNet = cash + amadCash - jamadCash - expenseSum;
+    const cashInHand = openingBalance + todayCashNet;
+    const totalBankInflow = bank + amadBank;
+    const netBank = totalBankInflow - jamadBank;
+    const grandTotal = cashInHand + netBank;
+
     return {
       salesTotal: cash + bank + udhar,
       cash,
       bank,
+      totalBankInflow,
+      netBank,
       udhar,
       amad,
+      amadCash,
+      amadBank,
       jamad,
+      jamadCash,
+      jamadBank,
       expenses: expenseSum,
-      cashInHand: cash + amadCash - jamadCash - expenseSum,
+      openingBalance,
+      todayCashNet,
+      cashInHand,
+      grandTotal,
     };
-  }, [sales, dayPayments, daySupplierPayments, expenses]);
+  }, [sales, dayPayments, daySupplierPayments, expenses, openingBalance]);
 
-  const saved = useMemo(() => dayClosings.find((c) => c.date === date) ?? null, [dayClosings, date]);
   const changedAfterClose =
     !!saved &&
     (Math.abs(saved.salesTotal - totals.salesTotal) > 0.5 ||
       Math.abs(saved.amad - totals.amad) > 0.5 ||
       Math.abs(saved.jamad - totals.jamad) > 0.5 ||
-      Math.abs(saved.expenses - totals.expenses) > 0.5);
+      Math.abs(saved.expenses - totals.expenses) > 0.5 ||
+      Math.abs((saved.openingBalance ?? 0) - totals.openingBalance) > 0.5);
 
   const handleClose = async () => {
     if (!ownerId) return;
@@ -208,6 +248,7 @@ export default function DailyClosingPage() {
         amad: totals.amad,
         jamad: totals.jamad,
         expenses: totals.expenses,
+        openingBalance: totals.openingBalance,
         cashInHand: totals.cashInHand,
       });
       setDayClosings((prev) => [record, ...prev.filter((c) => c.date !== date)].sort((a, b) => b.date.localeCompare(a.date)));
@@ -363,15 +404,100 @@ export default function DailyClosingPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard title={t("totalSales")} value={formatMoney(totals.salesTotal)} subtitle={t("closing_billsCount", { count: sales.length })} icon={ReceiptText} theme="blue" isPrivate loading={loading} />
-        <StatCard title={t("cash")} value={formatMoney(totals.cash)} subtitle={t("closing_cashSales")} icon={Banknote} theme="green" isPrivate loading={loading} />
-        <StatCard title={t("bankOnline")} value={formatMoney(totals.bank)} subtitle={t("closing_bankSales")} icon={CreditCard} theme="cyan" isPrivate loading={loading} />
-        <StatCard title={t("closing_credit")} value={formatMoney(totals.udhar)} subtitle={t("closing_creditGiven")} icon={HandCoins} theme="amber" isPrivate loading={loading} />
-        <StatCard title={t("closing_received")} value={formatMoney(totals.amad)} subtitle={t("closing_receivedHint")} icon={ArrowDownLeft} theme="green" isPrivate loading={loading} />
-        <StatCard title={t("closing_paidOut")} value={formatMoney(totals.jamad)} subtitle={t("closing_paidOutHint")} icon={ArrowUpRight} theme="red" isPrivate loading={loading} />
-        <StatCard title={t("expenses")} value={formatMoney(totals.expenses)} subtitle={t("closing_expensesToday")} icon={Wallet} theme="orange" isPrivate loading={loading} />
-        <StatCard title={t("closing_cashInHand")} value={signed(totals.cashInHand)} subtitle={t("closing_cashFormula")} icon={Wallet} theme="purple" isPrivate loading={loading} />
+      <div className="space-y-4">
+        {/* Row 1: Daily Sales & Inflow */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard title={t("totalSales")} value={formatMoney(totals.salesTotal)} subtitle={t("closing_billsCount", { count: sales.length })} icon={ReceiptText} theme="blue" isPrivate loading={loading} />
+          <StatCard title={t("cash")} value={formatMoney(totals.cash)} subtitle={t("closing_cashSales")} icon={Banknote} theme="green" isPrivate loading={loading} />
+          <StatCard
+            title={t("bankOnline")}
+            value={formatMoney(totals.totalBankInflow)}
+            subtitle={
+              totals.amadBank > 0
+                ? t("closing_bankInflow", { sales: formatMoney(totals.bank), rec: formatMoney(totals.amadBank) })
+                : t("closing_bankSales")
+            }
+            icon={CreditCard}
+            theme="cyan"
+            isPrivate
+            loading={loading}
+          />
+          <StatCard title={t("closing_credit")} value={formatMoney(totals.udhar)} subtitle={t("closing_creditGiven")} icon={HandCoins} theme="amber" isPrivate loading={loading} />
+        </div>
+
+        {/* Row 2: Cash In Hand & Drawer Flow */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <StatCard
+            title={t("closing_openingBalance")}
+            value={formatMoney(totals.openingBalance)}
+            subtitle={
+              customOpening !== null
+                ? t("closing_openingManualHint")
+                : previousClosing
+                  ? t("closing_openingHint")
+                  : "Starting Cash"
+            }
+            icon={Vault}
+            theme="indigo"
+            isPrivate
+            loading={loading}
+            action={
+              <button
+                type="button"
+                onClick={() => {
+                  setOpeningInput(String(totals.openingBalance));
+                  setEditOpeningOpen(true);
+                }}
+                className="rounded-lg p-1 text-indigo-600 transition hover:bg-indigo-50 hover:text-indigo-800"
+                title={t("closing_editOpeningTitle")}
+              >
+                <Pencil size={15} />
+              </button>
+            }
+          />
+          <StatCard
+            title={t("closing_received")}
+            value={formatMoney(totals.amad)}
+            subtitle={
+              totals.amadBank > 0
+                ? t("closing_receivedBreakdown", { cash: formatMoney(totals.amadCash), bank: formatMoney(totals.amadBank) })
+                : t("closing_receivedHint")
+            }
+            icon={ArrowDownLeft}
+            theme="green"
+            isPrivate
+            loading={loading}
+          />
+          <StatCard
+            title={t("closing_paidOut")}
+            value={formatMoney(totals.jamad)}
+            subtitle={
+              totals.jamadBank > 0
+                ? t("closing_paidBreakdown", { cash: formatMoney(totals.jamadCash), bank: formatMoney(totals.jamadBank) })
+                : t("closing_paidOutHint")
+            }
+            icon={ArrowUpRight}
+            theme="red"
+            isPrivate
+            loading={loading}
+          />
+          <StatCard title={t("expenses")} value={formatMoney(totals.expenses)} subtitle={t("closing_expensesToday")} icon={Wallet} theme="orange" isPrivate loading={loading} />
+          <StatCard
+            title={t("closing_cashInHand")}
+            value={signed(totals.cashInHand)}
+            subtitle={
+              totals.openingBalance > 0
+                ? t("closing_cashFormulaWithOpening")
+                : totals.amadBank > 0 || totals.bank > 0
+                  ? t("closing_totalDaily", { total: formatMoney(totals.grandTotal) })
+                  : t("closing_cashFormula")
+            }
+            icon={Wallet}
+            theme="purple"
+            isPrivate
+            loading={loading}
+          />
+        </div>
       </div>
 
       <div>
@@ -536,12 +662,82 @@ export default function DailyClosingPage() {
 
           { key: "bills", header: t("closing_colBills"), align: "right", cell: (c) => <span className="tabular">{c.invoiceCount}</span> },
           { key: "sales", header: t("closing_colSales"), align: "right", cell: (c) => <span className="tabular font-bold">{formatMoney(c.salesTotal)}</span> },
+          {
+            key: "opening",
+            header: t("closing_openingBalance"),
+            align: "right",
+            cell: (c) => <span className="tabular font-semibold text-indigo-600">{formatMoney(c.openingBalance ?? 0)}</span>,
+          },
           { key: "amad", header: t("closing_received"), align: "right", cell: (c) => <span className="tabular text-emerald-600">{formatMoney(c.amad)}</span> },
           { key: "jamad", header: t("closing_paidOut"), align: "right", cell: (c) => <span className="tabular text-red-600">{formatMoney(c.jamad)}</span> },
           { key: "exp", header: t("expenses"), align: "right", cell: (c) => <span className="tabular">{formatMoney(c.expenses)}</span> },
           { key: "cih", header: t("closing_cashInHand"), align: "right", cell: (c) => <span className="tabular font-extrabold text-stone-900">{signed(c.cashInHand)}</span> },
         ]}
       />
+
+      {editOpeningOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-stone-200">
+            <h3 className="text-lg font-bold text-stone-900">{t("closing_editOpeningTitle")}</h3>
+            <p className="mt-1 text-xs text-stone-500 leading-relaxed">{t("closing_editOpeningMsg")}</p>
+
+            <div className="mt-4">
+              <label className="text-xs font-semibold text-stone-700">{t("closing_openingBalance")} (Rs.)</label>
+              <input
+                type="number"
+                autoFocus
+                min={0}
+                value={openingInput}
+                onChange={(e) => setOpeningInput(e.target.value)}
+                className="input-field mt-1.5 w-full text-lg font-bold"
+                placeholder="0"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const val = Math.max(0, Number(openingInput) || 0);
+                    setCustomOpening(val);
+                    setEditOpeningOpen(false);
+                    toast.success(t("closing_openingUpdated"));
+                  }
+                }}
+              />
+            </div>
+
+            {previousClosing && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpeningInput(String(previousClosing.cashInHand));
+                }}
+                className="mt-2 text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline inline-block"
+              >
+                {t("closing_resetToPrev", { amount: formatMoney(previousClosing.cashInHand) })}
+              </button>
+            )}
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setEditOpeningOpen(false)}
+                className="btn-secondary"
+              >
+                {t("cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const val = Math.max(0, Number(openingInput) || 0);
+                  setCustomOpening(val);
+                  setEditOpeningOpen(false);
+                  toast.success(t("closing_openingUpdated"));
+                }}
+                className="btn-primary"
+              >
+                {t("save")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ChooseCustomerModal
         open={!!partyForSale}

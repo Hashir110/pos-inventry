@@ -144,6 +144,8 @@ export const addSupplierPurchase = async (
       productId?: string;
       productName: string;
       qty: number;
+      weight?: number;
+      totalWeight?: number;
       buyingPrice: number;
       destination?: "gudam" | "shop";
       destinationLocation?: "gudam" | "shop";

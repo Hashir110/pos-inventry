@@ -166,6 +166,7 @@ export interface PendingDayClosing {
   amad: number;
   jamad: number;
   expenses: number;
+  openingBalance?: number;
   cashInHand: number;
   closedAt: string;
   isOffline: true;

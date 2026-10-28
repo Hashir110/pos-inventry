@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-toastify";
 import DataTable from "../../components/DataTable";
+import HiddenAmount from "../../components/HiddenAmount";
 
 export default function SuppliersPage() {
   const { currentShop } = useStore();
@@ -59,6 +60,8 @@ export default function SuppliersPage() {
   const [purchaseSupId, setPurchaseSupId] = useState("");
   const [purchaseProdId, setPurchaseProdId] = useState("");
   const [purchaseQty, setPurchaseQty] = useState<number | "">(1);
+  const [purchaseWeight, setPurchaseWeight] = useState<number | "">(25);
+  const [isManualWeight, setIsManualWeight] = useState(false);
   const [purchaseBuyingPrice, setPurchaseBuyingPrice] = useState<number | "">("");
   const [purchaseDestination, setPurchaseDestination] = useState<"gudam" | "shop">("gudam");
   const [purchasePaidAmount, setPurchasePaidAmount] = useState<number | "">("");
@@ -107,6 +110,49 @@ export default function SuppliersPage() {
   }, [ownerId]);
 
   const totalSupplierPayable = suppliers.reduce((sum, s) => sum + (s.balance || 0), 0);
+
+  const selectedPurchaseProduct = products.find((p) => p.id === purchaseProdId);
+  const isPurchaseWeight = selectedPurchaseProduct?.unitType === "weight";
+  const purchaseBagWeight = (selectedPurchaseProduct as any)?.weightPerBag || 25;
+
+  const currentPurchaseWeight = isPurchaseWeight
+    ? (typeof purchaseWeight === "number" ? purchaseWeight : (Number(purchaseQty) || 0) * purchaseBagWeight)
+    : 0;
+
+  const currentPurchaseTotalBill = isPurchaseWeight
+    ? currentPurchaseWeight * (Number(purchaseBuyingPrice) || 0)
+    : (Number(purchaseQty) || 0) * (Number(purchaseBuyingPrice) || 0);
+
+  const handlePurchaseQtyChange = (val: string) => {
+    if (val === "") {
+      setPurchaseQty("");
+      if (!isManualWeight && isPurchaseWeight) {
+        setPurchaseWeight("");
+      }
+      return;
+    }
+    const num = Number(val);
+    setPurchaseQty(num);
+    if (!isManualWeight && isPurchaseWeight) {
+      setPurchaseWeight(num * purchaseBagWeight);
+    }
+  };
+
+  const handlePurchaseWeightChange = (val: string) => {
+    if (val === "") {
+      setPurchaseWeight("");
+      setIsManualWeight(true);
+      return;
+    }
+    setPurchaseWeight(Number(val));
+    setIsManualWeight(true);
+  };
+
+  const resetWeightToAuto = () => {
+    const q = typeof purchaseQty === "number" ? purchaseQty : 1;
+    setPurchaseWeight(q * purchaseBagWeight);
+    setIsManualWeight(false);
+  };
 
   const handleAddSupplierSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -197,8 +243,18 @@ export default function SuppliersPage() {
     if (!prod || !sup) return;
 
     const isWeight = prod.unitType === "weight";
+    const bagWeight = (prod as any)?.weightPerBag || 25;
+    const finalWeight = isWeight
+      ? (typeof purchaseWeight === "number" ? purchaseWeight : Number(purchaseQty) * bagWeight)
+      : undefined;
+
+    if (isWeight && (!finalWeight || finalWeight <= 0)) {
+      toast.warn(t("suppliers_warn_weight"));
+      return;
+    }
+
     const totalBill = isWeight
-      ? Number(purchaseQty) * 25 * Number(purchaseBuyingPrice)
+      ? (finalWeight || 0) * Number(purchaseBuyingPrice)
       : Number(purchaseQty) * Number(purchaseBuyingPrice);
 
     if (Number(purchasePaidAmount) > totalBill) {
@@ -221,6 +277,8 @@ export default function SuppliersPage() {
             productId: prod.id,
             productName: prod.name,
             qty: Number(purchaseQty),
+            weight: finalWeight,
+            totalWeight: finalWeight,
             buyingPrice: Number(purchaseBuyingPrice),
             total: totalBill,
             destinationLocation: purchaseDestination,
@@ -243,6 +301,8 @@ export default function SuppliersPage() {
       setPurchaseSupId("");
       setPurchaseProdId("");
       setPurchaseQty(1);
+      setPurchaseWeight(25);
+      setIsManualWeight(false);
       setPurchaseBuyingPrice("");
       setPurchasePaidAmount("");
     } catch (err: any) {
@@ -355,9 +415,13 @@ export default function SuppliersPage() {
           </div>
           <div>
             <p className="text-xs text-stone-500 font-bold uppercase">{t("suppliers_total_payable")}</p>
-            <p className="text-xl font-black text-amber-900">
-              Rs. {totalSupplierPayable.toLocaleString()}
-            </p>
+            <div className="flex items-center gap-2">
+              <HiddenAmount
+                value={`Rs. ${totalSupplierPayable.toLocaleString()}`}
+                className="text-xl font-black text-amber-900"
+                iconSize={16}
+              />
+            </div>
             <p className="text-[11px] text-stone-400">{t("suppliers_total_payable_hint")}</p>
           </div>
         </div>
@@ -581,9 +645,24 @@ export default function SuppliersPage() {
                 <select
                   value={purchaseProdId}
                   onChange={(e) => {
-                    setPurchaseProdId(e.target.value);
-                    const pr = products.find((p) => p.id === e.target.value);
-                    if (pr) setPurchaseBuyingPrice(pr.buyingPrice ? pr.buyingPrice : "");
+                    const prodId = e.target.value;
+                    setPurchaseProdId(prodId);
+                    const pr = products.find((p) => p.id === prodId);
+                    if (pr) {
+                      setPurchaseBuyingPrice(pr.buyingPrice ? pr.buyingPrice : "");
+                      if (pr.unitType === "weight") {
+                        const bw = (pr as any).weightPerBag || 25;
+                        const q = typeof purchaseQty === "number" ? purchaseQty : 1;
+                        setPurchaseWeight(q * bw);
+                        setIsManualWeight(false);
+                      } else {
+                        setPurchaseWeight("");
+                        setIsManualWeight(false);
+                      }
+                    } else {
+                      setPurchaseWeight("");
+                      setIsManualWeight(false);
+                    }
                   }}
                   className="input-field"
                   required
@@ -597,47 +676,113 @@ export default function SuppliersPage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">
-                    {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" ? t("suppliers_label_qty_bags") : t("suppliers_label_qty_pcs")}
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="1"
-                    value={purchaseQty}
-                    onChange={(e) => setPurchaseQty(e.target.value === "" ? "" : Number(e.target.value))}
-                    className="input-field"
-                    required
-                  />
-                  {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
+              {isPurchaseWeight ? (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-stone-700 block mb-1">
+                      {t("suppliers_label_qty_bags")}
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="1"
+                      value={purchaseQty}
+                      onChange={(e) => handlePurchaseQtyChange(e.target.value)}
+                      className="input-field"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-stone-700">
+                        {t("suppliers_label_weight")}
+                      </label>
+                      {isManualWeight && (
+                        <button
+                          type="button"
+                          onClick={resetWeightToAuto}
+                          className="text-[10px] text-amber-600 hover:text-amber-800 font-semibold"
+                        >
+                          {t("suppliers_reset_weight", { perBag: purchaseBagWeight })}
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="any"
+                      placeholder={String((Number(purchaseQty) || 1) * purchaseBagWeight)}
+                      value={purchaseWeight}
+                      onChange={(e) => handlePurchaseWeightChange(e.target.value)}
+                      className={`input-field ${isManualWeight ? "border-amber-400 bg-amber-50/50" : ""}`}
+                      required
+                    />
                     <p className="text-[10px] text-stone-500 mt-1 font-medium">
-                      {t("suppliers_weight_line", { weight: (Number(purchaseQty) || 1) * 25 })}
+                      {isManualWeight
+                        ? t("suppliers_weight_manual_hint", { weight: currentPurchaseWeight })
+                        : t("suppliers_weight_auto_hint", {
+                            weight: currentPurchaseWeight,
+                            perBag: purchaseBagWeight,
+                          })}
                     </p>
-                  )}
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">
-                    {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" ? t("suppliers_label_rate_kg") : t("suppliers_label_rate_pc")}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    placeholder="0"
-                    value={purchaseBuyingPrice}
-                    onChange={(e) => setPurchaseBuyingPrice(e.target.value === "" ? "" : Number(e.target.value))}
-                    className="input-field"
-                    required
-                  />
-                  {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-stone-700 block mb-1">
+                      {t("suppliers_label_rate_kg")}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="0"
+                      value={purchaseBuyingPrice}
+                      onChange={(e) => setPurchaseBuyingPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                      className="input-field"
+                      required
+                    />
                     <p className="text-[10px] text-stone-500 mt-1 font-medium">
-                      {t("suppliers_per_bag", { amount: ((Number(purchaseBuyingPrice) || 0) * 25).toLocaleString() })}
+                      {t("suppliers_per_bag", {
+                        amount: (
+                          (Number(purchaseBuyingPrice) || 0) *
+                          ((Number(purchaseQty) || 1) > 0 ? currentPurchaseWeight / (Number(purchaseQty) || 1) : purchaseBagWeight)
+                        ).toLocaleString(undefined, { maximumFractionDigits: 1 }),
+                      })}
                     </p>
-                  )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-stone-700 block mb-1">
+                      {t("suppliers_label_qty_pcs")}
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="1"
+                      value={purchaseQty}
+                      onChange={(e) => setPurchaseQty(e.target.value === "" ? "" : Number(e.target.value))}
+                      className="input-field"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-stone-700 block mb-1">
+                      {t("suppliers_label_rate_pc")}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="0"
+                      value={purchaseBuyingPrice}
+                      onChange={(e) => setPurchaseBuyingPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                      className="input-field"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -673,25 +818,29 @@ export default function SuppliersPage() {
               <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs flex justify-between font-bold items-center">
                 <span>
                   {t("suppliers_total_bill")}
-                  {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
+                  {isPurchaseWeight && (
                     <span className="text-[11px] text-stone-500 font-normal ml-1">
-                      ({(Number(purchaseQty) || 1) * 25} kg × Rs. {Number(purchaseBuyingPrice) || 0})
+                      ({currentPurchaseWeight} kg × Rs. {Number(purchaseBuyingPrice) || 0})
                     </span>
                   )}
                 </span>
                 <span className="text-amber-900 font-extrabold text-sm">
-                  Rs. {(
-                    products.find((p) => p.id === purchaseProdId)?.unitType === "weight"
-                      ? (Number(purchaseQty) || 1) * 25 * (Number(purchaseBuyingPrice) || 0)
-                      : (Number(purchaseQty) || 1) * (Number(purchaseBuyingPrice) || 0)
-                  ).toLocaleString()}
+                  Rs. {currentPurchaseTotalBill.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </span>
               </div>
 
               <div className="pt-2 flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowPurchaseModal(false)}
+                  onClick={() => {
+                    setShowPurchaseModal(false);
+                    setPurchaseProdId("");
+                    setPurchaseQty(1);
+                    setPurchaseWeight(25);
+                    setIsManualWeight(false);
+                    setPurchaseBuyingPrice("");
+                    setPurchasePaidAmount("");
+                  }}
                   className="btn-ghost flex-1 text-xs"
                 >
                   {t("cancel")}
@@ -877,7 +1026,9 @@ export default function SuppliersPage() {
                           <p className="font-bold text-stone-900">
                             {pur.items
                               .map((i) =>
-                                t("suppliers_history_item", { name: i.productName, qty: i.qty, price: i.buyingPrice })
+                                (i as any).totalWeight || (i as any).weight
+                                  ? `${i.productName} (${i.qty} Bags • ${(i as any).totalWeight || (i as any).weight} kg @ Rs. ${i.buyingPrice})`
+                                  : t("suppliers_history_item", { name: i.productName, qty: i.qty, price: i.buyingPrice })
                               )
                               .join(", ")}
                           </p>

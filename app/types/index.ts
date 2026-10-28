@@ -64,6 +64,7 @@ export interface Product {
   gudamStock?: number;
   shopStock?: number;
   unitType: UnitType;
+  weightPerBag?: number;
   category?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -200,6 +201,8 @@ export interface SupplierPurchase {
     productId?: string;
     productName: string;
     qty: number;
+    weight?: number;
+    totalWeight?: number;
     buyingPrice: number;
     total: number;
     destinationLocation: "gudam" | "shop";
@@ -234,6 +237,7 @@ export interface DayClosing {
   amad: number;
   jamad: number;
   expenses: number;
+  openingBalance?: number;
   cashInHand: number;
   closedAt: string;
 }

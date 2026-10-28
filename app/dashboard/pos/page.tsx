@@ -161,7 +161,7 @@ export default function POSPage() {
     const addToCart = (product: Product, bagsQty = 1) => {
         const finalPrice = product.sellingPrice;
         const isWeight = product.unitType === "weight";
-        const bagWeight = 25;
+        const bagWeight = product.weightPerBag || 25;
         const totalWeight = isWeight ? bagsQty * bagWeight : undefined;
         const lineGross = isWeight ? (totalWeight! * finalPrice) : (bagsQty * finalPrice);
 

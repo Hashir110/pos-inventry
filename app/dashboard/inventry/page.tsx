@@ -215,7 +215,11 @@ export default function InventoryList() {
                   item.unitType === "weight" ? "bg-orange-100 text-orange-800" : "bg-sky-100 text-sky-800"
                 }`}
               >
-                {item.unitType === "weight" ? t("inv_typeWeight") : t("inv_typeCount")}
+                {item.unitType === "weight"
+                  ? item.weightPerBag === 50
+                    ? t("inv_typeWeight50")
+                    : t("inv_typeWeight")
+                  : t("inv_typeCount")}
               </span>
             ),
           },

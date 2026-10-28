@@ -28,6 +28,7 @@ export interface ProductInput {
   gudamStock?: number;
   shopStock?: number;
   unitType: UnitType;
+  weightPerBag?: number;
   category?: string;
 }
 

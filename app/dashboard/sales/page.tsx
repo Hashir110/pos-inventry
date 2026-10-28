@@ -239,7 +239,7 @@ export default function SalesHistoryPage() {
             if (i !== index) return d;
             const isWeight = prod.unitType === "weight";
             const qtyNum = parseFloat(d.qty) || 1;
-            const bagWeight = 25;
+            const bagWeight = (prod as any).weightPerBag || 25;
             return {
               ...d,
               productId: prod.id,
@@ -289,7 +289,7 @@ export default function SalesHistoryPage() {
     const existingIds = new Set(draft?.map((d) => d.productId) || []);
     const prod = products.find((p) => !existingIds.has(p.id)) || products[0];
     const isWeight = prod.unitType === "weight";
-    const bagWeight = 25;
+    const bagWeight = (prod as any).weightPerBag || 25;
     const newItem: ItemDraft = {
       id: `new_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       productId: prod.id,

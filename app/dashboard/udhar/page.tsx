@@ -147,7 +147,7 @@ export default function UdharPage() {
               <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
               <span className="hidden sm:inline">Refresh</span>
             </button>
-            <SummaryBox label={t("totalReceivable")} value={formatMoney(totalOutstanding)} tone="amber" />
+            <SummaryBox label={t("totalReceivable")} value={formatMoney(totalOutstanding)} tone="amber" isPrivate />
             <SummaryBox label={t("customersCount")} value={debtors} />
           </div>
         }
