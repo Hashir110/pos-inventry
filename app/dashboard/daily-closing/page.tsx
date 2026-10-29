@@ -21,9 +21,9 @@ import { listSalesInRange, updateSalePayment } from "../../lib/services/sales";
 import { listExpensesInRange } from "../../lib/services/expenses";
 import { listCustomers, listAllPayments, receivePayment } from "../../lib/services/customers";
 import { addSupplierPayment, listSuppliers, listSupplierPayments } from "../../lib/services/suppliers";
-import { listDayClosings, saveDayClosing } from "../../lib/services/dailyClosing";
+import { deleteDayOpening, listDayClosings, listDayOpenings, saveDayClosing, saveDayOpening } from "../../lib/services/dailyClosing";
 import { listBankAccounts } from "../../lib/services/banks";
-import type { BankAccount, Customer, CustomerPayment, DayClosing, Expense, PaymentMethod, Sale, Supplier, SupplierPayment } from "../../types";
+import type { BankAccount, Customer, CustomerPayment, DayClosing, DayOpening, Expense, PaymentMethod, Sale, Supplier, SupplierPayment } from "../../types";
 
 type Kind = "amad" | "jamad";
 
@@ -88,12 +88,14 @@ export default function DailyClosingPage() {
   const [payments, setPayments] = useState<CustomerPayment[]>([]);
   const [supplierPayments, setSupplierPayments] = useState<SupplierPayment[]>([]);
   const [dayClosings, setDayClosings] = useState<DayClosing[]>([]);
+  const [dayOpenings, setDayOpenings] = useState<DayOpening[]>([]);
   const [banks, setBanks] = useState<BankAccount[]>([]);
   const [editSale, setEditSale] = useState<Sale | null>(null);
   const [partyForSale, setPartyForSale] = useState<Sale | null>(null);
   const [customOpening, setCustomOpening] = useState<number | null>(null);
   const [editOpeningOpen, setEditOpeningOpen] = useState(false);
   const [openingInput, setOpeningInput] = useState("");
+  const [savingOpening, setSavingOpening] = useState(false);
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -114,6 +116,7 @@ export default function DailyClosingPage() {
       tr("closing_src_supplierPayments"),
       tr("closing_src_closings"),
       tr("shell_navBanks"),
+      "Openings",
     ];
     const results = await Promise.allSettled([
       listSalesInRange(ownerId, startIso, endIso, force).then(setSales),
@@ -124,6 +127,7 @@ export default function DailyClosingPage() {
       listSupplierPayments(ownerId, force).then(setSupplierPayments),
       listDayClosings(ownerId, force).then(setDayClosings),
       listBankAccounts(ownerId, force).then(setBanks),
+      listDayOpenings(ownerId, force).then(setDayOpenings),
     ]);
     const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
     results.forEach((r, i) => {
@@ -177,12 +181,18 @@ export default function DailyClosingPage() {
 
   const saved = useMemo(() => dayClosings.find((c) => c.date === date) ?? null, [dayClosings, date]);
 
+  const currentDayOpening = useMemo(() => {
+    const found = dayOpenings.find((o) => o.date === date);
+    return found ? found.amount : null;
+  }, [dayOpenings, date]);
+
   const openingBalance = useMemo(() => {
     if (customOpening !== null) return customOpening;
+    if (currentDayOpening !== null) return currentDayOpening;
     if (saved?.openingBalance !== undefined) return saved.openingBalance;
     if (previousClosing) return previousClosing.cashInHand;
     return 0;
-  }, [customOpening, saved, previousClosing]);
+  }, [customOpening, currentDayOpening, saved, previousClosing]);
 
   const totals = useMemo(() => {
     let cash = 0;
@@ -252,6 +262,79 @@ export default function DailyClosingPage() {
       Math.abs(saved.expenses - totals.expenses) > 0.5 ||
       Math.abs((saved.openingBalance ?? 0) - totals.openingBalance) > 0.5);
 
+  const handleSaveOpening = async (val: number) => {
+    if (!ownerId) return;
+    setSavingOpening(true);
+    try {
+      const record = await saveDayOpening(ownerId, date, val);
+      setDayOpenings((prev) => [record, ...prev.filter((o) => o.date !== date)]);
+      setCustomOpening(val);
+
+      if (saved) {
+        const netCash = totals.todayCashNet;
+        const updatedClosing = await saveDayClosing(ownerId, {
+          date,
+          invoiceCount: sales.length,
+          salesTotal: totals.salesTotal,
+          cash: totals.cash,
+          bank: totals.bank,
+          udhar: totals.udhar,
+          amad: totals.amad,
+          jamad: totals.jamad,
+          expenses: totals.expenses,
+          openingBalance: val,
+          cashInHand: val + netCash,
+        });
+        setDayClosings((prev) => [updatedClosing, ...prev.filter((c) => c.date !== date)].sort((a, b) => b.date.localeCompare(a.date)));
+      }
+
+      setEditOpeningOpen(false);
+      toast.success(t("closing_openingUpdated"));
+    } catch (error) {
+      console.error("Failed to save opening balance:", error);
+      toast.error(t("closing_saveFailed"));
+    } finally {
+      setSavingOpening(false);
+    }
+  };
+
+  const handleResetOpening = async () => {
+    if (!ownerId) return;
+    setSavingOpening(true);
+    try {
+      await deleteDayOpening(ownerId, date);
+      setDayOpenings((prev) => prev.filter((o) => o.date !== date));
+      setCustomOpening(null);
+
+      const defaultOpening = previousClosing ? previousClosing.cashInHand : 0;
+      if (saved) {
+        const netCash = totals.todayCashNet;
+        const updatedClosing = await saveDayClosing(ownerId, {
+          date,
+          invoiceCount: sales.length,
+          salesTotal: totals.salesTotal,
+          cash: totals.cash,
+          bank: totals.bank,
+          udhar: totals.udhar,
+          amad: totals.amad,
+          jamad: totals.jamad,
+          expenses: totals.expenses,
+          openingBalance: defaultOpening,
+          cashInHand: defaultOpening + netCash,
+        });
+        setDayClosings((prev) => [updatedClosing, ...prev.filter((c) => c.date !== date)].sort((a, b) => b.date.localeCompare(a.date)));
+      }
+
+      setEditOpeningOpen(false);
+      toast.success(t("closing_openingUpdated"));
+    } catch (error) {
+      console.error("Failed to reset opening balance:", error);
+      toast.error(t("closing_saveFailed"));
+    } finally {
+      setSavingOpening(false);
+    }
+  };
+
   const handleClose = async () => {
     if (!ownerId) return;
     setClosing(true);
@@ -269,6 +352,9 @@ export default function DailyClosingPage() {
         openingBalance: totals.openingBalance,
         cashInHand: totals.cashInHand,
       });
+      if (customOpening !== null) {
+        await saveDayOpening(ownerId, date, customOpening);
+      }
       setDayClosings((prev) => [record, ...prev.filter((c) => c.date !== date)].sort((a, b) => b.date.localeCompare(a.date)));
       toast.success(
         (record as any).isOffline
@@ -449,7 +535,7 @@ export default function DailyClosingPage() {
             title={t("closing_openingBalance")}
             value={formatMoney(totals.openingBalance)}
             subtitle={
-              customOpening !== null
+              customOpening !== null || currentDayOpening !== null
                 ? t("closing_openingManualHint")
                 : previousClosing
                   ? t("closing_openingHint")
@@ -703,37 +789,50 @@ export default function DailyClosingPage() {
               <input
                 type="number"
                 autoFocus
+                disabled={savingOpening}
                 min={0}
                 value={openingInput}
                 onChange={(e) => setOpeningInput(e.target.value)}
                 className="input-field mt-1.5 w-full text-lg font-bold"
                 placeholder="0"
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
+                  if (e.key === "Enter" && !savingOpening) {
                     const val = Math.max(0, Number(openingInput) || 0);
-                    setCustomOpening(val);
-                    setEditOpeningOpen(false);
-                    toast.success(t("closing_openingUpdated"));
+                    handleSaveOpening(val);
                   }
                 }}
               />
             </div>
 
-            {previousClosing && (
-              <button
-                type="button"
-                onClick={() => {
-                  setOpeningInput(String(previousClosing.cashInHand));
-                }}
-                className="mt-2 text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline inline-block"
-              >
-                {t("closing_resetToPrev", { amount: formatMoney(previousClosing.cashInHand) })}
-              </button>
-            )}
+            <div className="mt-3 flex flex-col gap-1.5">
+              {previousClosing && (
+                <button
+                  type="button"
+                  disabled={savingOpening}
+                  onClick={() => {
+                    setOpeningInput(String(previousClosing.cashInHand));
+                  }}
+                  className="text-left text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline inline-block"
+                >
+                  {t("closing_resetToPrev", { amount: formatMoney(previousClosing.cashInHand) })}
+                </button>
+              )}
+              {(customOpening !== null || currentDayOpening !== null) && (
+                <button
+                  type="button"
+                  disabled={savingOpening}
+                  onClick={handleResetOpening}
+                  className="text-left text-xs font-semibold text-amber-700 hover:text-amber-800 hover:underline inline-block"
+                >
+                  Reset manual override
+                </button>
+              )}
+            </div>
 
             <div className="mt-6 flex justify-end gap-2">
               <button
                 type="button"
+                disabled={savingOpening}
                 onClick={() => setEditOpeningOpen(false)}
                 className="btn-secondary"
               >
@@ -741,14 +840,14 @@ export default function DailyClosingPage() {
               </button>
               <button
                 type="button"
+                disabled={savingOpening}
                 onClick={() => {
                   const val = Math.max(0, Number(openingInput) || 0);
-                  setCustomOpening(val);
-                  setEditOpeningOpen(false);
-                  toast.success(t("closing_openingUpdated"));
+                  handleSaveOpening(val);
                 }}
-                className="btn-primary"
+                className="btn-primary flex items-center gap-1.5"
               >
+                {savingOpening && <Loader2 className="animate-spin" size={14} />}
                 {t("save")}
               </button>
             </div>

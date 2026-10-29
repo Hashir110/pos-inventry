@@ -5,7 +5,7 @@ import { useStore } from "../store/useStore";
 import { auth } from "../lib/firebase";
 import { syncPendingSales } from "../lib/services/sales";
 import { syncPendingGatePasses } from "../lib/services/gatePasses";
-import { syncPendingDayClosings } from "../lib/services/dailyClosing";
+import { syncPendingDayClosings, syncPendingDayOpenings } from "../lib/services/dailyClosing";
 import { getTotalPendingCount } from "../lib/services/offlineStorage";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
 import { getUserShopProfile } from "../lib/authService";
@@ -135,6 +135,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             const uploadedClosings = await syncPendingDayClosings(() => setPendingCount(getTotalPendingCount()));
             totalUploaded += uploadedClosings;
+
+            const uploadedOpenings = await syncPendingDayOpenings(() => setPendingCount(getTotalPendingCount()));
+            totalUploaded += uploadedOpenings;
 
             if (totalUploaded > 0) {
                 toast.success(t("shell_offlineSynced", { count: totalUploaded }));

@@ -242,6 +242,14 @@ export interface DayClosing {
   closedAt: string;
 }
 
+export interface DayOpening {
+  id: string;
+  ownerId: string;
+  date: string;
+  amount: number;
+  updatedAt: string;
+}
+
 export interface Transport {
   id: string;
   ownerId: string;

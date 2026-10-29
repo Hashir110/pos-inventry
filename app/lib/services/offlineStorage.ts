@@ -81,6 +81,7 @@ export const cacheKeys = {
   sales: (ownerId: string) => `cache_sales_${ownerId}`,
   gatePasses: (ownerId: string) => `cache_gate_passes_${ownerId}`,
   dayClosings: (ownerId: string) => `cache_day_closings_${ownerId}`,
+  dayOpenings: (ownerId: string) => `cache_day_openings_${ownerId}`,
   expenses: (ownerId: string) => `cache_expenses_${ownerId}`,
   transports: (ownerId: string) => `cache_transports_${ownerId}`,
   banks: (ownerId: string) => `cache_banks_${ownerId}`,
@@ -97,6 +98,7 @@ import type { PendingSale, GatePass, DayClosing } from "../../types";
 const PENDING_SALES_KEY = "pendingSales";
 const PENDING_GATE_PASSES_KEY = "pendingGatePasses";
 const PENDING_DAY_CLOSINGS_KEY = "pendingDayClosings";
+const PENDING_DAY_OPENINGS_KEY = "pendingDayOpenings";
 
 // 1. Sales Queue
 export const getPendingSales = (): PendingSale[] => {
@@ -186,7 +188,36 @@ export const savePendingDayClosings = (queue: PendingDayClosing[]) => {
   localStorage.setItem(PENDING_DAY_CLOSINGS_KEY, JSON.stringify(queue));
 };
 
+// 4. Day Openings Queue
+export interface PendingDayOpening {
+  tempId: string;
+  ownerId: string;
+  date: string;
+  amount: number;
+  updatedAt: string;
+  isOffline: true;
+}
+
+export const getPendingDayOpenings = (): PendingDayOpening[] => {
+  if (!isClient) return [];
+  try {
+    return JSON.parse(localStorage.getItem(PENDING_DAY_OPENINGS_KEY) || "[]");
+  } catch {
+    return [];
+  }
+};
+
+export const savePendingDayOpenings = (queue: PendingDayOpening[]) => {
+  if (!isClient) return;
+  localStorage.setItem(PENDING_DAY_OPENINGS_KEY, JSON.stringify(queue));
+};
+
 // Overall Pending Count
 export const getTotalPendingCount = (): number => {
-  return getPendingSales().length + getPendingGatePasses().length + getPendingDayClosings().length;
+  return (
+    getPendingSales().length +
+    getPendingGatePasses().length +
+    getPendingDayClosings().length +
+    getPendingDayOpenings().length
+  );
 };
