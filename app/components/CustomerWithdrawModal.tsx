@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowUpRight, Loader2, Printer, X, AlertCircle } from "lucide-react";
+import { ArrowUpRight, Loader2, X, AlertCircle } from "lucide-react";
 import { toast } from "react-toastify";
 import { useStore } from "../store/useStore";
 import { useLanguage } from "../store/useLanguage";
@@ -15,15 +15,6 @@ interface CustomerWithdrawModalProps {
   onSuccess: () => void;
 }
 
-interface WithdrawVoucherData {
-  invoiceNo: string;
-  customerName: string;
-  amount: number;
-  newBalance: number;
-  note?: string;
-  date: string;
-}
-
 export default function CustomerWithdrawModal({
   customer,
   onClose,
@@ -34,13 +25,11 @@ export default function CustomerWithdrawModal({
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [withdrawing, setWithdrawing] = useState(false);
-  const [voucher, setVoucher] = useState<WithdrawVoucherData | null>(null);
 
   useEffect(() => {
     if (customer) {
       setAmount("");
       setNote("");
-      setVoucher(null);
     }
   }, [customer]);
 
@@ -61,22 +50,15 @@ export default function CustomerWithdrawModal({
 
     setWithdrawing(true);
     try {
-      const res = await recordCustomerWithdrawal(
+      await recordCustomerWithdrawal(
         currentUser.uid,
         customer.id,
         amt,
         note
       );
       toast.success(t("credit_withdrawSuccess", { amount: amt.toLocaleString() }));
-      setVoucher({
-        invoiceNo: res.invoiceNo,
-        customerName: customer.name,
-        amount: amt,
-        newBalance: res.newBalance,
-        note: note.trim(),
-        date: res.date,
-      });
       onSuccess();
+      onClose();
     } catch (error) {
       console.error(error);
       toast.error(error instanceof Error ? error.message : t("credit_withdrawFailed"));
@@ -85,13 +67,7 @@ export default function CustomerWithdrawModal({
     }
   };
 
-  const handleVoucherClose = () => {
-    setVoucher(null);
-    onClose();
-  };
-
   return (
-    <>
       <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
         <form
           onSubmit={handleWithdraw}
@@ -212,85 +188,5 @@ export default function CustomerWithdrawModal({
           </div>
         </form>
       </div>
-
-      {voucher && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-2xl shadow-pop w-full max-w-sm overflow-hidden">
-            <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-amber-50">
-              <h3 className="font-extrabold text-amber-900 text-sm">
-                {t("credit_withdrawVoucher")}
-              </h3>
-              <button
-                onClick={handleVoucherClose}
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-200"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="p-6 text-center space-y-4" id="withdrawal-voucher">
-              <div className="border-b pb-3">
-                <h2 className="font-black text-lg text-stone-900 uppercase tracking-wide">
-                  {t("credit_withdrawReceiptTitle")}
-                </h2>
-                <p className="text-xs font-mono font-bold text-amber-800 mt-0.5">
-                  #{voucher.invoiceNo}
-                </p>
-                <p className="text-xs text-stone-500 font-semibold mt-1">
-                  {new Date(voucher.date).toLocaleString()}
-                </p>
-              </div>
-
-              <div className="space-y-2.5 text-left text-xs bg-stone-50 p-4 rounded-xl border border-stone-200">
-                <p className="flex justify-between">
-                  <span className="font-semibold text-stone-500">Party Name:</span>
-                  <b className="text-stone-900 text-sm">{voucher.customerName}</b>
-                </p>
-                <p className="flex justify-between">
-                  <span className="font-semibold text-stone-500">Amount Withdrawn:</span>
-                  <b className="text-amber-800 text-base">{formatMoney(voucher.amount)}</b>
-                </p>
-                <p className="flex justify-between">
-                  <span className="font-semibold text-stone-500">Type:</span>
-                  <b className="text-stone-800">Ledger Debit (Udhar)</b>
-                </p>
-                {voucher.note && (
-                  <p className="flex justify-between">
-                    <span className="font-semibold text-stone-500">Reason / Note:</span>
-                    <span className="text-stone-800">{voucher.note}</span>
-                  </p>
-                )}
-                <div className="border-t border-stone-200 pt-2 flex justify-between font-bold">
-                  <span className="text-stone-600">New Balance:</span>
-                  <span className={voucher.newBalance < 0 ? "text-emerald-700" : "text-stone-900"}>
-                    {voucher.newBalance < 0
-                      ? `Advance: ${formatMoney(Math.abs(voucher.newBalance))}`
-                      : formatMoney(voucher.newBalance)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={handleVoucherClose}
-                  className="btn-ghost flex-1 text-xs"
-                >
-                  {t("receivePay_close")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="btn-primary !bg-amber-600 hover:!bg-amber-700 flex-1 text-xs font-bold flex items-center justify-center gap-1.5"
-                >
-                  <Printer size={15} />
-                  <span>Print</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
   );
 }
