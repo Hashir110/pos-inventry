@@ -32,7 +32,8 @@ import {
     Eye,
     ClipboardCheck,
     Truck,
-    PiggyBank
+    PiggyBank,
+    TrendingUp
 } from "lucide-react";
 
 
@@ -278,6 +279,15 @@ export default function DashboardHome() {
                     loading={loading}
                 />
                 <StatCard
+                    title={t("netSales")}
+                    value={signedMoney(stats.totalSales - stats.totalExpenses)}
+                    subtitle={t("netSalesSubtitle")}
+                    isPrivate
+                    icon={TrendingUp}
+                    theme={stats.totalSales - stats.totalExpenses >= 0 ? "green" : "red"}
+                    loading={loading}
+                />
+                <StatCard
                     title={t("invoices")}
                     value={stats.totalInvoices}
                     subtitle={t("billsGenerated")}
@@ -299,11 +309,11 @@ export default function DashboardHome() {
                 />
                 <StatCard
                     title={t("dashboard_balance")}
-                    value={signedMoney(stats.totalSales - jamadRange)}
-                    subtitle={t("dashboard_balanceSubtitle")}
+                    value={signedMoney(stats.totalSales - stats.totalExpenses - jamadRange)}
+                    subtitle={`${t("totalSales")} − ${t("expenses")} − ${t("closing_paidOut")}`}
                     isPrivate
                     icon={Wallet}
-                    theme="green"
+                    theme={stats.totalSales - stats.totalExpenses - jamadRange >= 0 ? "green" : "red"}
                     loading={loading}
                 />
                 <StatCard

@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -22,6 +23,7 @@ export interface ExpenseInput {
   title: string;
   amount: number;
   category: string;
+  date?: string;
 }
 
 export const listExpenses = async (ownerId: string, forceRefresh = false): Promise<Expense[]> => {
@@ -38,10 +40,18 @@ export const listExpenses = async (ownerId: string, forceRefresh = false): Promi
   }
 
   try {
-    const snap = await getDocs(
-      query(collection(db, "expenses"), where("ownerId", "==", ownerId), orderBy("date", "desc"))
-    );
+    let snap;
+    try {
+      snap = await getDocs(
+        query(collection(db, "expenses"), where("ownerId", "==", ownerId), orderBy("date", "desc"))
+      );
+    } catch {
+      snap = await getDocs(
+        query(collection(db, "expenses"), where("ownerId", "==", ownerId))
+      );
+    }
     const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Expense);
+    items.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
     setCached(cacheKey, items);
     return items;
   } catch (err) {
@@ -69,6 +79,7 @@ export const subscribeExpenses = (
     query(collection(db, "expenses"), where("ownerId", "==", ownerId)),
     (snap) => {
       const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Expense);
+      items.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
       setCached(cacheKey, items);
       onData(items);
     }
@@ -117,31 +128,85 @@ export const listExpensesInRange = async (
 
 export const addExpense = async (ownerId: string, input: ExpenseInput): Promise<Expense> => {
   const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
-  const nowIso = new Date().toISOString();
+  
+  let dateIso = new Date().toISOString();
+  if (input.date) {
+    const parsed = new Date(input.date);
+    if (!isNaN(parsed.getTime())) {
+      if (input.date.length === 10) {
+        const now = new Date();
+        parsed.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+      }
+      dateIso = parsed.toISOString();
+    }
+  }
+
   let id = `local_exp_${Date.now()}`;
+  const payload = {
+    title: input.title,
+    amount: input.amount,
+    category: input.category,
+    date: dateIso,
+    ownerId,
+  };
 
   if (isOnline) {
-    const ref = await addDoc(collection(db, "expenses"), { ...input, ownerId, date: nowIso });
+    const ref = await addDoc(collection(db, "expenses"), payload);
     id = ref.id;
   }
 
-  const newExp: Expense = { id, ownerId, ...input, date: nowIso };
+  const newExp: Expense = { id, ...payload };
 
   // Update local cache
   const cacheKey = cacheKeys.expenses(ownerId);
   const current = getCachedEvenStale<Expense[]>(cacheKey) || [];
-  setCached(cacheKey, [newExp, ...current]);
+  setCached(cacheKey, [newExp, ...current.filter((e) => e.id !== id)]);
 
   return newExp;
 };
 
 export const deleteExpense = async (id: string, ownerId?: string): Promise<void> => {
-  await deleteDoc(doc(db, "expenses", id));
-  if (ownerId) {
-    const cacheKey = cacheKeys.expenses(ownerId);
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+  let resolvedOwnerId = ownerId;
+
+  const expenseRef = doc(db, "expenses", id);
+
+  if (!resolvedOwnerId && isOnline && !id.startsWith("local_exp_")) {
+    try {
+      const snap = await getDoc(expenseRef);
+      if (snap.exists()) {
+        resolvedOwnerId = snap.data().ownerId;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (isOnline && !id.startsWith("local_exp_")) {
+    await deleteDoc(expenseRef);
+  }
+
+  if (resolvedOwnerId) {
+    const cacheKey = cacheKeys.expenses(resolvedOwnerId);
     const current = getCachedEvenStale<Expense[]>(cacheKey);
     if (current) {
       setCached(cacheKey, current.filter((e) => e.id !== id));
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("cache_expenses_")) {
+          const current = getCachedEvenStale<Expense[]>(key);
+          if (current && current.some((e) => e.id === id)) {
+            setCached(key, current.filter((e) => e.id !== id));
+          }
+        }
+      }
+    } catch {
+      // ignore
     }
   }
 };

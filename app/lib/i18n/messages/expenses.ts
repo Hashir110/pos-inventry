@@ -1,6 +1,8 @@
 const en = {
   expenses_added: "Expense added",
   expenses_addFailed: "Failed to add expense",
+  expenses_deleted: "Expense deleted successfully",
+  expenses_deleteFailed: "Failed to delete expense",
   expenses_deleteTitle: "Delete expense?",
   expenses_deleteMessage: "This expense will be permanently removed.",
   expenses_catGeneral: "General",
@@ -8,11 +10,25 @@ const en = {
   expenses_catTransport: "Transport",
   expenses_catUtility: "Bills / Utilities",
   expenses_catSalary: "Salary / Wages",
+  dailyExpenses: "Daily Expenses",
+  todayExpenses: "Today's Expenses",
+  overallExpenses: "Overall Expenses",
+  todaySales: "Today's Total Sales",
+  netDailySales: "Net Daily Sales",
+  netDailySalesSubtitle: "Sales − Daily Expenses",
+  expenseDateLabel: "Expense Date",
+  filterAllExpenses: "All Time",
+  filterDailyExpenses: "Selected Date",
+  selectDate: "Date",
+  todayFilter: "Today",
+  allFilter: "All Time",
 };
 
 const ur: Record<keyof typeof en, string> = {
   expenses_added: "خرچہ شامل ہو گیا",
   expenses_addFailed: "خرچہ شامل نہیں ہو سکا",
+  expenses_deleted: "خرچہ کامیابی سے حذف کر دیا گیا",
+  expenses_deleteFailed: "خرچہ حذف کرنے میں ناکامی",
   expenses_deleteTitle: "خرچہ حذف کریں؟",
   expenses_deleteMessage: "یہ خرچہ ہمیشہ کے لیے حذف ہو جائے گا۔",
   expenses_catGeneral: "عمومی",
@@ -20,6 +36,18 @@ const ur: Record<keyof typeof en, string> = {
   expenses_catTransport: "ٹرانسپورٹ",
   expenses_catUtility: "بل / یوٹیلیٹی",
   expenses_catSalary: "تنخواہ / مزدوری",
+  dailyExpenses: "روزانہ کے اخراجات",
+  todayExpenses: "آج کے اخراجات",
+  overallExpenses: "کل اخراجات",
+  todaySales: "آج کی کل فروخت",
+  netDailySales: "آج کی صاف فروخت",
+  netDailySalesSubtitle: "کل فروخت منہا روزانہ اخراجات",
+  expenseDateLabel: "خرچے کی تاریخ",
+  filterAllExpenses: "ہر وقت",
+  filterDailyExpenses: "منتخب تاریخ",
+  selectDate: "تاریخ",
+  todayFilter: "آج",
+  allFilter: "سب",
 };
 
 export const expenses = { en, ur };
