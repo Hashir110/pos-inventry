@@ -158,7 +158,7 @@ export default function CustomerWithdrawModal({
 
             <div className="p-2 rounded-lg bg-stone-50 text-[11px] text-stone-500 flex items-start gap-1.5">
               <AlertCircle size={14} className="shrink-0 mt-0.5 text-stone-400" />
-              <span>Ye raqam customer ke khate mein shamil hogi aur Total Sales aur Cash mein se minus ho jayegi.</span>
+              <span>Ye raqam customer ke khate mein shamil hogi aur Cash on Hand mein plus ho jayegi.</span>
             </div>
           </div>
 

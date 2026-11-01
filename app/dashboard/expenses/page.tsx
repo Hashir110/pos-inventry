@@ -5,9 +5,7 @@ import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
 import { listExpenses, addExpense, deleteExpense } from "../../lib/services/expenses";
 import { listSalesInRange } from "../../lib/services/sales";
-import { listAllPayments } from "../../lib/services/customers";
-import { listBankTransactions } from "../../lib/services/banks";
-import { isWithdrawalSale, saleNetAmount } from "../../lib/calc";
+import { saleNetAmount } from "../../lib/calc";
 import { formatMoney } from "../../lib/format";
 import {
   Plus,
@@ -25,7 +23,7 @@ import DataTable from "../../components/DataTable";
 import StatCard from "../../components/StatCard";
 import { toast } from "react-toastify";
 import { useDialog } from "../../components/DialogProvider";
-import type { BankTransaction, CustomerPayment, Expense, Sale } from "../../types";
+import type { Expense, Sale } from "../../types";
 
 const todayKey = () => new Date().toLocaleDateString("en-CA");
 const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-CA");

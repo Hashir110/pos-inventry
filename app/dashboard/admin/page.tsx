@@ -11,7 +11,7 @@ import StatCard from "../../components/StatCard";
 import DataTable from "../../components/DataTable";
 import AdminLoginModal from "../../components/AdminLoginModal";
 import { customerLabel, formatDate, formatMoney } from "../../lib/format";
-import { isWithdrawalSale, saleNetAmount, saleProfit } from "../../lib/calc";
+import { saleNetAmount, saleProfit } from "../../lib/calc";
 import { listSalesInRange } from "../../lib/services/sales";
 import { listExpensesInRange } from "../../lib/services/expenses";
 import { listSupplierPayments } from "../../lib/services/suppliers";
@@ -77,17 +77,12 @@ export default function AdminPage() {
   }, [unlocked, currentUser]);
 
   const totals = useMemo(() => {
-    const posSales = sales.reduce(
-      (sum, s) => (isWithdrawalSale(s) ? sum - saleNetAmount(s) : sum + saleNetAmount(s)),
-      0
-    );
-    const grossProfit = sales
-      .filter((s) => !isWithdrawalSale(s))
-      .reduce((sum, s) => sum + saleProfit(s), 0);
+    const posSales = sales.reduce((sum, s) => sum + saleNetAmount(s), 0);
+    const grossProfit = sales.reduce((sum, s) => sum + saleProfit(s), 0);
     const expenseSum = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const jamad = supplierPayments.reduce((sum, p) => sum + p.amount, 0);
     const creditSales = sales
-      .filter((s) => !isWithdrawalSale(s) && (s.paymentMethod || "").trim() === "Udhar")
+      .filter((s) => (s.paymentMethod || "").trim() === "Udhar")
       .reduce((sum, s) => sum + saleNetAmount(s), 0);
     return {
       creditSales,
