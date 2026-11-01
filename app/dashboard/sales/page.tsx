@@ -28,7 +28,7 @@ import { listCustomers } from "../../lib/services/customers";
 import { listProducts } from "../../lib/services/products";
 import ProductSelect from "../../components/ProductSelect";
 import SaleReceipt from "../../components/SaleReceipt";
-import { saleNetAmount } from "../../lib/calc";
+import { isWithdrawalSale, saleNetAmount } from "../../lib/calc";
 import { customerLabel, isCounterSale } from "../../lib/format";
 import StatCard from "../../components/StatCard";
 import PageHeader from "../../components/PageHeader";
@@ -594,18 +594,27 @@ export default function SalesHistoryPage() {
             header: t("customer"),
             cell: (sale) => {
               const name = customerLabel(sale.customerName);
+              const isWd = isWithdrawalSale(sale);
               return (
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 font-display text-sm font-bold text-brand-700">
+                  <span
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-sm font-bold ${
+                      isWd ? "bg-amber-100 text-amber-800" : "bg-brand-100 text-brand-700"
+                    }`}
+                  >
                     {name.trim().charAt(0).toUpperCase()}
                   </span>
                   <div>
                     <span className="font-semibold text-stone-900 block">{name}</span>
-                    {sale.transport && (
+                    {isWd ? (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block mt-0.5">
+                        Withdrawal / رقم نکالی
+                      </span>
+                    ) : sale.transport ? (
                       <span className="text-[11px] text-stone-400 block">
                         🚚 {sale.transport}
                       </span>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               );
@@ -639,6 +648,13 @@ export default function SalesHistoryPage() {
             key: "status",
             header: t("status"),
             cell: (sale) => {
+              if (isWithdrawalSale(sale)) {
+                return (
+                  <span className="rounded-md px-2.5 py-1 text-[11px] font-bold bg-amber-100 text-amber-800">
+                    Withdrawal
+                  </span>
+                );
+              }
               const status = saleStatus(sale);
               return (
                 <span

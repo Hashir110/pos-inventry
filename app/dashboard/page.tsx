@@ -11,7 +11,7 @@ import { listExpensesInRange } from "../lib/services/expenses";
 import { countLowStock } from "../lib/services/products";
 import { listDayClosings } from "../lib/services/dailyClosing";
 import { listSupplierPayments } from "../lib/services/suppliers";
-import { saleNetAmount } from "../lib/calc";
+import { isWithdrawalSale, saleNetAmount } from "../lib/calc";
 import { customerLabel, isCounterSale } from "../lib/format";
 import SaleReceipt from "../components/SaleReceipt";
 import HiddenAmount from "../components/HiddenAmount";
@@ -486,19 +486,34 @@ export default function DashboardHome() {
                 columns={[
                     { key: "date", header: t("date"), cell: (inv) => <span className="text-stone-600">{formatDate(inv.date)}</span> },
                     { key: "inv", header: t("invoices"), cell: (inv) => <span className="font-mono text-xs font-semibold text-stone-500">#{inv.invoiceNo || "-"}</span> },
-                    { key: "customer", header: t("customer"), cell: (inv) => <span className="font-semibold text-stone-800">{customerLabel(inv.customerName)}</span> },
+                    {
+                        key: "customer",
+                        header: t("customer"),
+                        cell: (inv) => (
+                            <div>
+                                <span className="font-semibold text-stone-800 block">{customerLabel(inv.customerName)}</span>
+                                {isWithdrawalSale(inv) && (
+                                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block mt-0.5">
+                                        Withdrawal / رقم نکالی
+                                    </span>
+                                )}
+                            </div>
+                        ),
+                    },
                     {
                         key: "pay",
                         header: t("paymentBreakdown"),
                         cell: (inv) => (
-                            <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${methodBadge(inv.paymentMethod)}`}>
-                                {inv.paymentMethod === "Bank Account"
-                                    ? t("dashboard_bank")
-                                    : inv.paymentMethod === "Udhar"
-                                        ? t("dashboard_credit")
-                                        : inv.paymentMethod && inv.paymentMethod !== "Cash"
-                                            ? inv.paymentMethod
-                                            : t("cash")}
+                            <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${isWithdrawalSale(inv) ? "bg-amber-100 text-amber-800" : methodBadge(inv.paymentMethod)}`}>
+                                {isWithdrawalSale(inv)
+                                    ? "Withdrawal"
+                                    : inv.paymentMethod === "Bank Account"
+                                        ? t("dashboard_bank")
+                                        : inv.paymentMethod === "Udhar"
+                                            ? t("dashboard_credit")
+                                            : inv.paymentMethod && inv.paymentMethod !== "Cash"
+                                                ? inv.paymentMethod
+                                                : t("cash")}
                             </span>
                         ),
                     },

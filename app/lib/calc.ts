@@ -20,3 +20,12 @@ export const saleProfit = (sale: Pick<Sale, "items">): number =>
 
 export const saleNetAmount = (sale: Pick<Sale, "totalAmount" | "refundedAmount">): number =>
   (Number(sale.totalAmount) || 0) - (Number(sale.refundedAmount) || 0);
+
+export const isWithdrawalSale = (
+  sale?: Pick<Sale, "items"> & { isWithdrawal?: boolean; description?: string }
+): boolean => {
+  if (!sale) return false;
+  if (sale.isWithdrawal) return true;
+  if (sale.description === "Cash Withdrawal from Ledger") return true;
+  return (sale.items ?? []).some((item) => item.id === "withdrawal");
+};

@@ -111,6 +111,7 @@ export interface Sale {
   transport?: string;
   extraCharges?: number;
   advanceAmount?: number;
+  isWithdrawal?: boolean;
 }
 
 export type PendingSale = Omit<Sale, "id">;

@@ -888,6 +888,12 @@ export default function BankAccountsPage() {
                 />
               </div>
 
+              <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200 text-[11px] text-stone-600">
+                {txType === "deposit"
+                  ? "Ye deposit raqam Total Sales mein PLUS ho jayegi."
+                  : "Ye withdrawal raqam Total Sales mein se MINUS ho jayegi."}
+              </div>
+
               <div className="flex items-center justify-end gap-2 border-t border-stone-100 pt-4">
                 <button
                   type="button"

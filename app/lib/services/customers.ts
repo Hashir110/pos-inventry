@@ -358,6 +358,7 @@ export const recordCustomerWithdrawal = async (
       description: note.trim() || "Cash Withdrawal from Ledger",
       invoiceNo,
       paymentMethod: "Udhar" as const,
+      isWithdrawal: true,
     };
 
     transaction.set(saleRef, saleData);
@@ -398,6 +399,7 @@ export const recordCustomerWithdrawal = async (
       description: note.trim() || "Cash Withdrawal from Ledger",
       invoiceNo,
       paymentMethod: "Udhar",
+      isWithdrawal: true,
     };
     setCached(salesKey, [saleRecord, ...currentSales]);
   } else {

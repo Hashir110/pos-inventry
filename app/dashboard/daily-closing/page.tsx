@@ -16,14 +16,14 @@ import ChooseCustomerModal from "../../components/ChooseCustomerModal";
 import { useDialog } from "../../components/DialogProvider";
 import SettlementPanel, { type SettleLine, type SettleMethod } from "../../components/SettlementPanel";
 import { customerLabel, formatDate, formatMoney } from "../../lib/format";
-import { saleNetAmount } from "../../lib/calc";
+import { isWithdrawalSale, saleNetAmount } from "../../lib/calc";
 import { listSalesInRange, updateSalePayment } from "../../lib/services/sales";
 import { listExpensesInRange } from "../../lib/services/expenses";
 import { listCustomers, listAllPayments, receivePayment } from "../../lib/services/customers";
 import { addSupplierPayment, listSuppliers, listSupplierPayments } from "../../lib/services/suppliers";
 import { deleteDayOpening, listDayClosings, listDayOpenings, saveDayClosing, saveDayOpening } from "../../lib/services/dailyClosing";
-import { listBankAccounts } from "../../lib/services/banks";
-import type { BankAccount, Customer, CustomerPayment, DayClosing, DayOpening, Expense, PaymentMethod, Sale, Supplier, SupplierPayment } from "../../types";
+import { listBankAccounts, listBankTransactions } from "../../lib/services/banks";
+import type { BankAccount, BankTransaction, Customer, CustomerPayment, DayClosing, DayOpening, Expense, PaymentMethod, Sale, Supplier, SupplierPayment } from "../../types";
 
 type Kind = "amad" | "jamad";
 
@@ -90,6 +90,7 @@ export default function DailyClosingPage() {
   const [dayClosings, setDayClosings] = useState<DayClosing[]>([]);
   const [dayOpenings, setDayOpenings] = useState<DayOpening[]>([]);
   const [banks, setBanks] = useState<BankAccount[]>([]);
+  const [bankTransactions, setBankTransactions] = useState<BankTransaction[]>([]);
   const [editSale, setEditSale] = useState<Sale | null>(null);
   const [partyForSale, setPartyForSale] = useState<Sale | null>(null);
   const [customOpening, setCustomOpening] = useState<number | null>(null);
@@ -117,6 +118,7 @@ export default function DailyClosingPage() {
       tr("closing_src_closings"),
       tr("shell_navBanks"),
       "Openings",
+      "Bank Transactions",
     ];
     const results = await Promise.allSettled([
       listSalesInRange(ownerId, startIso, endIso, force).then(setSales),
@@ -128,6 +130,7 @@ export default function DailyClosingPage() {
       listDayClosings(ownerId, force).then(setDayClosings),
       listBankAccounts(ownerId, force).then(setBanks),
       listDayOpenings(ownerId, force).then(setDayOpenings),
+      listBankTransactions(ownerId, undefined, 500, force).then(setBankTransactions),
     ]);
     const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
     results.forEach((r, i) => {
@@ -194,6 +197,23 @@ export default function DailyClosingPage() {
     return 0;
   }, [customOpening, currentDayOpening, saved, previousClosing]);
 
+  const dayManualBankTx = useMemo(
+    () =>
+      bankTransactions.filter(
+        (tx) =>
+          dayKey(tx.date) === date &&
+          !tx.customerId &&
+          !tx.saleId &&
+          tx.description !== "Opening / Initial Balance"
+      ),
+    [bankTransactions, date]
+  );
+
+  const dayCustomerWithdrawals = useMemo(
+    () => sales.filter(isWithdrawalSale),
+    [sales]
+  );
+
   const totals = useMemo(() => {
     let cash = 0;
     let bank = 0;
@@ -226,15 +246,52 @@ export default function DailyClosingPage() {
     const jamadCash = daySupplierPayments.filter((p) => p.method === "Cash").reduce((sum, p) => sum + p.amount, 0);
     const jamadBank = daySupplierPayments.filter((p) => p.method !== "Cash").reduce((sum, p) => sum + p.amount, 0);
 
+    // Manual bank transactions for this date
+    // Client rule: Bank deposit -> Cash on hand MINUS (-), Bank PLUS (+)
+    //              Bank withdrawal -> Cash on hand PLUS (+), Bank MINUS (-)
+    const bankDeposits = dayManualBankTx
+      .filter((tx) => tx.type === "deposit")
+      .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+    const bankWithdrawals = dayManualBankTx
+      .filter((tx) => tx.type === "withdrawal")
+      .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+
+    // Credit ledger withdrawals for this date
+    // Client rule: Credit ledger withdrawal -> Cash on hand PLUS (+)
+    const customerWithdrawals = dayCustomerWithdrawals.reduce(
+      (sum, s) => sum + saleNetAmount(s),
+      0
+    );
+
     const expenseSum = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-    const todayCashNet = cash + amadCash - jamadCash - expenseSum;
+
+    // Total Sales: Client instructed NOT to touch Total Sales ("hamny total sales ko nh cherna")
+    const salesTotal = cash + bank + udhar;
+
+    // Cash on Hand (Drawer balance):
+    // Cash sales + Credit collections (amadCash) - Supplier payments (jamadCash) - Expenses
+    // - Bank Deposits (cash on hand se minus)
+    // + Bank Withdrawals (cash on hand mein plus)
+    // + Credit Ledger Withdrawals (cash on hand mein plus)
+    const todayCashNet =
+      cash +
+      amadCash -
+      jamadCash -
+      expenseSum -
+      bankDeposits +
+      bankWithdrawals +
+      customerWithdrawals;
     const cashInHand = openingBalance + todayCashNet;
-    const totalBankInflow = bank + amadBank;
-    const netBank = totalBankInflow - jamadBank;
+
+    // Bank flow:
+    // Bank sales + amadBank + bankDeposits - jamadBank - bankWithdrawals
+    const totalBankInflow = bank + amadBank + bankDeposits;
+    const netBank = totalBankInflow - jamadBank - bankWithdrawals;
     const grandTotal = cashInHand + netBank;
 
     return {
-      salesTotal: cash + bank + udhar,
+      salesTotal,
+      customerWithdrawals,
       cash,
       bank,
       totalBankInflow,
@@ -246,13 +303,15 @@ export default function DailyClosingPage() {
       jamad,
       jamadCash,
       jamadBank,
+      bankDeposits,
+      bankWithdrawals,
       expenses: expenseSum,
       openingBalance,
       todayCashNet,
       cashInHand,
       grandTotal,
     };
-  }, [sales, dayPayments, daySupplierPayments, expenses, openingBalance]);
+  }, [sales, dayPayments, daySupplierPayments, expenses, openingBalance, dayManualBankTx, dayCustomerWithdrawals]);
 
   const changedAfterClose =
     !!saved &&
@@ -447,7 +506,7 @@ export default function DailyClosingPage() {
           kind: "amad" as Kind,
           party: p.customerName,
           method: p.method,
-          note: p.note ?? "",
+          note: p.note ? `${p.note} (Collection)` : "Credit Ledger Collection",
           amount: p.amount,
         })),
         ...daySupplierPayments.map((p) => ({
@@ -456,11 +515,42 @@ export default function DailyClosingPage() {
           kind: "jamad" as Kind,
           party: p.supplierName,
           method: p.method,
-          note: p.note ?? "",
+          note: p.note ? `${p.note} (Supplier Payment)` : "Supplier Payment",
           amount: p.amount,
         })),
+        ...dayCustomerWithdrawals.map((s) => ({
+          id: `cw-${s.id}`,
+          date: s.date,
+          kind: "amad" as Kind,
+          party: customerLabel(s.customerName),
+          method: "Cash",
+          note: s.description ? `${s.description} (Credit Withdrawal - Cash +)` : "Credit Ledger Withdrawal (Cash +)",
+          amount: saleNetAmount(s),
+        })),
+        ...dayManualBankTx
+          .filter((tx) => tx.type === "deposit")
+          .map((tx) => ({
+            id: `bd-${tx.id}`,
+            date: tx.date,
+            kind: "jamad" as Kind,
+            party: tx.bankName,
+            method: "Bank Deposit",
+            note: tx.description ? `${tx.description} (Bank Deposit - Cash -)` : "Cash Deposited to Bank (Cash -)",
+            amount: tx.amount,
+          })),
+        ...dayManualBankTx
+          .filter((tx) => tx.type === "withdrawal")
+          .map((tx) => ({
+            id: `bw-${tx.id}`,
+            date: tx.date,
+            kind: "amad" as Kind,
+            party: tx.bankName,
+            method: "Bank Withdrawal",
+            note: tx.description ? `${tx.description} (Bank Withdrawal - Cash +)` : "Cash Withdrawn from Bank (Cash +)",
+            amount: tx.amount,
+          })),
       ].sort((a, b) => b.date.localeCompare(a.date)),
-    [dayPayments, daySupplierPayments]
+    [dayPayments, daySupplierPayments, dayCustomerWithdrawals, dayManualBankTx]
   );
 
   return (
@@ -689,7 +779,20 @@ export default function DailyClosingPage() {
         columns={[
           { key: "time", header: t("closing_colTime"), className: "whitespace-nowrap", cell: (s) => <span className="text-stone-500">{timeOf(s.date)}</span> },
           { key: "inv", header: t("closing_colInvoice"), cell: (s) => <span className="font-mono text-xs font-bold text-brand-700">#{s.invoiceNo || "-"}</span> },
-          { key: "cust", header: t("customer"), cell: (s) => <span className="font-semibold text-stone-900">{customerLabel(s.customerName)}</span> },
+          {
+            key: "cust",
+            header: t("customer"),
+            cell: (s) => (
+              <div>
+                <span className="font-semibold text-stone-900 block">{customerLabel(s.customerName)}</span>
+                {isWithdrawalSale(s) && (
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block mt-0.5">
+                    Withdrawal / رقم نکالی
+                  </span>
+                )}
+              </div>
+            ),
+          },
           {
             key: "items",
             header: t("items"),
@@ -718,7 +821,16 @@ export default function DailyClosingPage() {
               );
             },
           },
-          { key: "amount", header: t("amount"), align: "right", cell: (s) => <span className="tabular font-extrabold text-stone-900">{formatMoney(saleNetAmount(s))}</span> },
+          {
+            key: "amount",
+            header: t("amount"),
+            align: "right",
+            cell: (s) => (
+              <span className={`tabular font-extrabold ${isWithdrawalSale(s) ? "text-amber-800" : "text-stone-900"}`}>
+                {isWithdrawalSale(s) ? `− ${formatMoney(saleNetAmount(s))}` : formatMoney(saleNetAmount(s))}
+              </span>
+            ),
+          },
           {
             key: "edit",
             header: "",
