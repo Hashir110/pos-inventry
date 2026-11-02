@@ -298,6 +298,8 @@ export const addSupplierPayment = async (
         type: "withdrawal",
         amount: payment.amount,
         date: paymentDate,
+        supplierId: payment.supplierId,
+        supplierName: payment.supplierName,
         description: payment.note?.trim() || `Supplier Payment: ${payment.supplierName}`,
         balanceAfter: newBankBalance,
         createdAt: paymentDate,

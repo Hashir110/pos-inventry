@@ -91,7 +91,7 @@ export default function ReceivePaymentModal({ customer, onClose, onSuccess }: Re
                 type="number"
                 required
                 min="1"
-                step="0.01"
+                step="any"
                 autoFocus
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}

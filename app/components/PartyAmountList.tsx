@@ -101,7 +101,7 @@ export default function PartyAmountList({
                     <input
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="any"
                       value={raw}
                       placeholder="0"
                       onChange={(e) => onChange(p.id, e.target.value)}

@@ -160,7 +160,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
                 type="number"
                 required
                 min="0"
-                step="0.01"
+                step="any"
                 placeholder="0"
                 value={form.sellingPrice}
                 onChange={(e) => set("sellingPrice", e.target.value)}

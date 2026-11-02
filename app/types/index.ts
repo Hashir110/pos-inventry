@@ -24,6 +24,8 @@ export interface BankTransaction {
   date: string;
   customerName?: string;
   customerId?: string;
+  supplierName?: string;
+  supplierId?: string;
   saleId?: string;
   invoiceNo?: string;
   description?: string;

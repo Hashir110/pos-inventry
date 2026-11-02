@@ -208,6 +208,9 @@ export default function DailyClosingPage() {
           dayKey(tx.date) === date &&
           !tx.customerId &&
           !tx.saleId &&
+          !tx.supplierId &&
+          !tx.supplierName &&
+          !tx.description?.toLowerCase().includes("supplier payment") &&
           tx.description !== "Opening / Initial Balance"
       ),
     [bankTransactions, date]
