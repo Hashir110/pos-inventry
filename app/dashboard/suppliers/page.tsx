@@ -338,7 +338,7 @@ export default function SuppliersPage() {
       toast.success(t("suppliers_payment_recorded", { amount: payAmt, name: sup.name }));
       setShowPaymentModal(false);
 
-      const pay = await listSupplierPayments(ownerId);
+      const pay = await listSupplierPayments(ownerId, true);
       setPayments(pay);
 
       setPaymentSupId("");

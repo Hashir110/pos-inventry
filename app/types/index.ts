@@ -224,6 +224,8 @@ export interface SupplierPayment {
   method: "Cash" | "Bank Account";
   note?: string;
   date: string;
+  bankId?: string;
+  bankName?: string;
 }
 
 export interface DayClosing {

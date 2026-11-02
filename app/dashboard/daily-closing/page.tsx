@@ -37,7 +37,11 @@ interface MoneyRow {
   amount: number;
 }
 
-const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
+const dayKey = (iso: string) => {
+  if (!iso) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  return new Date(iso).toLocaleDateString("en-CA");
+};
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 const methodLabel = (m: string) => (m === "Cash" ? tr("cash") : tr("bankOnline"));
 const signed = (n: number) => `${n < 0 ? "− " : ""}${formatMoney(Math.abs(n))}`;
@@ -464,9 +468,14 @@ export default function DailyClosingPage() {
   };
   const handleAmad = async (lines: SettleLine[], method: SettleMethod, note: string, bankId?: string) => {
     const failed: SettleLine[] = [];
+    const paymentDate =
+      date === dayKey(new Date().toISOString())
+        ? new Date().toISOString()
+        : `${date}T${new Date().toTimeString().slice(0, 8)}.000Z`;
+
     for (const line of lines) {
       try {
-        await receivePayment(ownerId, line.party.id, line.amount, line.method ?? method, note, bankId);
+        await receivePayment(ownerId, line.party.id, line.amount, line.method ?? method, note, bankId, paymentDate);
       } catch (error) {
         failed.push(line);
         toast.error(`${line.party.name}: ${error instanceof Error ? error.message : t("closing_saveItemFailed")}`);
@@ -475,16 +484,29 @@ export default function DailyClosingPage() {
     const saved = lines.filter((l) => !failed.includes(l));
     const parties = new Set(saved.map((l) => l.party.id)).size;
     if (saved.length > 0) toast.success(t("closing_collectionSaved", { count: parties }));
-    await load();
+    await load(true);
     return failed;
   };
 
-  const handleJamad = async (lines: SettleLine[], method: SettleMethod, note: string) => {
+  const handleJamad = async (lines: SettleLine[], method: SettleMethod, note: string, bankId?: string) => {
     const failed: SettleLine[] = [];
+    const paymentDate =
+      date === dayKey(new Date().toISOString())
+        ? new Date().toISOString()
+        : `${date}T${new Date().toTimeString().slice(0, 8)}.000Z`;
+
     for (const line of lines) {
       const { party, amount, method: lineMethod } = line;
       try {
-        await addSupplierPayment(ownerId, { supplierId: party.id, supplierName: party.name, amount, method: lineMethod ?? method, note });
+        await addSupplierPayment(ownerId, {
+          supplierId: party.id,
+          supplierName: party.name,
+          amount,
+          method: lineMethod ?? method,
+          note,
+          bankId,
+          date: paymentDate,
+        });
       } catch (error) {
         failed.push(line);
         toast.error(`${party.name}: ${error instanceof Error ? error.message : t("closing_saveItemFailed")}`);
@@ -493,7 +515,7 @@ export default function DailyClosingPage() {
     const saved = lines.filter((l) => !failed.includes(l));
     const parties = new Set(saved.map((l) => l.party.id)).size;
     if (saved.length > 0) toast.success(t("closing_supplierSaved", { count: parties }));
-    await load();
+    await load(true);
     return failed;
   };
 
@@ -718,6 +740,7 @@ export default function DailyClosingPage() {
             tone="amber"
             parties={supplierParties}
             allowSplit
+            banks={banks}
             noteLabel={t("closing_reasonLabel")}
             notePlaceholder={t("closing_reasonPlaceholder")}
             submitLabel={t("closing_savePayment")}

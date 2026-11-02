@@ -166,7 +166,8 @@ export const receivePayment = async (
   amount: number,
   method: CustomerPayment["method"],
   note = "",
-  bankId?: string
+  bankId?: string,
+  date?: string
 ): Promise<void> => {
   if (!(amount > 0)) throw new Error(tr("closing_errAmountPositive"));
 
@@ -183,7 +184,7 @@ export const receivePayment = async (
     const customer = snap.data() as Customer;
 
     const newBalance = Math.round((customer.balance - amount) * 100) / 100;
-    const now = new Date().toISOString();
+    const now = date || new Date().toISOString();
     transaction.update(customerRef, { balance: newBalance });
 
     if (bankRef && bankTxRef && bankSnap?.exists()) {

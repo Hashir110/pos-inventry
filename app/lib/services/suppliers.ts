@@ -6,16 +6,19 @@ import {
   getDocs,
   onSnapshot,
   query,
+  runTransaction,
+  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { addStock } from "../stock";
-import type { Supplier, SupplierPurchase, SupplierPayment, Product } from "../../types";
+import type { Supplier, SupplierPurchase, SupplierPayment, Product, BankAccount } from "../../types";
 import {
   cacheKeys,
   getCached,
   getCachedEvenStale,
+  invalidateCache,
   setCached,
 } from "./offlineStorage";
 
@@ -254,6 +257,8 @@ export const addSupplierPayment = async (
     amount: number;
     method: "Cash" | "Bank Account";
     note?: string;
+    bankId?: string;
+    date?: string;
   }
 ): Promise<string> => {
   if (payment.amount <= 0) {
@@ -268,18 +273,73 @@ export const addSupplierPayment = async (
 
   const currentBalance = targetSupplier.data().balance || 0;
   const newBalance = Math.round((currentBalance - payment.amount) * 100) / 100;
+  const paymentDate = payment.date || new Date().toISOString();
 
-  const ref = await addDoc(collection(db, "supplier_payments"), {
-    ownerId,
-    ...payment,
-    date: new Date().toISOString(),
-  });
+  const bankRef = payment.method === "Bank Account" && payment.bankId ? doc(db, "banks", payment.bankId) : null;
+  const bankTxRef = bankRef ? doc(collection(db, "bank_transactions")) : null;
+  let bankName = "";
 
-  await updateDoc(doc(db, "suppliers", payment.supplierId), {
-    balance: newBalance,
-  });
+  const ref = doc(collection(db, "supplier_payments"));
 
-  // Update local cache
+  if (bankRef && bankTxRef) {
+    await runTransaction(db, async (transaction) => {
+      const bankSnap = await transaction.get(bankRef);
+      if (!bankSnap.exists()) throw new Error("Bank account not found");
+      const bank = bankSnap.data() as BankAccount;
+      bankName = bank.bankName;
+      const newBankBalance = Math.round(((bank.currentBalance || 0) - payment.amount) * 100) / 100;
+
+      transaction.update(bankRef, { currentBalance: newBankBalance, updatedAt: paymentDate });
+      transaction.set(bankTxRef, {
+        id: bankTxRef.id,
+        ownerId,
+        bankId: bankRef.id,
+        bankName,
+        type: "withdrawal",
+        amount: payment.amount,
+        date: paymentDate,
+        description: payment.note?.trim() || `Supplier Payment: ${payment.supplierName}`,
+        balanceAfter: newBankBalance,
+        createdAt: paymentDate,
+      });
+
+      transaction.set(ref, {
+        ownerId,
+        supplierId: payment.supplierId,
+        supplierName: payment.supplierName,
+        amount: payment.amount,
+        method: payment.method,
+        note: payment.note || "",
+        bankId: bankRef.id,
+        bankName,
+        date: paymentDate,
+      });
+
+      transaction.update(doc(db, "suppliers", payment.supplierId), {
+        balance: newBalance,
+      });
+    });
+
+    invalidateCache(cacheKeys.banks(ownerId));
+    invalidateCache(cacheKeys.bankTransactions(ownerId, bankRef.id));
+    invalidateCache(cacheKeys.bankTransactions(ownerId));
+  } else {
+    await setDoc(ref, {
+      ownerId,
+      supplierId: payment.supplierId,
+      supplierName: payment.supplierName,
+      amount: payment.amount,
+      method: payment.method,
+      note: payment.note || "",
+      date: paymentDate,
+    });
+
+    await updateDoc(doc(db, "suppliers", payment.supplierId), {
+      balance: newBalance,
+    });
+  }
+
+  // Update local cache for suppliers
   const cacheKey = cacheKeys.suppliers(ownerId);
   const current = getCachedEvenStale<Supplier[]>(cacheKey);
   if (current) {
@@ -287,6 +347,26 @@ export const addSupplierPayment = async (
       cacheKey,
       current.map((s) => (s.id === payment.supplierId ? { ...s, balance: newBalance } : s))
     );
+  }
+
+  // Update local cache for supplier payments so daily closing and dashboard reflect immediately
+  const payCacheKey = cacheKeys.supplierPayments(ownerId);
+  const currentPayments = getCachedEvenStale<SupplierPayment[]>(payCacheKey);
+  const newPaymentRecord: SupplierPayment = {
+    id: ref.id,
+    ownerId,
+    supplierId: payment.supplierId,
+    supplierName: payment.supplierName,
+    amount: payment.amount,
+    method: payment.method,
+    note: payment.note || "",
+    ...(bankName ? { bankId: payment.bankId, bankName } : {}),
+    date: paymentDate,
+  };
+  if (currentPayments) {
+    setCached(payCacheKey, [newPaymentRecord, ...currentPayments]);
+  } else {
+    invalidateCache(payCacheKey);
   }
 
   return ref.id;
