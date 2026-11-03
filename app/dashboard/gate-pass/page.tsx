@@ -44,7 +44,7 @@ export default function GatePassPage() {
   const { currentShop } = useStore();
   const { t } = useLanguage();
   const ownerId = currentShop?.uid || "";
-  const unitLabel = (isWt: boolean) => (isWt ? "KG" : t("gatePass_unitBags"));
+  const unitLabel = (isWt: boolean) => (isWt ? t("gatePass_unitBags") : t("gatePass_unitBagsPcs"));
   const storedUnitLabel = (unit?: string) =>
     !unit || unit === "Bags"
       ? t("gatePass_unitBags")
@@ -64,7 +64,7 @@ export default function GatePassPage() {
 
   const [selectedProductId, setSelectedProductId] = useState("");
   const [itemQty, setItemQty] = useState<number | "">(1);
-  const [itemWeight, setItemWeight] = useState<number | "">(25);
+  const [itemWeight, setItemWeight] = useState<number | "">("");
   const [itemIsSelf, setItemIsSelf] = useState<boolean>(false);
 
   const [isPartyOpen, setIsPartyOpen] = useState(false);
@@ -105,7 +105,7 @@ export default function GatePassPage() {
   // Add Item inside Edit Modal state
   const [editAddProductId, setEditAddProductId] = useState("");
   const [editAddQty, setEditAddQty] = useState<number | "">(1);
-  const [editAddWeight, setEditAddWeight] = useState<number | "">(25);
+  const [editAddWeight, setEditAddWeight] = useState<number | "">("");
   const [editAddIsSelf, setEditAddIsSelf] = useState<boolean>(false);
 
   useEffect(() => {
@@ -211,12 +211,13 @@ export default function GatePassPage() {
     const prod = products.find((p) => p.id === prodId);
     if (!prod) {
       setItemQty(1);
-      setItemWeight(25);
+      setItemWeight("");
       return;
     }
     const isWeight = prod.unitType === "weight";
+    const bagWeight = (prod as any)?.weightPerBag || 25;
     setItemQty(1);
-    setItemWeight(isWeight ? 25 : "");
+    setItemWeight(isWeight ? bagWeight : "");
   };
 
   const handleQtyChange = (qtyVal: number | "") => {
@@ -227,7 +228,21 @@ export default function GatePassPage() {
     const q = isNaN(qtyVal) || qtyVal < 1 ? 1 : qtyVal;
     setItemQty(q);
     if (selectedProduct?.unitType === "weight") {
-      setItemWeight(q * 25);
+      const bagWeight = (selectedProduct as any)?.weightPerBag || 25;
+      setItemWeight(q * bagWeight);
+    }
+  };
+
+  const handleWeightChange = (val: string) => {
+    if (val === "") {
+      setItemWeight("");
+      return;
+    }
+    const w = Number(val);
+    setItemWeight(w);
+    const bagWeight = (selectedProduct as any)?.weightPerBag || 25;
+    if (w > 0 && selectedProduct?.unitType === "weight" && bagWeight > 0) {
+      setItemQty(Math.round((w / bagWeight) * 100) / 100);
     }
   };
 
@@ -244,7 +259,8 @@ export default function GatePassPage() {
     }
 
     const isWeight = selectedProduct.unitType === "weight";
-    const weight = isWeight ? Number(itemWeight) || qty * 25 : 0;
+    const bagWeight = (selectedProduct as any)?.weightPerBag || 25;
+    const weight = isWeight ? Number(itemWeight) || qty * bagWeight : 0;
     const gudamStock = selectedProduct.gudamStock ?? 0;
 
     setItems((prev) => [
@@ -262,7 +278,7 @@ export default function GatePassPage() {
 
     setSelectedProductId("");
     setItemQty(1);
-    setItemWeight(25);
+    setItemWeight("");
     setItemIsSelf(false);
   };
 
@@ -305,7 +321,7 @@ export default function GatePassPage() {
       setItems([]);
       setSelectedProductId("");
       setItemQty(1);
-      setItemWeight(25);
+      setItemWeight("");
       setItemIsSelf(false);
     } catch (err: any) {
       toast.error(err.message || t("gatePass_toastFailed"));
@@ -348,7 +364,7 @@ export default function GatePassPage() {
     );
     setEditAddProductId("");
     setEditAddQty(1);
-    setEditAddWeight(25);
+    setEditAddWeight("");
     setEditAddIsSelf(false);
   };
 
@@ -365,7 +381,8 @@ export default function GatePassPage() {
       return;
     }
     const isWeight = prod.unitType === "weight";
-    const weight = isWeight ? Number(editAddWeight) || qty * 25 : 0;
+    const bagWeight = (prod as any)?.weightPerBag || 25;
+    const weight = isWeight ? Number(editAddWeight) || qty * bagWeight : 0;
 
     const existingIndex = editItems.findIndex((it) => it.productId === prod.id);
     if (existingIndex !== -1) {
@@ -397,7 +414,7 @@ export default function GatePassPage() {
 
     setEditAddProductId("");
     setEditAddQty(1);
-    setEditAddWeight(25);
+    setEditAddWeight("");
     setEditAddIsSelf(false);
   };
 
@@ -732,7 +749,7 @@ export default function GatePassPage() {
                                     e.stopPropagation();
                                     setSelectedProductId("");
                                     setItemQty(1);
-                                    setItemWeight(25);
+                                    setItemWeight("");
                                   }}
                                   className="p-1 text-stone-400 hover:text-stone-700 rounded hover:bg-stone-100"
                                   title={t("gatePass_clearSelection")}
@@ -892,7 +909,7 @@ export default function GatePassPage() {
                           step="any"
                           placeholder={t("gatePass_weightPlaceholder")}
                           value={itemWeight}
-                          onChange={(e) => setItemWeight(e.target.value === "" ? "" : Number(e.target.value))}
+                          onChange={(e) => handleWeightChange(e.target.value)}
                           onKeyDown={(e) => { if (e.key === "Enter" && selectedProduct) { e.preventDefault(); handleAddItem(); } }}
                           disabled={selectedProduct?.unitType === "count"}
                           className="field w-full text-xs font-bold tabular !py-2 disabled:bg-stone-100 disabled:text-stone-400"
@@ -1487,7 +1504,9 @@ export default function GatePassPage() {
                           setEditAddProductId(pId);
                           const p = products.find((pr) => pr.id === pId);
                           if (p?.unitType === "weight") {
-                            setEditAddWeight(25);
+                            const bagWeight = (p as any)?.weightPerBag || 25;
+                            const q = typeof editAddQty === "number" ? editAddQty : 1;
+                            setEditAddWeight(q * bagWeight);
                           } else {
                             setEditAddWeight(0);
                           }
@@ -1515,7 +1534,8 @@ export default function GatePassPage() {
                           setEditAddQty(q);
                           const p = products.find((pr) => pr.id === editAddProductId);
                           if (p?.unitType === "weight") {
-                            setEditAddWeight(q * 25);
+                            const bagWeight = (p as any)?.weightPerBag || 25;
+                            setEditAddWeight(q * bagWeight);
                           }
                         }}
                         className="field w-full !py-1 text-xs font-bold text-center"
@@ -1548,7 +1568,20 @@ export default function GatePassPage() {
                         step="any"
                         placeholder="Weight"
                         value={editAddWeight}
-                        onChange={(e) => setEditAddWeight(parseFloat(e.target.value) || 0)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "") {
+                            setEditAddWeight("");
+                            return;
+                          }
+                          const w = parseFloat(val) || 0;
+                          setEditAddWeight(w);
+                          const p = products.find((pr) => pr.id === editAddProductId);
+                          const bagWeight = (p as any)?.weightPerBag || 25;
+                          if (w > 0 && p?.unitType === "weight" && bagWeight > 0) {
+                            setEditAddQty(Math.round((w / bagWeight) * 100) / 100);
+                          }
+                        }}
                         onKeyDown={(e) => { if (e.key === "Enter" && editAddProductId) { e.preventDefault(); handleEditAddProduct(); } }}
                         className="field w-full !py-1 text-xs font-bold text-center"
                       />

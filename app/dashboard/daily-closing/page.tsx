@@ -498,6 +498,13 @@ export default function DailyClosingPage() {
         ? new Date().toISOString()
         : `${date}T${new Date().toTimeString().slice(0, 8)}.000Z`;
 
+    const groups = new Map<string, string>();
+    lines.forEach((l) => {
+      if (lines.filter((x) => x.party.id === l.party.id).length > 1 && !groups.has(l.party.id)) {
+        groups.set(l.party.id, `grp_${Date.now()}_${l.party.id}`);
+      }
+    });
+
     for (const line of lines) {
       const { party, amount, method: lineMethod } = line;
       try {
@@ -509,6 +516,7 @@ export default function DailyClosingPage() {
           note,
           bankId,
           date: paymentDate,
+          groupId: groups.get(party.id),
         });
       } catch (error) {
         failed.push(line);
@@ -743,7 +751,6 @@ export default function DailyClosingPage() {
             tone="amber"
             parties={supplierParties}
             allowSplit
-            banks={banks}
             noteLabel={t("closing_reasonLabel")}
             notePlaceholder={t("closing_reasonPlaceholder")}
             submitLabel={t("closing_savePayment")}

@@ -9,6 +9,7 @@ import { useLanguage } from "../store/useLanguage";
 
 interface FormValues {
   name: string;
+  buyingPrice: string;
   sellingPrice: string;
   gudamStock: string;
   shopStock: string;
@@ -38,6 +39,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
 
   const [form, setForm] = useState<FormValues>({
     name: initial?.name ?? "",
+    buyingPrice: initial && initial.buyingPrice !== undefined ? String(initial.buyingPrice) : "",
     sellingPrice: initial ? String(initial.sellingPrice) : "",
     gudamStock: initial ? String(initial.gudamStock ?? "") : "",
     shopStock: initial ? String(initial.shopStock ?? initial.stock ?? "") : "",
@@ -65,7 +67,7 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
     try {
       await onSubmit({
         name: form.name.trim(),
-        buyingPrice: initial?.buyingPrice ?? 0,
+        buyingPrice: parseFloat(form.buyingPrice) || 0,
         sellingPrice: parseFloat(form.sellingPrice) || 0,
         stock: total,
         gudamStock: gudam,
@@ -151,10 +153,26 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
         </div>
 
         <div className="p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4">
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1">
-                {form.unitType === "weight" ? t("productForm_sellPriceKg") : t("productForm_sellPricePc")} <span className="text-red-500">*</span>
+                {form.unitType === "weight" ? t("productForm_buyPriceKg") : t("productForm_buyPricePc")}
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                placeholder="0"
+                value={form.buyingPrice}
+                onChange={(e) => set("buyingPrice", e.target.value)}
+                className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-stone-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1">
+                {form.unitType === "weight" ? t("productForm_sellPriceKg") : t("productForm_sellPricePc")}{" "}
+                <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -170,7 +188,10 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
 
             <div>
               <label className="block text-xs font-bold text-purple-900 mb-1">
-                {t("productForm_warehouseStock", { unit: form.unitType === "weight" ? t("productForm_unitBags") : t("productForm_unitPieces") })} <span className="text-red-500">*</span>
+                {t("productForm_warehouseStock", {
+                  unit: form.unitType === "weight" ? (sellingType === "weight_50" ? "50kg Bags" : "25kg Bags") : t("productForm_unitPieces"),
+                })}{" "}
+                <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -182,11 +203,19 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
                 onChange={(e) => set("gudamStock", e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-purple-950 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
               />
+              {form.unitType === "weight" && Number(form.gudamStock) > 0 && (
+                <p className="text-[10px] font-bold text-purple-600 mt-1">
+                  = {(Number(form.gudamStock) * (sellingType === "weight_50" ? 50 : 25)).toLocaleString()} kg
+                </p>
+              )}
             </div>
 
             <div>
               <label className="block text-xs font-bold text-blue-900 mb-1">
-                {t("productForm_shopStock", { unit: form.unitType === "weight" ? t("productForm_unitBags") : t("productForm_unitPieces") })} <span className="text-red-500">*</span>
+                {t("productForm_shopStock", {
+                  unit: form.unitType === "weight" ? (sellingType === "weight_50" ? "50kg Bags" : "25kg Bags") : t("productForm_unitPieces"),
+                })}{" "}
+                <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -198,6 +227,11 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
                 onChange={(e) => set("shopStock", e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-blue-950 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
+              {form.unitType === "weight" && Number(form.shopStock) > 0 && (
+                <p className="text-[10px] font-bold text-blue-600 mt-1">
+                  = {(Number(form.shopStock) * (sellingType === "weight_50" ? 50 : 25)).toLocaleString()} kg
+                </p>
+              )}
             </div>
           </div>
           <p className="text-[11px] text-stone-500 mt-4 bg-stone-50 p-2.5 rounded-lg border border-stone-200 flex items-center gap-1.5">

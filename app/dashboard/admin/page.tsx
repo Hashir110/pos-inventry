@@ -2,7 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, DollarSign, Filter, History, Loader2, Lock, TrendingUp, Truck, Wallet } from "lucide-react";
+import {
+  AlertTriangle,
+  Calendar,
+  DollarSign,
+  Filter,
+  History,
+  Loader2,
+  Lock,
+  TrendingUp,
+  Truck,
+  Wallet,
+} from "lucide-react";
 import { toast } from "react-toastify";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
@@ -11,11 +22,12 @@ import StatCard from "../../components/StatCard";
 import DataTable from "../../components/DataTable";
 import AdminLoginModal from "../../components/AdminLoginModal";
 import { customerLabel, formatDate, formatMoney } from "../../lib/format";
-import { saleNetAmount, saleProfit } from "../../lib/calc";
+import { isWithdrawalSale, saleNetAmount, saleProfit } from "../../lib/calc";
 import { listSalesInRange } from "../../lib/services/sales";
 import { listExpensesInRange } from "../../lib/services/expenses";
-import { listSupplierPayments } from "../../lib/services/suppliers";
-import type { Expense, Sale, SupplierPayment } from "../../types";
+import { listSupplierPayments, listSupplierPurchases } from "../../lib/services/suppliers";
+import { listProducts } from "../../lib/services/products";
+import type { Expense, Product, Sale, SupplierPayment, SupplierPurchase } from "../../types";
 
 const signed = (n: number) => `${n < 0 ? "− " : ""}${formatMoney(Math.abs(n))}`;
 
@@ -32,6 +44,8 @@ export default function AdminPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [supplierPayments, setSupplierPayments] = useState<SupplierPayment[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [purchases, setPurchases] = useState<SupplierPurchase[]>([]);
 
   const load = useCallback(
     async (filtered: boolean) => {
@@ -52,15 +66,19 @@ export default function AdminPage() {
           startIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         }
 
-        const [s, ex, sp] = await Promise.all([
+        const [s, ex, sp, prods, pur] = await Promise.all([
           listSalesInRange(currentUser.uid, startIso, endIso),
           listExpensesInRange(currentUser.uid, startIso, endIso),
           listSupplierPayments(currentUser.uid),
+          listProducts(currentUser.uid),
+          listSupplierPurchases(currentUser.uid),
         ]);
         const inRange = (iso: string) => iso >= startIso && (!endIso || iso <= endIso);
         setSales(s);
         setExpenses(ex);
         setSupplierPayments(sp.filter((p) => inRange(p.date)));
+        setProducts(prods);
+        setPurchases(pur);
       } catch (error) {
         console.error(error);
         toast.error(t("admin_loadFailed"));
@@ -76,12 +94,63 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unlocked, currentUser]);
 
+  const productPriceMap = useMemo(() => {
+    const map = new Map<string, number>();
+
+    // 1. Populate from supplier purchase bills (taking the purchase buying price)
+    purchases.forEach((pur) => {
+      (pur.items ?? []).forEach((it) => {
+        const bp = Number(it.buyingPrice) || 0;
+        if (bp > 0) {
+          if (it.productId && !map.has(it.productId)) {
+            map.set(it.productId, bp);
+          }
+          if (it.productName && !map.has(it.productName.trim().toLowerCase())) {
+            map.set(it.productName.trim().toLowerCase(), bp);
+          }
+        }
+      });
+    });
+
+    // 2. Override/update with product catalog buyingPrice if set
+    products.forEach((p) => {
+      const bp = Number(p.buyingPrice) || 0;
+      if (bp > 0) {
+        map.set(p.id, bp);
+        if (p.name) {
+          map.set(p.name.trim().toLowerCase(), bp);
+        }
+      }
+    });
+
+    return map;
+  }, [products, purchases]);
+
+  const missingBuyingCount = useMemo(() => {
+    const regularSales = sales.filter((s) => !isWithdrawalSale(s));
+    const seen = new Set<string>();
+    for (const sale of regularSales) {
+      for (const item of sale.items ?? []) {
+        const prodId = item.productId || item.id;
+        const fallback =
+          productPriceMap.get(prodId) ??
+          (item.name ? productPriceMap.get(item.name.trim().toLowerCase()) : undefined);
+        const buying = Number(item.buyingPrice) || Number(fallback) || 0;
+        if (buying <= 0 && !seen.has(prodId)) {
+          seen.add(prodId);
+        }
+      }
+    }
+    return seen.size;
+  }, [sales, productPriceMap]);
+
   const totals = useMemo(() => {
-    const posSales = sales.reduce((sum, s) => sum + saleNetAmount(s), 0);
-    const grossProfit = sales.reduce((sum, s) => sum + saleProfit(s), 0);
+    const regularSales = sales.filter((s) => !isWithdrawalSale(s));
+    const posSales = regularSales.reduce((sum, s) => sum + saleNetAmount(s), 0);
+    const grossProfit = regularSales.reduce((sum, s) => sum + saleProfit(s, productPriceMap), 0);
     const expenseSum = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const jamad = supplierPayments.reduce((sum, p) => sum + p.amount, 0);
-    const creditSales = sales
+    const creditSales = regularSales
       .filter((s) => (s.paymentMethod || "").trim() === "Udhar")
       .reduce((sum, s) => sum + saleNetAmount(s), 0);
     return {
@@ -93,7 +162,7 @@ export default function AdminPage() {
       jamad,
       baqi: posSales - jamad,
     };
-  }, [sales, expenses, supplierPayments]);
+  }, [sales, expenses, supplierPayments, productPriceMap]);
 
   const lock = () => {
     setUnlocked(false);
@@ -105,6 +174,8 @@ export default function AdminPage() {
       <AdminLoginModal open onClose={() => router.push("/dashboard")} onSuccess={() => setUnlocked(true)} />
     );
   }
+
+  const regularSalesCount = sales.filter((s) => !isWithdrawalSale(s)).length;
 
   return (
     <div className="space-y-6">
@@ -152,16 +223,48 @@ export default function AdminPage() {
         <StatCard title={t("admin_balance")} value={signed(totals.baqi)} subtitle={t("admin_balanceHint")} icon={Wallet} theme="green" loading={loading} />
       </div>
 
+      {missingBuyingCount > 0 && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs font-semibold text-amber-900 shadow-sm">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
+          <div className="flex-1">
+            {t("admin_missingBuyingHint", { count: missingBuyingCount })}
+          </div>
+          <button
+            onClick={() => router.push("/dashboard/inventry")}
+            className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 transition"
+          >
+            {t("navInventory")}
+          </button>
+        </div>
+      )}
+
       <DataTable
         data={sales}
         rowKey={(s) => s.id}
         loading={loading}
         emptyText={t("admin_noBills")}
-        toolbarLeft={<h3 className="text-base font-bold text-stone-900">{t("admin_billProfit", { count: sales.length })}</h3>}
+        toolbarLeft={
+          <h3 className="text-base font-bold text-stone-900">
+            {t("admin_billProfit", { count: regularSalesCount })}
+          </h3>
+        }
         columns={[
           { key: "date", header: t("date"), className: "whitespace-nowrap", cell: (s) => <span className="text-stone-500">{formatDate(s.date)}</span> },
           { key: "inv", header: t("admin_colInvoice"), cell: (s) => <span className="font-mono text-xs font-bold text-brand-700">#{s.invoiceNo || "-"}</span> },
-          { key: "cust", header: t("customer"), cell: (s) => <span className="font-semibold text-stone-800">{customerLabel(s.customerName)}</span> },
+          {
+            key: "cust",
+            header: t("customer"),
+            cell: (s) => (
+              <span className="font-semibold text-stone-800 flex items-center gap-1.5">
+                {customerLabel(s.customerName)}
+                {isWithdrawalSale(s) && (
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
+                    Withdrawal
+                  </span>
+                )}
+              </span>
+            ),
+          },
           {
             key: "pay",
             header: t("admin_colPayment"),
@@ -177,7 +280,10 @@ export default function AdminPage() {
             header: t("admin_colProfit"),
             align: "right",
             cell: (s) => {
-              const p = saleProfit(s);
+              if (isWithdrawalSale(s)) {
+                return <span className="text-xs text-stone-400 font-medium">—</span>;
+              }
+              const p = saleProfit(s, productPriceMap);
               return <span className={`tabular font-extrabold ${p < 0 ? "text-red-600" : "text-emerald-600"}`}>{signed(p)}</span>;
             },
           },

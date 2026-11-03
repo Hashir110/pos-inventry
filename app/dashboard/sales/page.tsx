@@ -208,21 +208,30 @@ export default function SalesHistoryPage() {
     setDraftDescription(sale.description || "");
     setDraftExtra(sale.extraCharges ? String(sale.extraCharges) : "");
     setDraft(
-      sale.items.map((i, idx) => ({
-        id: i.id || `item_${idx}_${Date.now()}`,
-        productId: i.productId || i.id || "",
-        name: i.name,
-        type: i.type || "count",
-        weightPerBag: i.weightPerBag || 25,
-        buyingPrice: i.buyingPrice || 0,
-        qty: String(i.qty),
-        weight:
-          i.type === "weight"
-            ? String(i.totalWeight ?? i.qty * (i.weightPerBag || 25))
-            : "",
-        manual: !!i.isManualWeight,
-        price: String(i.price),
-      }))
+      sale.items.map((i, idx) => {
+        const prodId = i.productId || i.id || "";
+        const matchedProd = products.find(
+          (p) => p.id === prodId || p.name.trim().toLowerCase() === i.name.trim().toLowerCase()
+        );
+        const resolvedBuying =
+          i.buyingPrice && i.buyingPrice > 0 ? i.buyingPrice : matchedProd?.buyingPrice || 0;
+
+        return {
+          id: i.id || `item_${idx}_${Date.now()}`,
+          productId: prodId,
+          name: i.name,
+          type: i.type || "count",
+          weightPerBag: i.weightPerBag || 25,
+          buyingPrice: resolvedBuying,
+          qty: String(i.qty),
+          weight:
+            i.type === "weight"
+              ? String(i.totalWeight ?? i.qty * (i.weightPerBag || 25))
+              : "",
+          manual: !!i.isManualWeight,
+          price: String(i.price),
+        };
+      })
     );
   };
 
@@ -608,11 +617,11 @@ export default function SalesHistoryPage() {
                     <span className="font-semibold text-stone-900 block">{name}</span>
                     {isWd ? (
                       <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block mt-0.5">
-                        Withdrawal / رقم نکالی
+                        Withdrawal / Ø±Ù‚Ù… Ù†Ú©Ø§Ù„ÛŒ
                       </span>
                     ) : sale.transport ? (
                       <span className="text-[11px] text-stone-400 block">
-                        🚚 {sale.transport}
+                        ðŸšš {sale.transport}
                       </span>
                     ) : null}
                   </div>
@@ -713,7 +722,7 @@ export default function SalesHistoryPage() {
                   <span
                     className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${pay.badge}`}
                   >
-                    ● {t(pay.labelKey)}
+                    â— {t(pay.labelKey)}
                   </span>
                   <span className="text-[11px] font-semibold text-stone-400">
                     {t(methodLabelKey(sale.paymentMethod))}
@@ -939,7 +948,7 @@ export default function SalesHistoryPage() {
                         </p>
                         {sale.transport && (
                           <p className="mt-1 text-xs font-semibold text-brand-700">
-                            🚚 {sale.transport}
+                            ðŸšš {sale.transport}
                           </p>
                         )}
                         {sale.description && (
@@ -1026,7 +1035,7 @@ export default function SalesHistoryPage() {
                             <span
                               className={`rounded-md px-2.5 py-0.5 text-[11px] font-bold ${payDisplay.badge}`}
                             >
-                              ● {t(payDisplay.labelKey)}
+                              â— {t(payDisplay.labelKey)}
                             </span>
                             <span className="ml-2 text-xs font-semibold text-stone-400">
                               {t(methodLabelKey(sale.paymentMethod))}
@@ -1101,7 +1110,7 @@ export default function SalesHistoryPage() {
                                     }`}
                                   />
                                 ) : (
-                                  <span className="text-stone-300">—</span>
+                                  <span className="text-stone-300">â€”</span>
                                 )}
                               </td>
                               <td className="px-4 py-2.5 text-right text-stone-600 tabular">
@@ -1140,7 +1149,7 @@ export default function SalesHistoryPage() {
                             item.totalWeight ??
                             (isWeight ? item.qty * (item.weightPerBag || 25) : undefined);
                           const weightStr =
-                            weightVal !== undefined ? `${weightVal} kg` : "—";
+                            weightVal !== undefined ? `${weightVal} kg` : "â€”";
                           const qtyStr = isWeight
                             ? t("sales_bagsCount", {
                                 count: String(item.qty).padStart(2, "0"),
@@ -1173,7 +1182,7 @@ export default function SalesHistoryPage() {
                                   ? isWeight
                                     ? `${item.returnedQty} kg`
                                     : item.returnedQty
-                                  : "—"}
+                                  : "â€”"}
                               </td>
                               <td className="px-4 py-3 text-right font-bold text-stone-900 tabular">
                                 Rs. {Math.round(item.total || item.price * item.qty).toLocaleString()}
@@ -1242,7 +1251,7 @@ export default function SalesHistoryPage() {
                         ? [
                             {
                               label: t("sales_refundReturn"),
-                              value: `− ${money(refunded)}`,
+                              value: `âˆ’ ${money(refunded)}`,
                               tone: "text-red-600",
                             },
                           ]
@@ -1256,7 +1265,7 @@ export default function SalesHistoryPage() {
                         ? [
                             {
                               label: t("advancePaid"),
-                              value: `− ${money(sale.advanceAmount || 0)}`,
+                              value: `âˆ’ ${money(sale.advanceAmount || 0)}`,
                               tone: "font-semibold text-blue-700",
                             },
                           ]
@@ -1371,7 +1380,7 @@ export default function SalesHistoryPage() {
                   })}
                 </h3>
                 <span className="text-xs font-semibold text-stone-500">
-                  {customerLabel(deleteConfirmSale.customerName)} •{" "}
+                  {customerLabel(deleteConfirmSale.customerName)} â€¢{" "}
                   {money(saleNetAmount(deleteConfirmSale))}
                 </span>
               </div>

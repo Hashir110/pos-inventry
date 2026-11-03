@@ -97,9 +97,7 @@ export const cleanSaleItem = (item: SaleItem): SaleItem => {
   if (item.sellingPrice !== undefined && item.sellingPrice !== null) {
     cleaned.sellingPrice = Number(item.sellingPrice);
   }
-  if (item.productId) {
-    cleaned.productId = item.productId;
-  }
+  cleaned.productId = item.productId || item.id || "";
   if (item.dispatchFrom) {
     cleaned.dispatchFrom = item.dispatchFrom;
   }
@@ -153,6 +151,7 @@ export const createOnlineSale = async (
 ): Promise<string> => {
   const saleRef = doc(collection(db, "sales"));
   let invoiceNo = "";
+  let savedItems: SaleItem[] = [];
 
   const advancePaid = meta.advanceAmount || 0;
   const netPayable = Math.max(0, roundMoney(totalAmount - advancePaid));
@@ -167,7 +166,7 @@ export const createOnlineSale = async (
     bankPaidAmount > 0;
 
   await runTransaction(db, async (transaction) => {
-    const reads = [];
+    const reads: { snapshot: any; item: SaleItem }[] = [];
     for (const item of cart) {
       const snapshot = await transaction.get(doc(db, "products", item.id));
       reads.push({ snapshot, item });
@@ -267,10 +266,25 @@ export const createOnlineSale = async (
       });
     }
 
+    const processedCart = cart.map((item) => {
+      const snapObj = reads.find((r) => r.item.id === item.id);
+      const prodData = snapObj?.snapshot?.data() as Product | undefined;
+      const itemBuying = Number(item.buyingPrice) || 0;
+      const prodBuying = Number(prodData?.buyingPrice) || 0;
+      const resolvedBuyingPrice = itemBuying > 0 ? itemBuying : prodBuying;
+
+      return cleanSaleItem({
+        ...item,
+        productId: item.productId || item.id,
+        buyingPrice: resolvedBuyingPrice,
+      });
+    });
+    savedItems = processedCart;
+
     const saleData = stripUndefined({
       saleId: saleRef.id,
       ownerId: ownerId || "",
-      items: cart.map(cleanSaleItem),
+      items: processedCart,
       totalAmount: roundMoney(totalAmount || 0),
       date: new Date().toISOString(),
       invoiceNo,
@@ -292,7 +306,7 @@ export const createOnlineSale = async (
     id: saleRef.id,
     saleId: saleRef.id,
     ownerId,
-    items: cart.map(cleanSaleItem),
+    items: savedItems.length > 0 ? savedItems : cart.map(cleanSaleItem),
     totalAmount: roundMoney(totalAmount || 0),
     date: new Date().toISOString(),
     invoiceNo,
@@ -343,9 +357,21 @@ export const queueOfflineSale = (
 
   const invoiceNo = "OFF-" + Date.now().toString(36).toUpperCase().slice(-6);
   const nowIso = new Date().toISOString();
+  const processedCart = cart.map((item) => {
+    const prod = localProducts?.find((p) => p.id === item.id);
+    const itemBuying = Number(item.buyingPrice) || 0;
+    const prodBuying = Number(prod?.buyingPrice) || 0;
+    const resolvedBuyingPrice = itemBuying > 0 ? itemBuying : prodBuying;
+
+    return cleanSaleItem({
+      ...item,
+      productId: item.productId || item.id,
+      buyingPrice: resolvedBuyingPrice,
+    });
+  });
   const order: PendingSale = stripUndefined({
     ownerId: ownerId || "",
-    items: cart.map(cleanSaleItem),
+    items: processedCart,
     totalAmount: roundMoney(totalAmount || 0),
     date: nowIso,
     isOffline: true,
@@ -392,7 +418,7 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
       const existing = await transaction.get(saleRef);
       if (existing.exists()) return;
 
-      const reads = [];
+      const reads: { snapshot: any; item: SaleItem }[] = [];
       for (const item of order.items) {
         const snapshot = await transaction.get(doc(db, "products", item.id));
         reads.push({ snapshot, item });
@@ -440,9 +466,22 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
 
       const { isOffline: _isOffline, ...cleanOrder } = order;
       void _isOffline;
+      const syncedItems = (cleanOrder.items || []).map((item) => {
+        const snapObj = reads.find((r) => r.item.id === item.id);
+        const prodData = snapObj?.snapshot?.data() as Product | undefined;
+        const itemBuying = Number(item.buyingPrice) || 0;
+        const prodBuying = Number(prodData?.buyingPrice) || 0;
+        const resolvedBuyingPrice = itemBuying > 0 ? itemBuying : prodBuying;
+
+        return cleanSaleItem({
+          ...item,
+          productId: item.productId || item.id,
+          buyingPrice: resolvedBuyingPrice,
+        });
+      });
       const saleData = stripUndefined({
         ...cleanOrder,
-        items: (cleanOrder.items || []).map(cleanSaleItem),
+        items: syncedItems,
         syncedAt: new Date().toISOString(),
       });
       transaction.set(saleRef, saleData);
@@ -544,7 +583,7 @@ export interface SaleItemEdit {
 
 
 const deductedUnits = (item: Pick<SaleItem, "type" | "totalWeight" | "qty">): number =>
-  item.type === "weight" && item.totalWeight ? item.totalWeight : item.qty;
+  Number(item.qty) || 0;
 
 export const resolveSaleRef = async (saleId: string, ownerId?: string) => {
   // 1. Direct doc lookup

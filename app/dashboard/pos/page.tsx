@@ -173,6 +173,7 @@ export default function POSPage() {
             }
             const newItem: SaleItem = {
                 id: product.id,
+                productId: product.id,
                 name: product.name,
                 qty: bagsQty,
                 weightPerBag: bagWeight,
@@ -392,8 +393,15 @@ export default function POSPage() {
             let weight = parseFloat(String(weightValue));
             if (isNaN(weight) || weight < 0) weight = 0;
 
+            const isWeight = item.type === "weight";
+            const bagWeight = item.weightPerBag || 25;
+            const newQty = isWeight && bagWeight > 0 && weight > 0
+                ? Math.round((weight / bagWeight) * 100) / 100
+                : item.qty;
+
             return {
                 ...item,
+                qty: newQty,
                 totalWeight: weight,
                 isManualWeight: true,
                 total: weight * item.price,

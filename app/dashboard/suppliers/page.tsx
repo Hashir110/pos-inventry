@@ -10,9 +10,14 @@ import {
   deleteSupplier,
   addSupplierPurchase,
   addSupplierPayment,
+  addSupplierRefund,
+  editSupplierPayment,
   listSupplierPurchases,
   listSupplierPayments,
+  reverseSupplierPayment,
 } from "../../lib/services/suppliers";
+import { useDialog } from "../../components/DialogProvider";
+import { allocateSplit, isSplitBalanced } from "../../lib/settlement";
 import { subscribeProducts } from "../../lib/services/products";
 import type { Supplier, Product, SupplierPurchase, SupplierPayment } from "../../types";
 import {
@@ -60,7 +65,7 @@ export default function SuppliersPage() {
   const [purchaseSupId, setPurchaseSupId] = useState("");
   const [purchaseProdId, setPurchaseProdId] = useState("");
   const [purchaseQty, setPurchaseQty] = useState<number | "">(1);
-  const [purchaseWeight, setPurchaseWeight] = useState<number | "">(25);
+  const [purchaseWeight, setPurchaseWeight] = useState<number | "">("");
   const [isManualWeight, setIsManualWeight] = useState(false);
   const [purchaseBuyingPrice, setPurchaseBuyingPrice] = useState<number | "">("");
   const [purchaseDestination, setPurchaseDestination] = useState<"gudam" | "shop">("gudam");
@@ -68,7 +73,12 @@ export default function SuppliersPage() {
 
   const [paymentSupId, setPaymentSupId] = useState("");
   const [paymentAmount, setPaymentAmount] = useState<number | "">("");
-  const [paymentMethod, setPaymentMethod] = useState<"Cash" | "Bank Account">("Cash");
+  const [paymentMethod, setPaymentMethod] = useState<"Cash" | "Bank Account" | "Split">("Cash");
+
+
+  const [paymentMode, setPaymentMode] = useState<"pay" | "refund">("pay");
+  const [splitCash, setSplitCash] = useState<number | "">("");
+  const [splitBank, setSplitBank] = useState<number | "">("");
   const [paymentNote, setPaymentNote] = useState("");
 
   const [addingSupplier, setAddingSupplier] = useState(false);
@@ -83,6 +93,13 @@ export default function SuppliersPage() {
 
   const [deleteSupplierTarget, setDeleteSupplierTarget] = useState<Supplier | null>(null);
   const [deletingSupplier, setDeletingSupplier] = useState(false);
+  const [reversingId, setReversingId] = useState("");
+  const [editingPay, setEditingPay] = useState<SupplierPayment | null>(null);
+  const [editPayAmount, setEditPayAmount] = useState<number | "">("");
+  const [editPayMethod, setEditPayMethod] = useState<"Cash" | "Bank Account">("Cash");
+  const [editPayNote, setEditPayNote] = useState("");
+  const [savingPayEdit, setSavingPayEdit] = useState(false);
+  const { confirm } = useDialog();
 
   useEffect(() => {
     if (!ownerId) return;
@@ -144,8 +161,12 @@ export default function SuppliersPage() {
       setIsManualWeight(true);
       return;
     }
-    setPurchaseWeight(Number(val));
+    const w = Number(val);
+    setPurchaseWeight(w);
     setIsManualWeight(true);
+    if (w > 0 && purchaseBagWeight > 0) {
+      setPurchaseQty(Math.round((w / purchaseBagWeight) * 100) / 100);
+    }
   };
 
   const resetWeightToAuto = () => {
@@ -301,7 +322,7 @@ export default function SuppliersPage() {
       setPurchaseSupId("");
       setPurchaseProdId("");
       setPurchaseQty(1);
-      setPurchaseWeight(25);
+      setPurchaseWeight("");
       setIsManualWeight(false);
       setPurchaseBuyingPrice("");
       setPurchasePaidAmount("");
@@ -325,17 +346,42 @@ export default function SuppliersPage() {
     }
     const sup = suppliers.find((s) => s.id === paymentSupId);
     if (!sup) return;
+
+    const isSplit = paymentMethod === "Split";
+    const cashPart = isSplit ? Math.max(0, Number(splitCash) || 0) : 0;
+    const bankPart = isSplit ? Math.max(0, Number(splitBank) || 0) : 0;
+    if (isSplit && !isSplitBalanced(cashPart, bankPart, payAmt)) {
+      toast.warn(t("settle_splitMismatch", { amount: Math.round(payAmt).toLocaleString() }));
+      return;
+    }
+
+    const parts: { amount: number; method: "Cash" | "Bank Account" }[] = isSplit
+      ? allocateSplit([{ party: sup.id, amount: payAmt }], cashPart).map((p) => ({ amount: p.amount, method: p.method }))
+      : [{ amount: payAmt, method: paymentMethod as "Cash" | "Bank Account" }];
+    const groupId = parts.length > 1 ? `grp_${Date.now()}_${sup.id}` : undefined;
+
+    let savedCash = 0;
+    let savedBank = 0;
     try {
       setSavingPayment(true);
-      await addSupplierPayment(ownerId, {
-        supplierId: sup.id,
-        supplierName: sup.name,
-        amount: payAmt,
-        method: paymentMethod,
-        note: paymentNote,
-      });
+      for (const part of parts) {
+        const entry = {
+          supplierId: sup.id,
+          supplierName: sup.name,
+          amount: part.amount,
+          method: part.method,
+          note: paymentNote,
+          groupId,
+        };
+        if (paymentMode === "refund") await addSupplierRefund(ownerId, entry);
+        else await addSupplierPayment(ownerId, entry);
+        if (part.method === "Cash") savedCash += part.amount;
+        else savedBank += part.amount;
+      }
 
-      toast.success(t("suppliers_payment_recorded", { amount: payAmt, name: sup.name }));
+      toast.success(
+        t(paymentMode === "refund" ? "suppliers_refund_recorded" : "suppliers_payment_recorded", { amount: payAmt, name: sup.name })
+      );
       setShowPaymentModal(false);
 
       const pay = await listSupplierPayments(ownerId, true);
@@ -344,10 +390,69 @@ export default function SuppliersPage() {
       setPaymentSupId("");
       setPaymentAmount("");
       setPaymentNote("");
+      setSplitCash("");
+      setSplitBank("");
     } catch (err: any) {
+      if (savedCash + savedBank > 0) {
+        setPaymentAmount(Math.round((payAmt - savedCash - savedBank) * 100) / 100);
+        setSplitCash(Math.max(0, Math.round((cashPart - savedCash) * 100) / 100));
+        setSplitBank(Math.max(0, Math.round((bankPart - savedBank) * 100) / 100));
+        const pay = await listSupplierPayments(ownerId, true);
+        setPayments(pay);
+      }
       toast.error(err.message || t("suppliers_err_payment"));
     } finally {
       setSavingPayment(false);
+    }
+  };
+
+  const startEditPayment = (pay: SupplierPayment) => {
+    setEditingPay(pay);
+    setEditPayAmount(Math.abs(pay.amount));
+    setEditPayMethod(pay.method);
+    setEditPayNote(pay.note || "");
+  };
+
+  const handleEditPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPay) return;
+    const amount = Number(editPayAmount) || 0;
+    if (amount <= 0) {
+      toast.warn(t("suppliers_warn_amount"));
+      return;
+    }
+    try {
+      setSavingPayEdit(true);
+      await editSupplierPayment(ownerId, editingPay.id, { amount, method: editPayMethod, note: editPayNote });
+      toast.success(t("suppliers_edit_saved"));
+      setEditingPay(null);
+      setPayments(await listSupplierPayments(ownerId, true));
+    } catch (err: any) {
+      toast.error(err?.message || t("suppliers_edit_failed"));
+    } finally {
+      setSavingPayEdit(false);
+    }
+  };
+
+  const handleReversePayment = async (pay: SupplierPayment) => {
+    const linked = pay.groupId ? payments.filter((p) => p.groupId === pay.groupId) : [pay];
+    const totalAmount = linked.reduce((sum, p) => sum + p.amount, 0);
+    const ok = await confirm({
+      title: t("suppliers_reverse_title"),
+      message: t("suppliers_reverse_msg", { amount: totalAmount.toLocaleString(), name: pay.supplierName }),
+      confirmLabel: t("suppliers_reverse_confirm"),
+      tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      setReversingId(pay.id);
+      await reverseSupplierPayment(ownerId, pay.id);
+      toast.success(t("suppliers_reverse_done", { amount: totalAmount.toLocaleString(), name: pay.supplierName }));
+      setPayments(await listSupplierPayments(ownerId, true));
+    } catch (err: any) {
+      toast.error(err?.message || t("suppliers_reverse_failed"));
+    } finally {
+      setReversingId("");
     }
   };
 
@@ -829,7 +934,7 @@ export default function SuppliersPage() {
                     setShowPurchaseModal(false);
                     setPurchaseProdId("");
                     setPurchaseQty(1);
-                    setPurchaseWeight(25);
+                    setPurchaseWeight("");
                     setIsManualWeight(false);
                     setPurchaseBuyingPrice("");
                     setPurchasePaidAmount("");
@@ -870,6 +975,27 @@ export default function SuppliersPage() {
               </button>
             </div>
             <form onSubmit={handlePaymentSubmit} className="p-5 space-y-4">
+              <div className="flex gap-2">
+                {(["pay", "refund"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setPaymentMode(mode)}
+                    className={`flex-1 rounded-xl border px-3 py-2 text-xs font-bold transition ${
+                      paymentMode === mode
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                        : "border-stone-300 bg-white text-stone-500 hover:bg-stone-50"
+                    }`}
+                  >
+                    {t(mode === "pay" ? "suppliers_mode_pay" : "suppliers_mode_refund")}
+                  </button>
+                ))}
+              </div>
+              {paymentMode === "refund" && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">
+                  {t("suppliers_refund_hint")}
+                </p>
+              )}
               <div>
                 <label className="text-xs font-bold text-stone-700 block mb-1">
                   {t("suppliers_label_supplier")}
@@ -941,12 +1067,13 @@ export default function SuppliersPage() {
                   <select
                     value={paymentMethod}
                     onChange={(e) =>
-                      setPaymentMethod(e.target.value as "Cash" | "Bank Account")
+                      setPaymentMethod(e.target.value as "Cash" | "Bank Account" | "Split")
                     }
                     className="input-field"
                   >
                     <option value="Cash">{t("cash")}</option>
                     <option value="Bank Account">{t("suppliers_method_bank")}</option>
+                    <option value="Split">{t("settle_split")}</option>
                   </select>
                 </div>
                 <div>
@@ -960,6 +1087,42 @@ export default function SuppliersPage() {
                   />
                 </div>
               </div>
+
+              {paymentMethod === "Split" && (
+                <div className="space-y-2 rounded-xl border border-indigo-200 bg-indigo-50/50 p-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-stone-700 block mb-1">{t("pos_cash_part")}</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        placeholder="0"
+                        value={splitCash}
+                        onChange={(e) => setSplitCash(e.target.value === "" ? "" : Number(e.target.value))}
+                        className="input-field text-right font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-stone-700 block mb-1">{t("pos_bank_part")}</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        placeholder="0"
+                        value={splitBank}
+                        onChange={(e) => setSplitBank(e.target.value === "" ? "" : Number(e.target.value))}
+                        className="input-field text-right font-bold"
+                      />
+                    </div>
+                  </div>
+                  {!isSplitBalanced(Number(splitCash) || 0, Number(splitBank) || 0, Number(paymentAmount) || 0) && Number(paymentAmount) > 0 && (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-800">
+                      {t("settle_splitMismatch", { amount: Math.round(Number(paymentAmount)).toLocaleString() })}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="pt-2 flex gap-3">
                 <button
@@ -977,7 +1140,7 @@ export default function SuppliersPage() {
                   {savingPayment ? (
                     <Loader2 className="animate-spin text-white" size={16} />
                   ) : (
-                    t("suppliers_save_payment")
+                    t(paymentMode === "refund" ? "suppliers_save_refund" : "suppliers_save_payment")
                   )}
                 </button>
               </div>
@@ -1059,7 +1222,7 @@ export default function SuppliersPage() {
                       >
                         <div>
                           <p className="font-bold text-emerald-900">
-                            {t("suppliers_history_payment_line", {
+                            {t(pay.amount < 0 ? "suppliers_refund_line" : "suppliers_history_payment_line", {
                               method: pay.method === "Cash" ? t("cash") : pay.method === "Bank Account" ? t("suppliers_method_bank") : pay.method,
                             })}{" "}
                             {pay.note ? `- ${pay.note}` : ""}
@@ -1068,14 +1231,94 @@ export default function SuppliersPage() {
                             {new Date(pay.date).toLocaleDateString()}
                           </p>
                         </div>
-                        <span className="font-black text-emerald-800">
-                          - Rs. {pay.amount.toLocaleString()}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-black ${pay.amount < 0 ? "text-amber-700" : "text-emerald-800"}`}>
+                            {pay.amount < 0 ? "+" : "-"} Rs. {Math.abs(pay.amount).toLocaleString()}
+                          </span>
+                          <button
+                            onClick={() => startEditPayment(pay)}
+                            className="rounded-lg p-1.5 text-stone-500 transition hover:bg-blue-50 hover:text-blue-600"
+                            title={t("suppliers_edit_payment")}
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
+                            onClick={() => handleReversePayment(pay)}
+                            disabled={reversingId === pay.id}
+                            className="rounded-lg p-1.5 text-stone-500 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                            title={t("suppliers_reverse")}
+                          >
+                            {reversingId === pay.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                          </button>
+                        </div>
                       </div>
                     ))}
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {editingPay && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-pop w-full max-w-sm overflow-hidden">
+            <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-blue-50">
+              <h3 className="font-extrabold text-blue-900 text-sm flex items-center gap-2">
+                <Pencil size={18} className="text-blue-600" /> {t("suppliers_editPay_title")}
+              </h3>
+              <button onClick={() => setEditingPay(null)} className="rounded-lg p-1 text-stone-400 hover:bg-stone-200">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleEditPaymentSubmit} className="p-5 space-y-4">
+              <p className="text-xs font-bold text-stone-600">{editingPay.supplierName}</p>
+              <div>
+                <label className="text-xs font-bold text-stone-700 block mb-1">{t("suppliers_label_payment_amount")}</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="any"
+                  value={editPayAmount}
+                  onChange={(e) => setEditPayAmount(e.target.value === "" ? "" : Number(e.target.value))}
+                  className="input-field text-lg font-bold text-emerald-800"
+                  autoFocus
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-stone-700 block mb-1">{t("suppliers_label_payment_method")}</label>
+                <select
+                  value={editPayMethod}
+                  onChange={(e) => setEditPayMethod(e.target.value as "Cash" | "Bank Account")}
+                  disabled={!!editingPay.bankId}
+                  className="input-field disabled:bg-stone-100"
+                >
+                  <option value="Cash">{t("cash")}</option>
+                  <option value="Bank Account">{t("suppliers_method_bank")}</option>
+                </select>
+                {editingPay.bankId && (
+                  <p className="mt-1 text-[11px] font-semibold text-amber-700">{t("suppliers_edit_bankLocked")}</p>
+                )}
+              </div>
+              <div>
+                <label className="text-xs font-bold text-stone-700 block mb-1">{t("suppliers_label_note")}</label>
+                <input
+                  type="text"
+                  value={editPayNote}
+                  onChange={(e) => setEditPayNote(e.target.value)}
+                  placeholder={t("suppliers_placeholder_note")}
+                  className="input-field"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={savingPayEdit}
+                className="btn-primary w-full text-xs font-bold min-h-[38px] flex items-center justify-center"
+              >
+                {savingPayEdit ? <Loader2 className="animate-spin text-white" size={16} /> : t("suppliers_edit_save")}
+              </button>
+            </form>
           </div>
         </div>
       )}

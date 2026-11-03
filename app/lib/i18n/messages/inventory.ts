@@ -47,6 +47,8 @@ const en = {
   productForm_byWeight50: "By Weight (50kg Bag)",
   productForm_byCount: "By Count (Pieces)",
   productForm_pricingStock: "Pricing & Stock",
+  productForm_buyPriceKg: "Buying Price (Rate / kg) [Optional]",
+  productForm_buyPricePc: "Buying Price (Rate / pc) [Optional]",
   productForm_sellPriceKg: "Selling Price (Rate / kg)",
   productForm_sellPricePc: "Selling Price (Rate / pc)",
   productForm_warehouseStock: "Warehouse Stock ({unit})",
@@ -55,7 +57,7 @@ const en = {
   productForm_unitPieces: "Pieces",
   productForm_note: "Note:",
   productForm_noteText:
-    "You do not need to enter the buying price here. It is updated automatically from the purchase bill when you buy goods from a supplier.",
+    "Buying price is optional here. It updates automatically when you purchase goods from a supplier.",
   productForm_update: "Update Product",
   productForm_save: "Save Product",
 
@@ -142,6 +144,8 @@ const ur: Record<keyof typeof en, string> = {
   productForm_byWeight50: "وزن کے حساب سے (50 کلو بوری)",
   productForm_byCount: "گنتی کے حساب سے (عدد)",
   productForm_pricingStock: "قیمت اور اسٹاک",
+  productForm_buyPriceKg: "خرید قیمت (ریٹ / کلو) [اختیاری]",
+  productForm_buyPricePc: "خرید قیمت (ریٹ / عدد) [اختیاری]",
   productForm_sellPriceKg: "فروخت قیمت (ریٹ / کلو)",
   productForm_sellPricePc: "فروخت قیمت (ریٹ / عدد)",
   productForm_warehouseStock: "گودام اسٹاک ({unit})",
@@ -150,7 +154,7 @@ const ur: Record<keyof typeof en, string> = {
   productForm_unitPieces: "عدد",
   productForm_note: "نوٹ:",
   productForm_noteText:
-    "یہاں خرید کی قیمت درج کرنے کی ضرورت نہیں۔ سپلائر سے مال خریدتے وقت یہ خریداری بل سے خود بخود اپ ڈیٹ ہو جاتی ہے۔",
+    "یہاں خرید قیمت اختیاری ہے۔ سپلائر سے مال خریدتے وقت یہ خریداری بل سے خود بخود اپ ڈیٹ ہو جائے گی۔",
   productForm_update: "پروڈکٹ اپ ڈیٹ کریں",
   productForm_save: "پروڈکٹ محفوظ کریں",
 

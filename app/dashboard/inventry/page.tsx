@@ -223,26 +223,50 @@ export default function InventoryList() {
               </span>
             ),
           },
+          { key: "buy", header: t("buyingPrice"), align: "right", cell: (item) => <span className="font-semibold text-stone-600">Rs. {item.buyingPrice ?? 0}</span> },
           { key: "sell", header: t("sellingPrice"), align: "right", cell: (item) => <span className="font-bold text-stone-900">Rs. {item.sellingPrice}</span> },
           {
             key: "gudam",
             header: t("inv_warehouseStock"),
             align: "center",
-            cell: (item) => (
-              <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-purple-100 text-purple-800 border border-purple-200">
-                {item.gudamStock ?? 0} {unitLabel(item)}
-              </span>
-            ),
+            cell: (item) => {
+              const bagWt = item.weightPerBag || (item.unitType === "weight" ? 25 : 0);
+              const totalKg = item.unitType === "weight" ? (item.gudamStock ?? 0) * bagWt : null;
+              return (
+                <div className="flex flex-col items-center">
+                  <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-purple-100 text-purple-800 border border-purple-200">
+                    {item.gudamStock ?? 0} {unitLabel(item)}
+                  </span>
+                  {totalKg !== null && (
+                    <span className="text-[10px] font-bold text-stone-500 mt-0.5">
+                      {totalKg.toLocaleString()} kg
+                    </span>
+                  )}
+                </div>
+              );
+            },
           },
           {
             key: "shop",
             header: t("inv_shopStock"),
             align: "center",
-            cell: (item) => (
-              <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
-                {item.shopStock ?? item.stock ?? 0} {unitLabel(item)}
-              </span>
-            ),
+            cell: (item) => {
+              const bagWt = item.weightPerBag || (item.unitType === "weight" ? 25 : 0);
+              const shopQty = item.shopStock ?? item.stock ?? 0;
+              const totalKg = item.unitType === "weight" ? shopQty * bagWt : null;
+              return (
+                <div className="flex flex-col items-center">
+                  <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
+                    {shopQty} {unitLabel(item)}
+                  </span>
+                  {totalKg !== null && (
+                    <span className="text-[10px] font-bold text-stone-500 mt-0.5">
+                      {totalKg.toLocaleString()} kg
+                    </span>
+                  )}
+                </div>
+              );
+            },
           },
           {
             key: "total",
@@ -252,14 +276,23 @@ export default function InventoryList() {
               const unit = unitLabel(item);
               const out = item.stock <= 0;
               const low = !out && item.stock < 5;
+              const bagWt = item.weightPerBag || (item.unitType === "weight" ? 25 : 0);
+              const totalKg = item.unitType === "weight" ? (item.stock ?? 0) * bagWt : null;
               return (
-                <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-bold ${
-                    out ? "bg-red-100 text-red-700" : low ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
-                  }`}
-                >
-                  {item.stock < 0 ? `${item.stock} ${unit}` : out ? t("outOfStock") : `${item.stock} ${unit}`}
-                </span>
+                <div className="flex flex-col items-end">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                      out ? "bg-red-100 text-red-700" : low ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                    }`}
+                  >
+                    {item.stock < 0 ? `${item.stock} ${unit}` : out ? t("outOfStock") : `${item.stock} ${unit}`}
+                  </span>
+                  {totalKg !== null && !out && (
+                    <span className="text-[10px] font-bold text-stone-500 mt-0.5">
+                      {totalKg.toLocaleString()} kg
+                    </span>
+                  )}
+                </div>
               );
             },
           },

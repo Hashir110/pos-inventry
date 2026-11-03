@@ -228,6 +228,8 @@ export interface SupplierPayment {
   date: string;
   bankId?: string;
   bankName?: string;
+  groupId?: string;
+  kind?: "refund";
 }
 
 export interface DayClosing {

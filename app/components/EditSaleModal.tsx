@@ -61,7 +61,18 @@ export default function EditSaleModal({ sale, onClose, onSaved }: EditSaleModalP
     const uid = currentUser?.uid || sale.ownerId;
     if (uid) {
       listProducts(uid)
-        .then(setProducts)
+        .then((prods) => {
+          setProducts(prods);
+          setDraft((prev) =>
+            prev.map((d) => {
+              if (d.buyingPrice > 0) return d;
+              const found = prods.find(
+                (p) => p.id === d.productId || p.name.trim().toLowerCase() === d.name.trim().toLowerCase()
+              );
+              return found && found.buyingPrice > 0 ? { ...d, buyingPrice: found.buyingPrice } : d;
+            })
+          );
+        })
         .catch(() => {});
     }
   }, [sale, currentUser]);
@@ -272,7 +283,7 @@ export default function EditSaleModal({ sale, onClose, onSaved }: EditSaleModalP
                             className={`field !w-24 !py-1.5 text-center font-bold ${d.manual ? "!border-amber-300 !bg-amber-50" : ""}`}
                           />
                         ) : (
-                          <span className="text-stone-300">—</span>
+                          <span className="text-stone-300">â€”</span>
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-center">
