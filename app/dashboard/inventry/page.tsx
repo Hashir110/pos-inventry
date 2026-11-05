@@ -232,12 +232,15 @@ export default function InventoryList() {
             cell: (item) => {
               const bagWt = item.weightPerBag || (item.unitType === "weight" ? 25 : 0);
               const totalKg = item.unitType === "weight" ? (item.gudamStock ?? 0) * bagWt : null;
+              const isNeg = (item.gudamStock ?? 0) < 0;
               return (
                 <div className="flex flex-col items-center">
-                  <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-purple-100 text-purple-800 border border-purple-200">
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-extrabold border ${
+                    isNeg ? "bg-red-100 text-red-700 border-red-200" : "bg-purple-100 text-purple-800 border-purple-200"
+                  }`}>
                     {item.gudamStock ?? 0} {unitLabel(item)}
                   </span>
-                  {totalKg !== null && (
+                  {totalKg !== null && item.gudamStock !== 0 && (
                     <span className="text-[10px] font-bold text-stone-500 mt-0.5">
                       {totalKg.toLocaleString()} kg
                     </span>
@@ -254,12 +257,15 @@ export default function InventoryList() {
               const bagWt = item.weightPerBag || (item.unitType === "weight" ? 25 : 0);
               const shopQty = item.shopStock ?? item.stock ?? 0;
               const totalKg = item.unitType === "weight" ? shopQty * bagWt : null;
+              const isNeg = shopQty < 0;
               return (
                 <div className="flex flex-col items-center">
-                  <span className="rounded-full px-2.5 py-1 text-xs font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-extrabold border ${
+                    isNeg ? "bg-red-100 text-red-700 border-red-200" : "bg-blue-100 text-blue-800 border-blue-200"
+                  }`}>
                     {shopQty} {unitLabel(item)}
                   </span>
-                  {totalKg !== null && (
+                  {totalKg !== null && shopQty !== 0 && (
                     <span className="text-[10px] font-bold text-stone-500 mt-0.5">
                       {totalKg.toLocaleString()} kg
                     </span>
@@ -287,7 +293,7 @@ export default function InventoryList() {
                   >
                     {item.stock < 0 ? `${item.stock} ${unit}` : out ? t("outOfStock") : `${item.stock} ${unit}`}
                   </span>
-                  {totalKg !== null && !out && (
+                  {totalKg !== null && item.stock !== 0 && (
                     <span className="text-[10px] font-bold text-stone-500 mt-0.5">
                       {totalKg.toLocaleString()} kg
                     </span>

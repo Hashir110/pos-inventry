@@ -43,7 +43,15 @@ const dayKey = (iso: string) => {
   return new Date(iso).toLocaleDateString("en-CA");
 };
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
-const methodLabel = (m: string) => (m === "Cash" ? tr("cash") : tr("bankOnline"));
+const methodLabel = (m: string) => {
+  if (m === "Cash") return tr("cash");
+  if (m.startsWith("Bank Account (")) {
+    const bankPart = m.slice("Bank Account (".length, -1);
+    return `${tr("bankOnline")} (${bankPart})`;
+  }
+  if (m === "Bank Account") return tr("bankOnline");
+  return m;
+};
 const signed = (n: number) => `${n < 0 ? "− " : ""}${formatMoney(Math.abs(n))}`;
 
 const paymentLabel = (m: PaymentMethod) => {
@@ -477,8 +485,17 @@ export default function DailyClosingPage() {
         : `${date}T${new Date().toTimeString().slice(0, 8)}.000Z`;
 
     for (const line of lines) {
+      const effectiveMethod = line.method ?? method;
       try {
-        await receivePayment(ownerId, line.party.id, line.amount, line.method ?? method, note, bankId, paymentDate);
+        await receivePayment(
+          ownerId,
+          line.party.id,
+          line.amount,
+          effectiveMethod,
+          note,
+          effectiveMethod === "Bank Account" ? bankId : undefined,
+          paymentDate
+        );
       } catch (error) {
         failed.push(line);
         toast.error(`${line.party.name}: ${error instanceof Error ? error.message : t("closing_saveItemFailed")}`);
@@ -507,14 +524,15 @@ export default function DailyClosingPage() {
 
     for (const line of lines) {
       const { party, amount, method: lineMethod } = line;
+      const effectiveMethod = lineMethod ?? method;
       try {
         await addSupplierPayment(ownerId, {
           supplierId: party.id,
           supplierName: party.name,
           amount,
-          method: lineMethod ?? method,
+          method: effectiveMethod,
           note,
-          bankId,
+          bankId: effectiveMethod === "Bank Account" ? bankId : undefined,
           date: paymentDate,
           groupId: groups.get(party.id),
         });
@@ -538,7 +556,7 @@ export default function DailyClosingPage() {
           date: p.date,
           kind: "amad" as Kind,
           party: p.customerName,
-          method: p.method,
+          method: p.bankName ? `${p.method} (${p.bankName})` : p.method,
           note: p.note ? `${p.note} (Collection)` : "Credit Ledger Collection",
           amount: p.amount,
         })),
@@ -547,7 +565,7 @@ export default function DailyClosingPage() {
           date: p.date,
           kind: "jamad" as Kind,
           party: p.supplierName,
-          method: p.method,
+          method: p.bankName ? `${p.method} (${p.bankName})` : p.method,
           note: p.note ? `${p.note} (Supplier Payment)` : "Supplier Payment",
           amount: p.amount,
         })),
@@ -686,7 +704,7 @@ export default function DailyClosingPage() {
             title={t("closing_received")}
             value={formatMoney(totals.amad)}
             subtitle={
-              totals.amadBank > 0
+              totals.amad > 0
                 ? t("closing_receivedBreakdown", { cash: formatMoney(totals.amadCash), bank: formatMoney(totals.amadBank) })
                 : t("closing_receivedHint")
             }
@@ -699,7 +717,7 @@ export default function DailyClosingPage() {
             title={t("closing_paidOut")}
             value={formatMoney(totals.jamad)}
             subtitle={
-              totals.jamadBank > 0
+              totals.jamad > 0
                 ? t("closing_paidBreakdown", { cash: formatMoney(totals.jamadCash), bank: formatMoney(totals.jamadBank) })
                 : t("closing_paidOutHint")
             }
@@ -751,6 +769,7 @@ export default function DailyClosingPage() {
             tone="amber"
             parties={supplierParties}
             allowSplit
+            banks={banks}
             noteLabel={t("closing_reasonLabel")}
             notePlaceholder={t("closing_reasonPlaceholder")}
             submitLabel={t("closing_savePayment")}

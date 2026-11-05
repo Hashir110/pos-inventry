@@ -35,15 +35,14 @@ export interface ProductInput {
 
 const mapProductDoc = (d: { id: string; data: () => Record<string, any>; ref?: any }): Product => {
   const data = d.data();
-  const total = data.stock ?? 0;
-  const shop = data.shopStock ?? 0;
-  const rawGudam = data.gudamStock ?? 0;
-  const gudam = (rawGudam + shop > total) ? Math.max(0, total - shop) : rawGudam;
+  const total = Number(data.stock ?? 0);
+  const shop = Number(data.shopStock ?? 0);
+  const rawGudam = data.gudamStock !== undefined && data.gudamStock !== null ? Number(data.gudamStock) : (total - shop);
   return {
     id: d.id,
     ...data,
     stock: total,
-    gudamStock: gudam,
+    gudamStock: rawGudam,
     shopStock: shop,
   } as Product;
 };

@@ -197,9 +197,29 @@ export default function SettlementPanel({
               </FormField>
             </div>
             {splitMismatch && total > 0 && (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-800">
-                {t("settle_splitMismatch", { amount: Math.round(total).toLocaleString() })}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-800">
+                <span>{t("settle_splitMismatch", { amount: Math.round(total).toLocaleString() })}</span>
+                <div className="flex gap-1.5">
+                  {total - cashPart > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setBankInput(String(Math.round((total - cashPart) * 100) / 100))}
+                      className="rounded bg-amber-200/80 px-2 py-0.5 text-[11px] font-bold text-amber-900 hover:bg-amber-300 transition-colors"
+                    >
+                      Baqi Bank ({formatMoney(total - cashPart)})
+                    </button>
+                  )}
+                  {total - bankPart > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setCashInput(String(Math.round((total - bankPart) * 100) / 100))}
+                      className="rounded bg-amber-200/80 px-2 py-0.5 text-[11px] font-bold text-amber-900 hover:bg-amber-300 transition-colors"
+                    >
+                      Baqi Cash ({formatMoney(total - bankPart)})
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         )}

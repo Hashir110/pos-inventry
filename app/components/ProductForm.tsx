@@ -58,8 +58,8 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    const gudam = parseFloat(form.gudamStock) || 0;
-    const shop = parseFloat(form.shopStock) || 0;
+    const gudam = Number.isNaN(parseFloat(form.gudamStock)) ? 0 : parseFloat(form.gudamStock);
+    const shop = Number.isNaN(parseFloat(form.shopStock)) ? 0 : parseFloat(form.shopStock);
     const total = gudam + shop;
     const isCount = sellingType === "count";
     const weightPerBag = sellingType === "weight_50" ? 50 : 25;
@@ -196,15 +196,14 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
               <input
                 type="number"
                 required
-                min="0"
                 step="any"
                 placeholder="0"
                 value={form.gudamStock}
                 onChange={(e) => set("gudamStock", e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-purple-950 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
               />
-              {form.unitType === "weight" && Number(form.gudamStock) > 0 && (
-                <p className="text-[10px] font-bold text-purple-600 mt-1">
+              {form.unitType === "weight" && form.gudamStock !== "" && !isNaN(Number(form.gudamStock)) && Number(form.gudamStock) !== 0 && (
+                <p className={`text-[10px] font-bold mt-1 ${Number(form.gudamStock) < 0 ? "text-red-600" : "text-purple-600"}`}>
                   = {(Number(form.gudamStock) * (sellingType === "weight_50" ? 50 : 25)).toLocaleString()} kg
                 </p>
               )}
@@ -220,15 +219,14 @@ export default function ProductForm({ initial, mode, onSubmit }: ProductFormProp
               <input
                 type="number"
                 required
-                min="0"
                 step="any"
                 placeholder="0"
                 value={form.shopStock}
                 onChange={(e) => set("shopStock", e.target.value)}
                 className="w-full px-3 py-2.5 bg-white border border-stone-300 rounded-lg text-xs font-medium text-blue-950 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
-              {form.unitType === "weight" && Number(form.shopStock) > 0 && (
-                <p className="text-[10px] font-bold text-blue-600 mt-1">
+              {form.unitType === "weight" && form.shopStock !== "" && !isNaN(Number(form.shopStock)) && Number(form.shopStock) !== 0 && (
+                <p className={`text-[10px] font-bold mt-1 ${Number(form.shopStock) < 0 ? "text-red-600" : "text-blue-600"}`}>
                   = {(Number(form.shopStock) * (sellingType === "weight_50" ? 50 : 25)).toLocaleString()} kg
                 </p>
               )}
