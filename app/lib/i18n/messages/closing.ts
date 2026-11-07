@@ -97,6 +97,11 @@ const en = {
   settle_full: "Full",
   settle_overBalance: "Exceeds balance ({amount})",
   settle_remaining: "{balance} − {value} = {remaining} remaining",
+  settle_showingCount: "Showing {count} of {total}",
+  settle_showAll: "Show all ({count})",
+  settle_showLess: "Show top 5",
+  settle_activeHiddenHint: "{count} selected party outside search",
+  settle_clearSearch: "Clear",
 
   editSale_title: "Edit Bill — #{invoice}",
   editSale_returned: "This bill has returns, so it cannot be edited.",
@@ -257,6 +262,11 @@ const ur: Record<keyof typeof en, string> = {
   settle_full: "پوری",
   settle_overBalance: "باقی رقم سے زیادہ ({amount})",
   settle_remaining: "{balance} − {value} = {remaining} باقی رہ جائے گا",
+  settle_showingCount: "{total} میں سے {count} پارٹیاں",
+  settle_showAll: "سب دیکھیں ({count})",
+  settle_showLess: "صرف 5 دیکھیں",
+  settle_activeHiddenHint: "{count} منتخب پارٹیاں تلاش سے باہر ہیں",
+  settle_clearSearch: "تلاش ختم کریں",
 
   editSale_title: "بل میں ترمیم — #{invoice}",
   editSale_returned: "اس بل پر واپسی ہو چکی ہے، اس لیے ترمیم نہیں ہو سکتی۔",

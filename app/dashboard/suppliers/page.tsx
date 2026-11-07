@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
 import {
@@ -456,11 +456,25 @@ export default function SuppliersPage() {
     }
   };
 
-  const filteredSuppliers = suppliers.filter(
-    (s) =>
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.phone && s.phone.includes(searchTerm))
-  );
+  const sortedSuppliers = useMemo(() => {
+    return [...suppliers].sort((a, b) => {
+      const balA = a.balance ?? 0;
+      const balB = b.balance ?? 0;
+      if (balB !== balA) {
+        return balB - balA;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [suppliers]);
+
+  const filteredSuppliers = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return sortedSuppliers.filter(
+      (s) =>
+        s.name.toLowerCase().includes(term) ||
+        (s.phone && s.phone.includes(term))
+    );
+  }, [sortedSuppliers, searchTerm]);
 
   return (
     <div className="space-y-6">
@@ -726,7 +740,7 @@ export default function SuppliersPage() {
                   required
                 >
                   <option value="">{t("suppliers_select_supplier")}</option>
-                  {suppliers.map((s) => (
+                  {sortedSuppliers.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.balance < 0
                         ? `${s.name} (Advance: Rs. ${Math.abs(s.balance).toLocaleString()})`
@@ -1007,7 +1021,7 @@ export default function SuppliersPage() {
                   required
                 >
                   <option value="">{t("suppliers_select_supplier")}</option>
-                  {suppliers.map((s) => (
+                  {sortedSuppliers.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.balance < 0
                         ? `${s.name} (Advance: Rs. ${Math.abs(s.balance).toLocaleString()})`
