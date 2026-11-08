@@ -22,6 +22,7 @@ import {
     Loader2,
     Truck,
     CreditCard,
+    Calendar,
 } from "lucide-react";
 import { toast } from 'react-toastify';
 import { listCustomers } from '../../lib/services/customers';
@@ -35,9 +36,19 @@ import SaleReceipt from '../../components/SaleReceipt';
 
 const OTHER_CATEGORY = "__other__";
 
+const getTodayDateKey = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+};
+
 export default function POSPage() {
     const { currentUser, currentShop } = useStore();
     const { t } = useLanguage();
+    const [saleDate, setSaleDate] = useState<string>(getTodayDateKey);
+    const [lastSaleDate, setLastSaleDate] = useState<string>("");
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash");
     const [customerName, setCustomerName] = useState("");
     const [customers, setCustomers] = useState<Customer[]>([]);
@@ -267,6 +278,16 @@ export default function POSPage() {
             calculatedBankAmount = 0;
         }
 
+        const todayStr = getTodayDateKey();
+        if (saleDate > todayStr) {
+            toast.error("Aainda (future) ki tareekh ka bill nahi banaya ja sakta");
+            return;
+        }
+
+        const now = new Date();
+        const timePart = now.toTimeString().slice(0, 8);
+        const isoSaleDate = saleDate === todayStr ? now.toISOString() : `${saleDate}T${timePart}.000Z`;
+
         setCheckoutLoading(true);
 
         try {
@@ -282,6 +303,7 @@ export default function POSPage() {
                 ...(calculatedBankAmount !== undefined ? { bankAmount: calculatedBankAmount } : {}),
                 ...(chosenBankId ? { bankId: chosenBankId } : {}),
                 ...(chosenBankName ? { bankName: chosenBankName } : {}),
+                date: isoSaleDate,
             };
 
             const shortInvoiceNo = isOnline
@@ -303,8 +325,14 @@ export default function POSPage() {
                 bankName: chosenBankName,
                 advanceAmount: advance,
             });
+            setLastSaleDate(isoSaleDate);
             setInvoiceNumber(shortInvoiceNo);
-            toast.success(t("pos_sale_success"));
+            const isPast = saleDate !== todayStr;
+            toast.success(
+                isPast
+                    ? `${t("pos_sale_success")} (${saleDate} closing me merge ho gaya)`
+                    : t("pos_sale_success")
+            );
             if (customerId) refreshCustomers();
             setShowReceipt(true);
 
@@ -357,6 +385,7 @@ export default function POSPage() {
         setDescription("");
         setTransport(""); setTransportId(""); setExtraCharges(""); setAdvanceAmount("");
         setShowNote(false);
+        setSaleDate(getTodayDateKey());
     };
 
 
@@ -574,8 +603,8 @@ export default function POSPage() {
                     </div>
                 </div>
 
-                <div className="flex items-end gap-3 border-b border-stone-200 px-3.5 py-2">
-                    <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-end gap-2.5 border-b border-stone-200 px-3.5 py-2">
+                    <div className="min-w-[180px] flex-1 space-y-1">
                         <div className="flex justify-between items-center">
                             <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">
                                 {paymentMethod === "Udhar" ? t("pos_party_credit_label") : t("customer")}
@@ -595,7 +624,7 @@ export default function POSPage() {
                         />
                     </div>
 
-                    <div className="w-full max-w-[280px] shrink-0 space-y-1">
+                    <div className="w-full sm:w-[220px] shrink-0 space-y-1">
                         <label className="text-[10px] font-bold uppercase tracking-widest text-stone-400">{t("pos_transport")}</label>
                         <div className="flex gap-2">
                             <div className="min-w-0 flex-1">
@@ -618,6 +647,42 @@ export default function POSPage() {
                                 <Plus size={18} />
                             </button>
                         </div>
+                    </div>
+
+                    <div className="w-full sm:w-[150px] shrink-0 space-y-1">
+                        <div className="flex items-center justify-between gap-1">
+                            <label htmlFor="pos-bill-date" className="text-[10px] font-bold uppercase tracking-widest text-stone-400 flex items-center gap-1">
+                                <Calendar size={11} />
+                                <span>{t("date")}</span>
+                            </label>
+                            {saleDate !== getTodayDateKey() && (
+                                <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded-full">
+                                    Past
+                                </span>
+                            )}
+                        </div>
+                        <input
+                            id="pos-bill-date"
+                            type="date"
+                            value={saleDate}
+                            max={getTodayDateKey()}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                if (val) {
+                                    if (val > getTodayDateKey()) {
+                                        toast.warning("Aainda (future) ki tareekh ka bill nahi banaya ja sakta");
+                                        setSaleDate(getTodayDateKey());
+                                    } else {
+                                        setSaleDate(val);
+                                    }
+                                }
+                            }}
+                            className={`field !py-1.5 !px-2 text-xs font-bold ${
+                                saleDate !== getTodayDateKey()
+                                    ? "!border-amber-400 !bg-amber-50 text-amber-900"
+                                    : "bg-white text-stone-800"
+                            }`}
+                        />
                     </div>
                 </div>
                 <div className="flex-1 overflow-y-auto">
@@ -990,7 +1055,7 @@ export default function POSPage() {
                 <SaleReceipt
                     shop={currentShop}
                     invoiceNo={invoiceNumber}
-                    date={new Date().toISOString()}
+                    date={lastSaleDate || new Date().toISOString()}
                     customerName={customerName}
                     transport={transport}
                     extraCharges={extra}
@@ -1018,6 +1083,8 @@ export default function POSPage() {
                         setBankAmountInput("");
                         setInvoiceNumber("");
                         setLastSaleMeta(null);
+                        setSaleDate(getTodayDateKey());
+                        setLastSaleDate("");
                     }}
                 />
             )}

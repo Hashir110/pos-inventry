@@ -34,6 +34,7 @@ import {
   setCached,
   invalidateCache,
 } from "./offlineStorage";
+import { mergeSaleIntoDayClosing } from "./dailyClosing";
 
 export { getPendingSales, savePendingSales };
 
@@ -49,6 +50,7 @@ export interface SaleMeta {
   bankAmount?: number;
   bankId?: string;
   bankName?: string;
+  date?: string;
 }
 
 export const stripUndefined = <T>(obj: T): T => {
@@ -153,6 +155,12 @@ export const createOnlineSale = async (
   let invoiceNo = "";
   let savedItems: SaleItem[] = [];
 
+  const now = new Date();
+  const timePart = now.toTimeString().slice(0, 8);
+  const saleDate = meta.date
+    ? (meta.date.includes("T") ? meta.date : `${meta.date}T${timePart}.000Z`)
+    : now.toISOString();
+
   const advancePaid = meta.advanceAmount || 0;
   const netPayable = Math.max(0, roundMoney(totalAmount - advancePaid));
 
@@ -239,7 +247,7 @@ export const createOnlineSale = async (
         bankName: meta.bankName || bankData.bankName,
         type: "deposit",
         amount: bankPaidAmount,
-        date: new Date().toISOString(),
+        date: saleDate,
         customerName: meta.customerName || "Counter Sale",
         customerId: meta.customerId,
         saleId: saleRef.id,
@@ -286,7 +294,7 @@ export const createOnlineSale = async (
       ownerId: ownerId || "",
       items: processedCart,
       totalAmount: roundMoney(totalAmount || 0),
-      date: new Date().toISOString(),
+      date: saleDate,
       invoiceNo,
       ...buildMeta(meta),
     });
@@ -308,7 +316,7 @@ export const createOnlineSale = async (
     ownerId,
     items: savedItems.length > 0 ? savedItems : cart.map(cleanSaleItem),
     totalAmount: roundMoney(totalAmount || 0),
-    date: new Date().toISOString(),
+    date: saleDate,
     invoiceNo,
     customerName: meta.customerName || "Counter Sale",
     description: meta.description || "",
@@ -338,6 +346,29 @@ export const createOnlineSale = async (
     setCached(prodsKey, updatedProds);
   }
 
+  // Auto-merge into existing DayClosing for this date if it was already closed
+  let addedCash = 0;
+  let addedBank = 0;
+  let addedUdhar = 0;
+  if (meta.paymentMethod === "Split") {
+    addedCash = meta.cashAmount || 0;
+    addedBank = meta.bankAmount || 0;
+    addedUdhar = Math.max(0, roundMoney(netPayable - (addedCash + addedBank)));
+  } else if (meta.paymentMethod === "Bank Account") {
+    addedBank = netPayable;
+  } else if (meta.paymentMethod === "Udhar") {
+    addedUdhar = netPayable;
+  } else {
+    addedCash = netPayable;
+  }
+
+  await mergeSaleIntoDayClosing(ownerId, saleDate, {
+    net: netPayable,
+    cash: addedCash,
+    bank: addedBank,
+    udhar: addedUdhar,
+  });
+
   return invoiceNo;
 };
 
@@ -356,7 +387,12 @@ export const queueOfflineSale = (
   }
 
   const invoiceNo = "OFF-" + Date.now().toString(36).toUpperCase().slice(-6);
-  const nowIso = new Date().toISOString();
+  const now = new Date();
+  const timePart = now.toTimeString().slice(0, 8);
+  const saleDate = meta.date
+    ? (meta.date.includes("T") ? meta.date : `${meta.date}T${timePart}.000Z`)
+    : now.toISOString();
+
   const processedCart = cart.map((item) => {
     const prod = localProducts?.find((p) => p.id === item.id);
     const itemBuying = Number(item.buyingPrice) || 0;
@@ -373,7 +409,7 @@ export const queueOfflineSale = (
     ownerId: ownerId || "",
     items: processedCart,
     totalAmount: roundMoney(totalAmount || 0),
-    date: nowIso,
+    date: saleDate,
     isOffline: true,
     invoiceNo,
     ...buildMeta(meta),
@@ -403,6 +439,30 @@ export const queueOfflineSale = (
     });
     setCached(prodsKey, updatedProds);
   }
+
+  // Optimistically merge into local cached DayClosing if exists
+  const netAmount = Math.max(0, roundMoney(totalAmount - (meta.advanceAmount || 0)));
+  let addedCash = 0;
+  let addedBank = 0;
+  let addedUdhar = 0;
+  if (meta.paymentMethod === "Split") {
+    addedCash = meta.cashAmount || 0;
+    addedBank = meta.bankAmount || 0;
+    addedUdhar = Math.max(0, roundMoney(netAmount - (addedCash + addedBank)));
+  } else if (meta.paymentMethod === "Bank Account") {
+    addedBank = netAmount;
+  } else if (meta.paymentMethod === "Udhar") {
+    addedUdhar = netAmount;
+  } else {
+    addedCash = netAmount;
+  }
+
+  void mergeSaleIntoDayClosing(ownerId, saleDate, {
+    net: netAmount,
+    cash: addedCash,
+    bank: addedBank,
+    udhar: addedUdhar,
+  });
 
   return invoiceNo;
 };
@@ -485,6 +545,29 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
         syncedAt: new Date().toISOString(),
       });
       transaction.set(saleRef, saleData);
+    });
+
+    const advancePaid = order.advanceAmount || 0;
+    const netAmount = Math.max(0, roundMoney(order.totalAmount - advancePaid));
+    let addedCash = 0;
+    let addedBank = 0;
+    let addedUdhar = 0;
+    if (order.paymentMethod === "Split") {
+      addedCash = order.cashAmount || 0;
+      addedBank = order.bankAmount || 0;
+      addedUdhar = Math.max(0, roundMoney(netAmount - (addedCash + addedBank)));
+    } else if (order.paymentMethod === "Bank Account") {
+      addedBank = netAmount;
+    } else if (order.paymentMethod === "Udhar") {
+      addedUdhar = netAmount;
+    } else {
+      addedCash = netAmount;
+    }
+    await mergeSaleIntoDayClosing(order.ownerId, order.date, {
+      net: netAmount,
+      cash: addedCash,
+      bank: addedBank,
+      udhar: addedUdhar,
     });
 
     queue = queue.filter((o) => o.invoiceNo !== order.invoiceNo);
@@ -805,6 +888,7 @@ export interface FullSaleEditData {
   transport?: string;
   extraCharges?: number;
   description?: string;
+  date?: string;
 }
 
 export const updateSaleFull = async (
@@ -966,6 +1050,7 @@ export const updateSaleFull = async (
       paymentMethod: newMethod,
       transport: updates.transport !== undefined ? updates.transport.trim() : sale.transport,
       description: updates.description !== undefined ? updates.description.trim() : sale.description,
+      ...(updates.date ? { date: updates.date } : {}),
       editedAt: new Date().toISOString(),
     });
 

@@ -116,7 +116,7 @@ export default function DailyClosingPage() {
     setCustomOpening(null);
   }, [date]);
 
-  const load = useCallback(async (force = false) => {
+  const load = useCallback(async (force = false, showSuccessToast = false) => {
     if (!ownerId) return;
     if (force) setRefreshing(true);
     const { startIso, endIso } = dayRange(date);
@@ -151,7 +151,7 @@ export default function DailyClosingPage() {
         toast.error(tr("closing_loadFailed", { name: names[i] }));
       }
     });
-    if (force && isOnline) {
+    if (showSuccessToast && isOnline) {
       toast.success("Data refreshed");
     }
 
@@ -161,7 +161,7 @@ export default function DailyClosingPage() {
 
   useEffect(() => {
     setLoading(true);
-    load();
+    load(true, false);
   }, [load]);
 
   const customerParties = useMemo(
@@ -360,6 +360,7 @@ export default function DailyClosingPage() {
           cashInHand: val + netCash,
         });
         setDayClosings((prev) => [updatedClosing, ...prev.filter((c) => c.date !== date)].sort((a, b) => b.date.localeCompare(a.date)));
+        await load(true, false);
       }
 
       setEditOpeningOpen(false);
@@ -397,6 +398,7 @@ export default function DailyClosingPage() {
           cashInHand: defaultOpening + netCash,
         });
         setDayClosings((prev) => [updatedClosing, ...prev.filter((c) => c.date !== date)].sort((a, b) => b.date.localeCompare(a.date)));
+        await load(true, false);
       }
 
       setEditOpeningOpen(false);
@@ -437,6 +439,7 @@ export default function DailyClosingPage() {
             ? t("closing_updated")
             : t("closing_saved")
       );
+      await load(true, false);
     } catch (error) {
       console.error(error);
       toast.error(t("closing_saveFailed"));
@@ -449,7 +452,7 @@ export default function DailyClosingPage() {
     try {
       await updateSalePayment(sale.id, method, customer ? { id: customer.id, name: customer.name } : undefined);
       toast.success(t("closing_paymentChanged", { method: paymentLabel(method) }));
-      await load();
+      await load(true, false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("closing_paymentFailed"));
     }
@@ -612,7 +615,7 @@ export default function DailyClosingPage() {
         actions={
           <div className="flex items-center gap-2">
             <button
-              onClick={() => load(true)}
+              onClick={() => load(true, true)}
               disabled={refreshing}
               className="btn-secondary flex items-center gap-1.5"
               title="Refresh from server"
@@ -1036,7 +1039,7 @@ export default function DailyClosingPage() {
         onSaved={(updated) => {
           setSales((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
           setEditSale(null);
-          load();
+          load(true, false);
         }}
       />
     </div>

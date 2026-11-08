@@ -144,15 +144,21 @@ export default function DashboardHome() {
             const fromKey = dayKey(startIso);
             const toKey = isFilter ? dayKey(endIso) : "9999-12-31";
 
+            const map = new Map<string, (typeof closings)[0]>();
+            [...closings].forEach((c) => {
+                const existing = map.get(c.date);
+                if (!existing || (c.closedAt || "") >= (existing.closedAt || "")) {
+                    map.set(c.date, c);
+                }
+            });
+            const dedupedClosings = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
 
             let running = 0;
-            const all = [...closings]
-                .sort((a, b) => a.date.localeCompare(b.date))
-                .map((c) => {
-                    const baqi = c.salesTotal - c.jamad;
-                    running += baqi;
-                    return { day: c.date, sale: c.salesTotal, jamad: c.jamad, baqi, total: running };
-                });
+            const all = dedupedClosings.map((c) => {
+                const baqi = c.salesTotal - c.jamad;
+                running += baqi;
+                return { day: c.date, sale: c.salesTotal, jamad: c.jamad, baqi, total: running };
+            });
             setClosingTotal(running);
             setClosingDays(all.filter((d) => d.day >= fromKey && d.day <= toKey).reverse());
             setJamadRange(
@@ -173,11 +179,26 @@ export default function DashboardHome() {
     }
 };
     useEffect(() => {
-        fetchDashboardData();
+        fetchDashboardData(false, true);
+    }, [currentUser]);
+
+    useEffect(() => {
+        if (!currentUser) return;
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === "visible") {
+                fetchDashboardData(false, true);
+            }
+        };
+        window.addEventListener("focus", handleVisibilityChange);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("focus", handleVisibilityChange);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
     }, [currentUser]);
 
     const applyFilter = () => {
-        fetchDashboardData(true);
+        fetchDashboardData(true, true);
     };
 
     const formatDate = (isoString?: string) => {

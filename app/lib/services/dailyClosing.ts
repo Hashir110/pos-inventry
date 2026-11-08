@@ -1,6 +1,7 @@
-import { collection, deleteDoc, doc, getDocs, query, setDoc, where } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } from "firebase/firestore";
 import { db } from "../firebase";
 import type { DayClosing, DayOpening } from "../../types";
+import { dayKey } from "../calc";
 import {
   cacheKeys,
   getCached,
@@ -24,38 +25,64 @@ export const listDayClosings = async (ownerId: string, forceRefresh = false): Pr
     const cached = isOnline ? getCached<DayClosing[]>(cacheKey) : getCachedEvenStale<DayClosing[]>(cacheKey);
     if (cached && cached.length >= 0) {
       const pending = getPendingDayClosings().map((c) => ({ id: c.tempId, ...c } as DayClosing));
-      return [...pending, ...cached.filter((c) => !pending.some((p) => p.date === c.date))].sort((a, b) =>
-        b.date.localeCompare(a.date)
-      );
+      const map = new Map<string, DayClosing>();
+      [...pending, ...cached].forEach((c) => {
+        const existing = map.get(c.date);
+        if (!existing || (c.closedAt || "") >= (existing.closedAt || "")) {
+          map.set(c.date, c);
+        }
+      });
+      return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
     }
   }
 
   if (!isOnline) {
     const cached = getCachedEvenStale<DayClosing[]>(cacheKey) || [];
     const pending = getPendingDayClosings().map((c) => ({ id: c.tempId, ...c } as DayClosing));
-    return [...pending, ...cached.filter((c) => !pending.some((p) => p.date === c.date))].sort((a, b) =>
-      b.date.localeCompare(a.date)
-    );
+    const map = new Map<string, DayClosing>();
+    [...pending, ...cached].forEach((c) => {
+      const existing = map.get(c.date);
+      if (!existing || (c.closedAt || "") >= (existing.closedAt || "")) {
+        map.set(c.date, c);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
   }
 
   try {
     const snap = await getDocs(query(collection(db, "day_closings"), where("ownerId", "==", ownerId)));
-    const items = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }) as DayClosing)
-      .sort((a, b) => b.date.localeCompare(a.date));
+    const map = new Map<string, DayClosing>();
+    snap.docs.forEach((d) => {
+      const item = { id: d.id, ...d.data() } as DayClosing;
+      const existing = map.get(item.date);
+      if (!existing || (item.closedAt || "") > (existing.closedAt || "")) {
+        map.set(item.date, item);
+      }
+    });
+    const items = Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
     setCached(cacheKey, items);
 
     const pending = getPendingDayClosings().map((c) => ({ id: c.tempId, ...c } as DayClosing));
-    return [...pending, ...items.filter((c) => !pending.some((p) => p.date === c.date))].sort((a, b) =>
-      b.date.localeCompare(a.date)
-    );
+    const finalMap = new Map<string, DayClosing>();
+    [...pending, ...items].forEach((c) => {
+      const existing = finalMap.get(c.date);
+      if (!existing || (c.closedAt || "") >= (existing.closedAt || "")) {
+        finalMap.set(c.date, c);
+      }
+    });
+    return Array.from(finalMap.values()).sort((a, b) => b.date.localeCompare(a.date));
   } catch (err) {
     console.warn("[dailyClosing] Failed to fetch closings, using offline cache:", err);
     const stale = getCachedEvenStale<DayClosing[]>(cacheKey) || [];
     const pending = getPendingDayClosings().map((c) => ({ id: c.tempId, ...c } as DayClosing));
-    return [...pending, ...stale.filter((c) => !pending.some((p) => p.date === c.date))].sort((a, b) =>
-      b.date.localeCompare(a.date)
-    );
+    const map = new Map<string, DayClosing>();
+    [...pending, ...stale].forEach((c) => {
+      const existing = map.get(c.date);
+      if (!existing || (c.closedAt || "") >= (existing.closedAt || "")) {
+        map.set(c.date, c);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
   }
 };
 
@@ -96,6 +123,10 @@ export const saveDayClosing = async (ownerId: string, input: DayClosingInput): P
   const id = `${ownerId}_${input.date}`;
   const data = { ...input, ownerId, closedAt: new Date().toISOString() };
   await setDoc(doc(db, "day_closings", id), data);
+
+  // Clear any pending offline closing for this date
+  const remainingPending = getPendingDayClosings().filter((c) => c.date !== input.date);
+  savePendingDayClosings(remainingPending);
 
   const savedRecord = { id, ...data };
 
@@ -139,6 +170,74 @@ export const syncPendingDayClosings = async (onProgress?: (remaining: number) =>
   return uploaded;
 };
 
+export const mergeSaleIntoDayClosing = async (
+  ownerId: string,
+  saleDate: string,
+  breakdown: {
+    net: number;
+    cash: number;
+    bank: number;
+    udhar: number;
+  }
+): Promise<void> => {
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+  const dKey = dayKey(saleDate);
+  if (!dKey || !ownerId) return;
+
+  const id = `${ownerId}_${dKey}`;
+  const cacheKey = cacheKeys.dayClosings(ownerId);
+
+  if (isOnline) {
+    try {
+      const closingRef = doc(db, "day_closings", id);
+      const snap = await getDoc(closingRef);
+      if (snap.exists()) {
+        const existing = snap.data() as DayClosing;
+        const updatedClosing: DayClosing = {
+          ...existing,
+          invoiceCount: (existing.invoiceCount || 0) + 1,
+          salesTotal: Math.round(((existing.salesTotal || 0) + breakdown.net) * 100) / 100,
+          cash: Math.round(((existing.cash || 0) + breakdown.cash) * 100) / 100,
+          bank: Math.round(((existing.bank || 0) + breakdown.bank) * 100) / 100,
+          udhar: Math.round(((existing.udhar || 0) + breakdown.udhar) * 100) / 100,
+          cashInHand: Math.round(((existing.cashInHand || 0) + breakdown.cash) * 100) / 100,
+          closedAt: new Date().toISOString(),
+        };
+        await setDoc(closingRef, updatedClosing);
+
+        // Update local cache
+        const current = getCachedEvenStale<DayClosing[]>(cacheKey) || [];
+        setCached(
+          cacheKey,
+          [updatedClosing, ...current.filter((c) => c.date !== dKey)].sort((a, b) => b.date.localeCompare(a.date))
+        );
+      }
+    } catch (err) {
+      console.warn("[dailyClosing] Failed to auto-merge sale into closing:", err);
+    }
+  } else {
+    // Offline optimistic cache update
+    const current = getCachedEvenStale<DayClosing[]>(cacheKey) || [];
+    const existing = current.find((c) => c.date === dKey);
+    if (existing) {
+      const updatedClosing: DayClosing = {
+        ...existing,
+        invoiceCount: (existing.invoiceCount || 0) + 1,
+        salesTotal: Math.round(((existing.salesTotal || 0) + breakdown.net) * 100) / 100,
+        cash: Math.round(((existing.cash || 0) + breakdown.cash) * 100) / 100,
+        bank: Math.round(((existing.bank || 0) + breakdown.bank) * 100) / 100,
+        udhar: Math.round(((existing.udhar || 0) + breakdown.udhar) * 100) / 100,
+        cashInHand: Math.round(((existing.cashInHand || 0) + breakdown.cash) * 100) / 100,
+        closedAt: new Date().toISOString(),
+      };
+      setCached(
+        cacheKey,
+        [updatedClosing, ...current.filter((c) => c.date !== dKey)].sort((a, b) => b.date.localeCompare(a.date))
+      );
+    }
+  }
+};
+
 export const listDayOpenings = async (ownerId: string, forceRefresh = false): Promise<DayOpening[]> => {
   const cacheKey = cacheKeys.dayOpenings(ownerId);
   const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
@@ -147,38 +246,64 @@ export const listDayOpenings = async (ownerId: string, forceRefresh = false): Pr
     const cached = isOnline ? getCached<DayOpening[]>(cacheKey) : getCachedEvenStale<DayOpening[]>(cacheKey);
     if (cached && cached.length >= 0) {
       const pending = getPendingDayOpenings().map((o) => ({ id: o.tempId, ...o } as DayOpening));
-      return [...pending, ...cached.filter((c) => !pending.some((p) => p.date === c.date))].sort((a, b) =>
-        b.date.localeCompare(a.date)
-      );
+      const map = new Map<string, DayOpening>();
+      [...pending, ...cached].forEach((o) => {
+        const existing = map.get(o.date);
+        if (!existing || (o.updatedAt || "") >= (existing.updatedAt || "")) {
+          map.set(o.date, o);
+        }
+      });
+      return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
     }
   }
 
   if (!isOnline) {
     const cached = getCachedEvenStale<DayOpening[]>(cacheKey) || [];
     const pending = getPendingDayOpenings().map((o) => ({ id: o.tempId, ...o } as DayOpening));
-    return [...pending, ...cached.filter((c) => !pending.some((p) => p.date === c.date))].sort((a, b) =>
-      b.date.localeCompare(a.date)
-    );
+    const map = new Map<string, DayOpening>();
+    [...pending, ...cached].forEach((o) => {
+      const existing = map.get(o.date);
+      if (!existing || (o.updatedAt || "") >= (existing.updatedAt || "")) {
+        map.set(o.date, o);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
   }
 
   try {
     const snap = await getDocs(query(collection(db, "day_openings"), where("ownerId", "==", ownerId)));
-    const items = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }) as DayOpening)
-      .sort((a, b) => b.date.localeCompare(a.date));
+    const map = new Map<string, DayOpening>();
+    snap.docs.forEach((d) => {
+      const item = { id: d.id, ...d.data() } as DayOpening;
+      const existing = map.get(item.date);
+      if (!existing || (item.updatedAt || "") > (existing.updatedAt || "")) {
+        map.set(item.date, item);
+      }
+    });
+    const items = Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
     setCached(cacheKey, items);
 
     const pending = getPendingDayOpenings().map((o) => ({ id: o.tempId, ...o } as DayOpening));
-    return [...pending, ...items.filter((c) => !pending.some((p) => p.date === c.date))].sort((a, b) =>
-      b.date.localeCompare(a.date)
-    );
+    const finalMap = new Map<string, DayOpening>();
+    [...pending, ...items].forEach((o) => {
+      const existing = finalMap.get(o.date);
+      if (!existing || (o.updatedAt || "") >= (existing.updatedAt || "")) {
+        finalMap.set(o.date, o);
+      }
+    });
+    return Array.from(finalMap.values()).sort((a, b) => b.date.localeCompare(a.date));
   } catch (err) {
     console.warn("[dailyClosing] Failed to fetch openings, using offline cache:", err);
     const stale = getCachedEvenStale<DayOpening[]>(cacheKey) || [];
     const pending = getPendingDayOpenings().map((o) => ({ id: o.tempId, ...o } as DayOpening));
-    return [...pending, ...stale.filter((c) => !pending.some((p) => p.date === c.date))].sort((a, b) =>
-      b.date.localeCompare(a.date)
-    );
+    const map = new Map<string, DayOpening>();
+    [...pending, ...stale].forEach((o) => {
+      const existing = map.get(o.date);
+      if (!existing || (o.updatedAt || "") >= (existing.updatedAt || "")) {
+        map.set(o.date, o);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.date.localeCompare(a.date));
   }
 };
 
@@ -216,6 +341,10 @@ export const saveDayOpening = async (ownerId: string, date: string, amount: numb
   if (!isOnline) {
     return queueOfflineDayOpening(ownerId, date, amount);
   }
+
+  // Clear any pending offline opening for this date
+  const remainingPending = getPendingDayOpenings().filter((o) => o.date !== date);
+  savePendingDayOpenings(remainingPending);
 
   const id = `${ownerId}_${date}`;
   const data = { id, ownerId, date, amount, updatedAt: new Date().toISOString() };

@@ -173,6 +173,7 @@ export default function SalesHistoryPage() {
   const [draftTransport, setDraftTransport] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [draftExtra, setDraftExtra] = useState("");
+  const [draftDate, setDraftDate] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Delete modal state
@@ -207,6 +208,7 @@ export default function SalesHistoryPage() {
     setDraftTransport(sale.transport || "");
     setDraftDescription(sale.description || "");
     setDraftExtra(sale.extraCharges ? String(sale.extraCharges) : "");
+    setDraftDate(sale.date ? sale.date.slice(0, 10) : "");
     setDraft(
       sale.items.map((i, idx) => {
         const prodId = i.productId || i.id || "";
@@ -351,6 +353,18 @@ export default function SalesHistoryPage() {
     }
     setSaving(true);
     try {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let finalDate: string | undefined = undefined;
+      if (draftDate) {
+        if (draftDate > todayStr) {
+          toast.error("Aainda (future) ki tareekh ka bill nahi banaya ja sakta");
+          setSaving(false);
+          return;
+        }
+        const timePart = sale.date ? sale.date.slice(11) : new Date().toISOString().slice(11);
+        finalDate = `${draftDate}T${timePart}`;
+      }
+
       const extraNow = Math.max(0, parseFloat(draftExtra) || 0);
       const updated = await updateSaleFull(sale.id, currentUser.uid, {
         items: draft.map((d) => ({
@@ -376,6 +390,7 @@ export default function SalesHistoryPage() {
         transport: draftTransport.trim(),
         extraCharges: extraNow,
         description: draftDescription.trim(),
+        ...(finalDate ? { date: finalDate } : {}),
       });
 
       setSales((prev) => prev.map((s) => (s.id === sale.id ? updated : s)));
@@ -1006,6 +1021,18 @@ export default function SalesHistoryPage() {
                             onChange={(e) => setDraftDescription(e.target.value)}
                             placeholder="Optional notes or remarks"
                             className="field mt-1 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-stone-600 block">
+                            {t("date")}
+                          </label>
+                          <input
+                            type="date"
+                            max={new Date().toISOString().slice(0, 10)}
+                            value={draftDate}
+                            onChange={(e) => setDraftDate(e.target.value)}
+                            className="field mt-1 text-xs font-bold"
                           />
                         </div>
                       </div>
