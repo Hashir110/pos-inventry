@@ -11,7 +11,7 @@ import { listExpensesInRange } from "../lib/services/expenses";
 import { countLowStock } from "../lib/services/products";
 import { listDayClosings } from "../lib/services/dailyClosing";
 import { listSupplierPayments } from "../lib/services/suppliers";
-import { isWithdrawalSale, saleNetAmount } from "../lib/calc";
+import { dayKey, dayRange, isWithdrawalSale, saleNetAmount } from "../lib/calc";
 import { customerLabel, isCounterSale } from "../lib/format";
 import SaleReceipt from "../components/SaleReceipt";
 import HiddenAmount from "../components/HiddenAmount";
@@ -45,7 +45,7 @@ interface ClosingDay {
     total: number;
 }
 
-const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
+
 
 export default function DashboardHome() {
     const { currentUser, currentShop } = useStore();
@@ -85,10 +85,10 @@ export default function DashboardHome() {
             let startIso, endIso;
 
             if (isFilter && startDate && endDate) {
-                const s = new Date(startDate); s.setHours(0, 0, 0, 0);
-                const e = new Date(endDate); e.setHours(23, 59, 59, 999);
-                startIso = s.toISOString();
-                endIso = e.toISOString();
+                const { startIso: sIso } = dayRange(startDate);
+                const { endIso: eIso } = dayRange(endDate);
+                startIso = sIso;
+                endIso = eIso;
             } else {
                 const now = new Date();
                 const s = new Date(now.getFullYear(), now.getMonth(), 1);

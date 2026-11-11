@@ -11,6 +11,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { toLocalIsoString } from "../calc";
 import type { Expense } from "../../types";
 import {
   cacheKeys,
@@ -129,17 +130,7 @@ export const listExpensesInRange = async (
 export const addExpense = async (ownerId: string, input: ExpenseInput): Promise<Expense> => {
   const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
   
-  let dateIso = new Date().toISOString();
-  if (input.date) {
-    const parsed = new Date(input.date);
-    if (!isNaN(parsed.getTime())) {
-      if (input.date.length === 10) {
-        const now = new Date();
-        parsed.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
-      }
-      dateIso = parsed.toISOString();
-    }
-  }
+  const dateIso = input.date ? toLocalIsoString(input.date) : new Date().toISOString();
 
   let id = `local_exp_${Date.now()}`;
   const payload = {

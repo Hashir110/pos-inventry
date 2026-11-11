@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { tr } from "../i18n/translate";
+import { toLocalIsoString } from "../calc";
 import type { BankAccount, Customer, CustomerPayment, Sale } from "../../types";
 import {
   cacheKeys,
@@ -184,7 +185,7 @@ export const receivePayment = async (
     const customer = snap.data() as Customer;
 
     const newBalance = Math.round((customer.balance - amount) * 100) / 100;
-    const now = date || new Date().toISOString();
+    const now = date ? toLocalIsoString(date) : new Date().toISOString();
     transaction.update(customerRef, { balance: newBalance });
 
     if (bankRef && bankTxRef && bankSnap?.exists()) {

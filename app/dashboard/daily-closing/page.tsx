@@ -16,7 +16,7 @@ import ChooseCustomerModal from "../../components/ChooseCustomerModal";
 import { useDialog } from "../../components/DialogProvider";
 import SettlementPanel, { type SettleLine, type SettleMethod } from "../../components/SettlementPanel";
 import { customerLabel, formatDate, formatMoney } from "../../lib/format";
-import { isWithdrawalSale, saleNetAmount } from "../../lib/calc";
+import { dayKey, dayRange, isWithdrawalSale, saleNetAmount, todayKey, toLocalIsoString } from "../../lib/calc";
 import { listSalesInRange, updateSalePayment } from "../../lib/services/sales";
 import { listExpensesInRange } from "../../lib/services/expenses";
 import { listCustomers, listAllPayments, receivePayment } from "../../lib/services/customers";
@@ -37,11 +37,6 @@ interface MoneyRow {
   amount: number;
 }
 
-const dayKey = (iso: string) => {
-  if (!iso) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
-  return new Date(iso).toLocaleDateString("en-CA");
-};
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 const methodLabel = (m: string) => {
   if (m === "Cash") return tr("cash");
@@ -70,11 +65,6 @@ const paymentOf = (sale: Sale): PaymentMethod => {
   const m = (sale.paymentMethod || "Cash").trim();
   return m === "Bank Account" || m === "Udhar" || m === "Split" ? (m as PaymentMethod) : "Cash";
 };
-const dayRange = (day: string) => {
-  const start = new Date(`${day}T00:00:00`);
-  const end = new Date(`${day}T23:59:59.999`);
-  return { startIso: start.toISOString(), endIso: end.toISOString() };
-};
 
 const qtySummary = (sale: Sale) => {
   const bags = sale.items.filter((i) => i.type === "weight").reduce((s, i) => s + i.qty, 0);
@@ -89,7 +79,7 @@ export default function DailyClosingPage() {
   const { confirm } = useDialog();
   const { t } = useLanguage();
 
-  const [date, setDate] = useState(() => dayKey(new Date().toISOString()));
+  const [date, setDate] = useState(() => todayKey());
   const [loading, setLoading] = useState(true);
   const [closing, setClosing] = useState(false);
 
@@ -482,10 +472,7 @@ export default function DailyClosingPage() {
   };
   const handleAmad = async (lines: SettleLine[], method: SettleMethod, note: string, bankId?: string) => {
     const failed: SettleLine[] = [];
-    const paymentDate =
-      date === dayKey(new Date().toISOString())
-        ? new Date().toISOString()
-        : `${date}T${new Date().toTimeString().slice(0, 8)}.000Z`;
+    const paymentDate = toLocalIsoString(date);
 
     for (const line of lines) {
       const effectiveMethod = line.method ?? method;
@@ -513,10 +500,7 @@ export default function DailyClosingPage() {
 
   const handleJamad = async (lines: SettleLine[], method: SettleMethod, note: string, bankId?: string) => {
     const failed: SettleLine[] = [];
-    const paymentDate =
-      date === dayKey(new Date().toISOString())
-        ? new Date().toISOString()
-        : `${date}T${new Date().toTimeString().slice(0, 8)}.000Z`;
+    const paymentDate = toLocalIsoString(date);
 
     const groups = new Map<string, string>();
     lines.forEach((l) => {
@@ -626,7 +610,7 @@ export default function DailyClosingPage() {
             <input
               type="date"
               value={date}
-              max={dayKey(new Date().toISOString())}
+              max={todayKey()}
               onChange={(e) => e.target.value && setDate(e.target.value)}
               className="field !w-44"
             />

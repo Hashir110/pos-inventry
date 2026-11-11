@@ -5,7 +5,7 @@ import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
 import { listExpenses, addExpense, deleteExpense } from "../../lib/services/expenses";
 import { listSalesInRange } from "../../lib/services/sales";
-import { saleNetAmount } from "../../lib/calc";
+import { dayKey, dayRange, saleNetAmount, todayKey } from "../../lib/calc";
 import { formatMoney } from "../../lib/format";
 import {
   Plus,
@@ -25,13 +25,7 @@ import { toast } from "react-toastify";
 import { useDialog } from "../../components/DialogProvider";
 import type { Expense, Sale } from "../../types";
 
-const todayKey = () => new Date().toLocaleDateString("en-CA");
-const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
-const dayRange = (day: string) => {
-  const start = new Date(`${day}T00:00:00`);
-  const end = new Date(`${day}T23:59:59.999`);
-  return { startIso: start.toISOString(), endIso: end.toISOString() };
-};
+
 
 export default function ExpensesPage() {
   const { confirm } = useDialog();

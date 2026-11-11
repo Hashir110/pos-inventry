@@ -29,6 +29,7 @@ import { listCustomers } from '../../lib/services/customers';
 import { listBankAccounts } from '../../lib/services/banks';
 import type { BankAccount, Customer, PaymentMethod, Product, SaleItem, Transport } from '../../types';
 import { listTransports } from '../../lib/services/transports';
+import { todayKey, toLocalIsoString } from '../../lib/calc';
 import SearchSelect from '../../components/SearchSelect';
 import AddTransportModal from '../../components/AddTransportModal';
 import CustomerSelect from '../../components/CustomerSelect';
@@ -36,13 +37,7 @@ import SaleReceipt from '../../components/SaleReceipt';
 
 const OTHER_CATEGORY = "__other__";
 
-const getTodayDateKey = () => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-};
+const getTodayDateKey = todayKey;
 
 export default function POSPage() {
     const { currentUser, currentShop } = useStore();
@@ -284,9 +279,7 @@ export default function POSPage() {
             return;
         }
 
-        const now = new Date();
-        const timePart = now.toTimeString().slice(0, 8);
-        const isoSaleDate = saleDate === todayStr ? now.toISOString() : `${saleDate}T${timePart}.000Z`;
+        const isoSaleDate = toLocalIsoString(saleDate);
 
         setCheckoutLoading(true);
 

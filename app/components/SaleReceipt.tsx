@@ -63,6 +63,11 @@ export default function SaleReceipt({
   };
 
   const formatReceiptDate = (dStr: string) => {
+    if (!dStr) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) {
+      const [y, m, d] = dStr.split("-");
+      return `${d}/${m}/${y}`;
+    }
     const d = new Date(dStr);
     if (isNaN(d.getTime())) return dStr;
     const day = String(d.getDate()).padStart(2, "0");

@@ -15,6 +15,7 @@ import {
 import { db } from "../firebase";
 import { addStock } from "../stock";
 import { tr } from "../i18n/translate";
+import { toLocalIsoString } from "../calc";
 import type { Supplier, SupplierPurchase, SupplierPayment, Product, BankAccount } from "../../types";
 import {
   cacheKeys,
@@ -274,7 +275,7 @@ export const addSupplierPayment = async (
 
   const currentBalance = targetSupplier.data().balance || 0;
   const newBalance = Math.round((currentBalance - payment.amount) * 100) / 100;
-  const paymentDate = payment.date || new Date().toISOString();
+  const paymentDate = payment.date ? toLocalIsoString(payment.date) : new Date().toISOString();
 
   const bankRef = payment.method === "Bank Account" && payment.bankId ? doc(db, "banks", payment.bankId) : null;
   const bankTxRef = bankRef ? doc(collection(db, "bank_transactions")) : null;

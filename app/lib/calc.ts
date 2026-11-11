@@ -71,11 +71,77 @@ export const isWithdrawalSale = (
   return (sale.items ?? []).some((item) => item.id === "withdrawal");
 };
 
-export const dayKey = (isoString?: string): string => {
-  if (!isoString) return "";
-  const d = new Date(isoString);
+export const todayKey = (): string => {
+  const d = new Date();
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+};
+
+export const dayKey = (isoString?: string): string => {
+  if (!isoString) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoString)) return isoString;
+  const d = new Date(isoString);
+  if (isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+export const toLocalIsoString = (dateStr?: string, preserveTime = true): string => {
+  const now = new Date();
+  if (!dateStr) return now.toISOString();
+
+  // If already a full ISO string ending in Z
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/i.test(dateStr)) {
+    return dateStr;
+  }
+
+  // If YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, d] = dateStr.split("-").map(Number);
+    const target = preserveTime
+      ? new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds())
+      : new Date(y, m - 1, d, 12, 0, 0, 0);
+    return target.toISOString();
+  }
+
+  // If YYYY-MM-DDTHH:mm or YYYY-MM-DDTHH:mm:ss without Z (local datetime string)
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dateStr)) {
+    const target = new Date(dateStr);
+    if (!isNaN(target.getTime())) return target.toISOString();
+  }
+
+  const parsed = new Date(dateStr);
+  return isNaN(parsed.getTime()) ? now.toISOString() : parsed.toISOString();
+};
+
+export const dateWithTimeToIso = (dateStr: string, originalIsoOrDate?: string): string => {
+  if (!dateStr) return new Date().toISOString();
+  const [y, m, d] = dateStr.split("-").map(Number);
+  let hours = new Date().getHours();
+  let minutes = new Date().getMinutes();
+  let seconds = new Date().getSeconds();
+  let ms = new Date().getMilliseconds();
+
+  if (originalIsoOrDate) {
+    const orig = new Date(originalIsoOrDate);
+    if (!isNaN(orig.getTime())) {
+      hours = orig.getHours();
+      minutes = orig.getMinutes();
+      seconds = orig.getSeconds();
+      ms = orig.getMilliseconds();
+    }
+  }
+
+  const dt = new Date(y, m - 1, d, hours, minutes, seconds, ms);
+  return dt.toISOString();
+};
+
+export const dayRange = (day: string) => {
+  const start = new Date(`${day}T00:00:00`);
+  const end = new Date(`${day}T23:59:59.999`);
+  return { startIso: start.toISOString(), endIso: end.toISOString() };
 };

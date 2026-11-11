@@ -22,7 +22,7 @@ import StatCard from "../../components/StatCard";
 import DataTable from "../../components/DataTable";
 import AdminLoginModal from "../../components/AdminLoginModal";
 import { customerLabel, formatDate, formatMoney } from "../../lib/format";
-import { isWithdrawalSale, saleNetAmount, saleProfit } from "../../lib/calc";
+import { dayRange, isWithdrawalSale, saleNetAmount, saleProfit } from "../../lib/calc";
 import { listSalesInRange } from "../../lib/services/sales";
 import { listExpensesInRange } from "../../lib/services/expenses";
 import { listSupplierPayments, listSupplierPurchases } from "../../lib/services/suppliers";
@@ -55,12 +55,10 @@ export default function AdminPage() {
         let startIso: string;
         let endIso: string | undefined;
         if (filtered && startDate && endDate) {
-          const s = new Date(startDate);
-          s.setHours(0, 0, 0, 0);
-          const e = new Date(endDate);
-          e.setHours(23, 59, 59, 999);
-          startIso = s.toISOString();
-          endIso = e.toISOString();
+          const { startIso: sIso } = dayRange(startDate);
+          const { endIso: eIso } = dayRange(endDate);
+          startIso = sIso;
+          endIso = eIso;
         } else {
           const now = new Date();
           startIso = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();

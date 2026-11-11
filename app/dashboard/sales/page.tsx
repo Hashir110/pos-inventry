@@ -28,7 +28,7 @@ import { listCustomers } from "../../lib/services/customers";
 import { listProducts } from "../../lib/services/products";
 import ProductSelect from "../../components/ProductSelect";
 import SaleReceipt from "../../components/SaleReceipt";
-import { isWithdrawalSale, saleNetAmount } from "../../lib/calc";
+import { dateWithTimeToIso, dayKey, isWithdrawalSale, saleNetAmount, todayKey as todayStr } from "../../lib/calc";
 import { customerLabel, isCounterSale } from "../../lib/format";
 import StatCard from "../../components/StatCard";
 import PageHeader from "../../components/PageHeader";
@@ -55,23 +55,6 @@ type SortKey = "new" | "old" | "high";
 
 const money = (n: number) => `Rs. ${Math.round(n || 0).toLocaleString()}`;
 
-const dayKey = (iso: string) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
-
-const todayStr = () => {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleString("en-US", {
@@ -208,7 +191,7 @@ export default function SalesHistoryPage() {
     setDraftTransport(sale.transport || "");
     setDraftDescription(sale.description || "");
     setDraftExtra(sale.extraCharges ? String(sale.extraCharges) : "");
-    setDraftDate(sale.date ? sale.date.slice(0, 10) : "");
+    setDraftDate(sale.date ? dayKey(sale.date) : "");
     setDraft(
       sale.items.map((i, idx) => {
         const prodId = i.productId || i.id || "";
@@ -353,16 +336,15 @@ export default function SalesHistoryPage() {
     }
     setSaving(true);
     try {
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const today = todayStr();
       let finalDate: string | undefined = undefined;
       if (draftDate) {
-        if (draftDate > todayStr) {
+        if (draftDate > today) {
           toast.error("Aainda (future) ki tareekh ka bill nahi banaya ja sakta");
           setSaving(false);
           return;
         }
-        const timePart = sale.date ? sale.date.slice(11) : new Date().toISOString().slice(11);
-        finalDate = `${draftDate}T${timePart}`;
+        finalDate = dateWithTimeToIso(draftDate, sale.date);
       }
 
       const extraNow = Math.max(0, parseFloat(draftExtra) || 0);
@@ -1029,7 +1011,7 @@ export default function SalesHistoryPage() {
                           </label>
                           <input
                             type="date"
-                            max={new Date().toISOString().slice(0, 10)}
+                            max={todayStr()}
                             value={draftDate}
                             onChange={(e) => setDraftDate(e.target.value)}
                             className="field mt-1 text-xs font-bold"

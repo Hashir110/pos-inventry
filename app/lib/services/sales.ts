@@ -14,6 +14,7 @@ import {
 import { auth, db } from "../firebase";
 import { tr } from "../i18n/translate";
 import { deductStock } from "../stock";
+import { toLocalIsoString } from "../calc";
 import type {
   BankAccount,
   BankTransaction,
@@ -155,11 +156,7 @@ export const createOnlineSale = async (
   let invoiceNo = "";
   let savedItems: SaleItem[] = [];
 
-  const now = new Date();
-  const timePart = now.toTimeString().slice(0, 8);
-  const saleDate = meta.date
-    ? (meta.date.includes("T") ? meta.date : `${meta.date}T${timePart}.000Z`)
-    : now.toISOString();
+  const saleDate = toLocalIsoString(meta.date);
 
   const advancePaid = meta.advanceAmount || 0;
   const netPayable = Math.max(0, roundMoney(totalAmount - advancePaid));
@@ -387,11 +384,7 @@ export const queueOfflineSale = (
   }
 
   const invoiceNo = "OFF-" + Date.now().toString(36).toUpperCase().slice(-6);
-  const now = new Date();
-  const timePart = now.toTimeString().slice(0, 8);
-  const saleDate = meta.date
-    ? (meta.date.includes("T") ? meta.date : `${meta.date}T${timePart}.000Z`)
-    : now.toISOString();
+  const saleDate = toLocalIsoString(meta.date);
 
   const processedCart = cart.map((item) => {
     const prod = localProducts?.find((p) => p.id === item.id);
@@ -1050,7 +1043,7 @@ export const updateSaleFull = async (
       paymentMethod: newMethod,
       transport: updates.transport !== undefined ? updates.transport.trim() : sale.transport,
       description: updates.description !== undefined ? updates.description.trim() : sale.description,
-      ...(updates.date ? { date: updates.date } : {}),
+      ...(updates.date ? { date: toLocalIsoString(updates.date) } : {}),
       editedAt: new Date().toISOString(),
     });
 
