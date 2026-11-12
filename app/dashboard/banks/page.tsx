@@ -38,7 +38,7 @@ import {
   recordManualBankTransaction,
 } from "../../lib/services/banks";
 import { listRecentSales } from "../../lib/services/sales";
-import { saleNetAmount } from "../../lib/calc";
+import { saleNetAmount, todayKey } from "../../lib/calc";
 
 const money = (n: number) => `Rs. ${Math.round(n || 0).toLocaleString()}`;
 
@@ -77,6 +77,7 @@ export default function BankAccountsPage() {
   const [txType, setTxType] = useState<"deposit" | "withdrawal">("deposit");
   const [txAmount, setTxAmount] = useState("");
   const [txDesc, setTxDesc] = useState("");
+  const [txDate, setTxDate] = useState("");
   const [savingTx, setSavingTx] = useState(false);
 
   // Invoice Slip Viewer Modal
@@ -120,11 +121,11 @@ export default function BankAccountsPage() {
     if (!currentUser) return;
     setLoadingTx(true);
     try {
-      const data = await listBankTransactions(currentUser.uid, bankId, 200, force);
+      const data = await listBankTransactions(currentUser.uid, bankId, 1000, force);
 
       // Also check recent sales that were made with this bank to ensure statement history is never empty
       const currentBankObj = banks.find((b) => b.id === bankId) || selectedBank;
-      const recentSales = await listRecentSales(currentUser.uid, 200);
+      const recentSales = await listRecentSales(currentUser.uid, 500);
       const bankSales = recentSales.filter(
         (s) =>
           (s.bankId === bankId || (currentBankObj?.bankName && s.bankName === currentBankObj.bankName)) &&
@@ -165,11 +166,7 @@ export default function BankAccountsPage() {
         }
       }
 
-      const merged = [...data, ...missingTx].sort((a, b) =>
-        (b.date || "").localeCompare(a.date || "")
-      );
-
-      setTransactions(merged);
+      setTransactions([...data, ...missingTx]);
     } catch (err) {
       console.error(err);
       toast.error("Failed to load transactions");
@@ -284,7 +281,8 @@ export default function BankAccountsPage() {
         selectedBank.id,
         txType,
         amt,
-        txDesc
+        txDesc,
+        txDate
       );
       toast.success(
         txType === "deposit"
@@ -294,6 +292,7 @@ export default function BankAccountsPage() {
       setShowTxModal(false);
       setTxAmount("");
       setTxDesc("");
+      setTxDate(todayKey());
       fetchBanks(true);
       fetchTransactions(selectedBank.id, true);
     } catch (err) {
@@ -332,16 +331,71 @@ export default function BankAccountsPage() {
     }
   };
 
+  type BankTransactionWithRunningBalance = BankTransaction & {
+    computedBalanceAfter: number;
+  };
+
+  const transactionsWithRunningBalance = useMemo<BankTransactionWithRunningBalance[]>(() => {
+    if (!transactions.length) return [];
+
+    // 1. Sort all transactions in chronological order (Oldest to Newest)
+    const chronological = [...transactions].sort((a, b) => {
+      const timeA = new Date(a.date || 0).getTime();
+      const timeB = new Date(b.date || 0).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+
+      const createdA = new Date(a.createdAt || a.date || 0).getTime();
+      const createdB = new Date(b.createdAt || b.date || 0).getTime();
+      if (createdA !== createdB) return createdA - createdB;
+
+      const isOpeningA = (a.description || "").toLowerCase().includes("opening");
+      const isOpeningB = (b.description || "").toLowerCase().includes("opening");
+      if (isOpeningA && !isOpeningB) return -1;
+      if (!isOpeningA && isOpeningB) return 1;
+
+      return (a.id || "").localeCompare(b.id || "");
+    });
+
+    // 2. Reverse to Newest first (Descending)
+    const desc = [...chronological].reverse();
+
+    // 3. Compute continuous running balance backward from selectedBank.currentBalance
+    let running = Number(selectedBank?.currentBalance) || 0;
+
+    return desc.map((tx, idx) => {
+      if (idx === 0) {
+        return {
+          ...tx,
+          computedBalanceAfter: Math.round(running * 100) / 100,
+        };
+      }
+
+      const afterTx = desc[idx - 1];
+      const afterAmt = Number(afterTx.amount) || 0;
+
+      if (afterTx.type === "deposit") {
+        running = running - afterAmt;
+      } else {
+        running = running + afterAmt;
+      }
+
+      return {
+        ...tx,
+        computedBalanceAfter: Math.round(running * 100) / 100,
+      };
+    });
+  }, [transactions, selectedBank?.currentBalance]);
+
   const visibleTransactions = useMemo(() => {
     const term = txSearch.trim().toLowerCase();
-    if (!term) return transactions;
-    return transactions.filter(
+    if (!term) return transactionsWithRunningBalance;
+    return transactionsWithRunningBalance.filter(
       (tx) =>
         (tx.invoiceNo && tx.invoiceNo.toLowerCase().includes(term)) ||
         (tx.customerName && tx.customerName.toLowerCase().includes(term)) ||
         (tx.description && tx.description.toLowerCase().includes(term))
     );
-  }, [transactions, txSearch]);
+  }, [transactionsWithRunningBalance, txSearch]);
 
   return (
     <div className="space-y-6">
@@ -557,6 +611,9 @@ export default function BankAccountsPage() {
                   <button
                     onClick={() => {
                       setTxType("deposit");
+                      setTxAmount("");
+                      setTxDesc("");
+                      setTxDate(todayKey());
                       setShowTxModal(true);
                     }}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition"
@@ -566,6 +623,9 @@ export default function BankAccountsPage() {
                   <button
                     onClick={() => {
                       setTxType("withdrawal");
+                      setTxAmount("");
+                      setTxDesc("");
+                      setTxDate(todayKey());
                       setShowTxModal(true);
                     }}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-700 border border-red-200 hover:bg-red-100 transition"
@@ -700,8 +760,8 @@ export default function BankAccountsPage() {
                       header: "Balance After",
                       align: "right",
                       cell: (tx) => (
-                        <span className="font-mono text-xs font-semibold text-stone-700">
-                          {tx.balanceAfter !== undefined ? money(tx.balanceAfter) : "—"}
+                        <span className="font-mono text-xs font-bold text-stone-900">
+                          {money(tx.computedBalanceAfter ?? tx.balanceAfter ?? 0)}
                         </span>
                       ),
                     },
@@ -863,6 +923,17 @@ export default function BankAccountsPage() {
             </div>
 
             <form onSubmit={handleManualTx} className="mt-4 space-y-3.5">
+              <div>
+                <label className="text-xs font-bold text-stone-700 block">Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={txDate}
+                  onChange={(e) => setTxDate(e.target.value)}
+                  className="field mt-1 text-xs font-semibold"
+                />
+              </div>
+
               <div>
                 <label className="text-xs font-bold text-stone-700 block">Amount (Rs.) *</label>
                 <input

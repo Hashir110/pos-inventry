@@ -12,6 +12,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../firebase";
+import { toLocalIsoString } from "../calc";
 import type { BankAccount, BankTransaction } from "../../types";
 import {
   cacheKeys,
@@ -214,13 +215,14 @@ export const recordManualBankTransaction = async (
   bankId: string,
   type: "deposit" | "withdrawal",
   amount: number,
-  description?: string
+  description?: string,
+  date?: string
 ): Promise<BankTransaction> => {
   if (amount <= 0) throw new Error("Amount must be greater than zero");
 
   const bankRef = doc(db, "banks", bankId);
   const txRef = doc(collection(db, "bank_transactions"));
-  const now = new Date().toISOString();
+  const now = date ? toLocalIsoString(date) : new Date().toISOString();
   let createdTx: BankTransaction | null = null;
 
   await runTransaction(db, async (tx) => {

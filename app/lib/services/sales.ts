@@ -484,6 +484,20 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
         customerSnap = await transaction.get(customerRef);
       }
 
+      let bankRef = null;
+      let bankSnap = null;
+      const bankPaidAmount =
+        order.paymentMethod === "Bank Account"
+          ? Math.max(0, roundMoney(order.totalAmount - (order.advanceAmount || 0)))
+          : order.paymentMethod === "Split"
+          ? Number(order.bankAmount) || 0
+          : 0;
+
+      if (order.bankId && bankPaidAmount > 0) {
+        bankRef = doc(db, "banks", order.bankId);
+        bankSnap = await transaction.get(bankRef);
+      }
+
       for (const { snapshot, item } of reads) {
         if (!snapshot.exists()) continue;
         const prod = snapshot.data() as Product;
@@ -515,6 +529,36 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
         if (udharToAdd > 0) {
           transaction.update(customerRef, { balance: roundMoney(balance + udharToAdd) });
         }
+      }
+
+      if (bankRef && bankSnap?.exists() && bankPaidAmount > 0) {
+        const bankData = bankSnap.data() as BankAccount;
+        const currentBankBal = bankData.currentBalance || 0;
+        const newBankBal = roundMoney(currentBankBal + bankPaidAmount);
+
+        transaction.update(bankRef, {
+          currentBalance: newBankBal,
+          updatedAt: new Date().toISOString(),
+        });
+
+        const bankTxRef = doc(collection(db, "bank_transactions"));
+        const bankTxData: BankTransaction = {
+          id: bankTxRef.id,
+          ownerId: order.ownerId,
+          bankId: order.bankId!,
+          bankName: order.bankName || bankData.bankName,
+          type: "deposit",
+          amount: bankPaidAmount,
+          date: order.date,
+          customerName: order.customerName || "Counter Sale",
+          customerId: order.customerId,
+          saleId: saleRef.id,
+          invoiceNo: order.invoiceNo,
+          description: `Sale Payment #${order.invoiceNo}`,
+          balanceAfter: newBankBal,
+          createdAt: new Date().toISOString(),
+        };
+        transaction.set(bankTxRef, stripUndefined(bankTxData));
       }
 
       const { isOffline: _isOffline, ...cleanOrder } = order;
@@ -562,6 +606,12 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
       bank: addedBank,
       udhar: addedUdhar,
     });
+
+    if (order.bankId && addedBank > 0) {
+      invalidateCache(cacheKeys.banks(order.ownerId));
+      invalidateCache(cacheKeys.bankTransactions(order.ownerId, order.bankId));
+      invalidateCache(cacheKeys.bankTransactions(order.ownerId));
+    }
 
     queue = queue.filter((o) => o.invoiceNo !== order.invoiceNo);
     savePendingSales(queue);
