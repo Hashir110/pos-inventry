@@ -82,14 +82,17 @@ export default function CustomerLedgerPage() {
           amount: saleNetAmount(s),
         };
       }),
-      ...payments.map((p) => ({
-        id: p.id,
-        date: p.date,
-        kind: "payment" as const,
-        title: t("paymentReceived"),
-        details: `${p.method === "Cash" ? t("cash") : t("bankOnline")}${p.note ? ` • ${p.note}` : ""}`,
-        amount: p.amount,
-      })),
+      ...payments.map((p) => {
+        const isPayout = p.type === "out";
+        return {
+          id: p.id,
+          date: p.date,
+          kind: isPayout ? ("sale" as const) : ("payment" as const),
+          title: isPayout ? (p.note || "Cash Paid Out") : t("paymentReceived"),
+          details: `${p.method === "Cash" ? t("cash") : t("bankOnline")}${p.note && !isPayout ? ` • ${p.note}` : ""}`,
+          amount: p.amount,
+        };
+      }),
     ].sort((a, b) => a.date.localeCompare(b.date));
 
     let running = 0;
@@ -101,7 +104,10 @@ export default function CustomerLedgerPage() {
       .reverse();
   }, [sales, payments, t]);
 
-  const totalReceived = useMemo(() => payments.reduce((sum, p) => sum + p.amount, 0), [payments]);
+  const totalReceived = useMemo(
+    () => payments.filter((p) => p.type !== "out").reduce((sum, p) => sum + p.amount, 0),
+    [payments]
+  );
 
   if (loading) {
     return (

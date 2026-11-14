@@ -10,6 +10,7 @@ import { useLanguage } from "../../store/useLanguage";
 import {
     Search,
     ShoppingCart,
+    Star,
     Trash2,
     ChevronUp,
     ChevronDown,
@@ -79,6 +80,34 @@ export default function POSPage() {
     const [showMobileCart, setShowMobileCart] = useState(false);
     const [activeCategory, setActiveCategory] = useState("all");
     const [showNote, setShowNote] = useState(false);
+
+    // Pinned Products (Star feature for quick access at top of invoice item list)
+    const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => {
+        if (typeof window === "undefined") return new Set<string>();
+        try {
+            const saved = localStorage.getItem("pos_pinned_products");
+            return saved ? new Set<string>(JSON.parse(saved)) : new Set<string>();
+        } catch {
+            return new Set<string>();
+        }
+    });
+
+    const togglePin = useCallback((productId: string) => {
+        setPinnedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(productId)) {
+                next.delete(productId);
+            } else {
+                next.add(productId);
+            }
+            try {
+                localStorage.setItem("pos_pinned_products", JSON.stringify(Array.from(next)));
+            } catch (err) {
+                console.error("Failed to save pinned products:", err);
+            }
+            return next;
+        });
+    }, []);
 
     useEffect(() => {
         if (!currentUser) return;
@@ -365,11 +394,19 @@ export default function POSPage() {
 
     const filteredProducts = useMemo(() => {
         const term = search.toLowerCase();
-        return products.filter(p => {
+        const list = products.filter(p => {
             if (!p.name.toLowerCase().includes(term)) return false;
             return activeCategory === "all" || (p.category?.trim() || OTHER_CATEGORY) === activeCategory;
         });
-    }, [products, search, activeCategory]);
+
+        return list.sort((a, b) => {
+            const aPinned = pinnedIds.has(a.id);
+            const bPinned = pinnedIds.has(b.id);
+            if (aPinned && !bPinned) return -1;
+            if (!aPinned && bPinned) return 1;
+            return 0;
+        });
+    }, [products, search, activeCategory, pinnedIds]);
 
     const resetOrder = () => {
         setCart([]);
@@ -514,6 +551,7 @@ export default function POSPage() {
                                 const isOutOfStock = product.stock <= 0;
                                 const inCartQty = cart.find(c => c.id === product.id)?.qty ?? 0;
                                 const isLow = !isOutOfStock && product.stock < 5;
+                                const isPinned = pinnedIds.has(product.id);
                                 const rateUnit = product.unitType === 'weight' ? 'kg' : 'pc';
                                 const stockUnit = product.unitType === 'weight' ? t("pos_unit_bags") : t("pos_unit_pcs");
 
@@ -525,16 +563,42 @@ export default function POSPage() {
                                         onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
                                         className={`relative flex flex-col gap-1 rounded-lg border bg-white p-2 text-left transition-all ${inCartQty > 0
                                             ? 'border-brand-500 ring-2 ring-brand-500/20 active:scale-[0.98]'
-                                            : 'border-stone-200 hover:border-brand-400 hover:shadow-pop active:scale-[0.98]'
+                                            : isPinned
+                                                ? 'border-amber-300 bg-amber-50/20 hover:border-amber-400 hover:shadow-pop active:scale-[0.98]'
+                                                : 'border-stone-200 hover:border-brand-400 hover:shadow-pop active:scale-[0.98]'
                                             }`}
                                     >
+                                        {/* Pin Star button on top-right */}
+                                        <div
+                                            role="button"
+                                            tabIndex={0}
+                                            title={isPinned ? "Unpin item" : "Pin item to top"}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                togglePin(product.id);
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter" || e.key === " ") {
+                                                    e.stopPropagation();
+                                                    e.preventDefault();
+                                                    togglePin(product.id);
+                                                }
+                                            }}
+                                            className="absolute right-1 top-1 z-20 flex h-6 w-6 items-center justify-center rounded text-stone-300 hover:bg-stone-100 hover:text-amber-500 transition-colors"
+                                        >
+                                            <Star
+                                                size={13}
+                                                className={isPinned ? "fill-amber-400 text-amber-500" : "fill-none text-stone-300 hover:text-amber-400"}
+                                            />
+                                        </div>
+
                                         {inCartQty > 0 && (
-                                            <span className="absolute right-1 top-1 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-white shadow">
+                                            <span className="absolute right-7 top-1.5 z-10 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-white shadow">
                                                 {inCartQty}
                                             </span>
                                         )}
 
-                                        <h3 className="line-clamp-2 min-h-[2rem] pr-4 text-[11px] font-bold leading-tight text-stone-900">
+                                        <h3 className="line-clamp-2 min-h-[2rem] pr-6 text-[11px] font-bold leading-tight text-stone-900">
                                             {product.name}
                                         </h3>
 

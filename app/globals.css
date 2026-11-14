@@ -215,6 +215,9 @@ textarea:focus-visible {
   .btn-primary {
     @apply btn bg-brand-500 text-white shadow-sm hover:bg-brand-600;
   }
+  .btn-secondary {
+    @apply btn border border-stone-300 bg-white text-stone-700 shadow-sm hover:bg-stone-50 hover:border-stone-400;
+  }
   .btn-dark {
     @apply btn bg-ink text-white hover:bg-ink-800;
   }

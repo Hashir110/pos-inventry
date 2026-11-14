@@ -215,6 +215,7 @@ export const receivePayment = async (
       customerName: customer.name,
       amount,
       method,
+      type: "in",
       ...(bankRef && bankName ? { bankId: bankRef.id, bankName } : {}),
       note: note.trim(),
       date: now,
@@ -235,6 +236,88 @@ export const receivePayment = async (
       cacheKey,
       current.map((c) =>
         c.id === customerId ? { ...c, balance: Math.round((c.balance - amount) * 100) / 100 } : c
+      )
+    );
+  }
+};
+
+export const payCustomer = async (
+  ownerId: string,
+  customerId: string,
+  amount: number,
+  method: CustomerPayment["method"],
+  note = "",
+  bankId?: string,
+  date?: string
+): Promise<void> => {
+  if (!(amount > 0)) throw new Error(tr("closing_errAmountPositive") || "Amount must be greater than zero");
+
+  const customerRef = doc(db, "customers", customerId);
+  const paymentRef = doc(collection(db, "payments"));
+  const bankRef = method === "Bank Account" && bankId ? doc(db, "banks", bankId) : null;
+  const bankTxRef = bankRef ? doc(collection(db, "bank_transactions")) : null;
+  let bankName = "";
+
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(customerRef);
+    const bankSnap = bankRef ? await transaction.get(bankRef) : null;
+    if (!snap.exists()) throw new Error(tr("closing_errCustomerNotFound") || "Customer not found");
+    const customer = snap.data() as Customer;
+
+    // Money is given to customer: their balance increases (debt increases or advance decreases)
+    const newBalance = Math.round(((customer.balance || 0) + amount) * 100) / 100;
+    const now = date ? toLocalIsoString(date) : new Date().toISOString();
+    transaction.update(customerRef, { balance: newBalance });
+
+    if (bankRef && bankTxRef && bankSnap?.exists()) {
+      const bank = bankSnap.data() as BankAccount;
+      const newBankBalance = Math.round(((bank.currentBalance || 0) - amount) * 100) / 100;
+      bankName = bank.bankName;
+      transaction.update(bankRef, { currentBalance: newBankBalance, updatedAt: now });
+      transaction.set(bankTxRef, {
+        id: bankTxRef.id,
+        ownerId,
+        bankId: bankRef.id,
+        bankName,
+        type: "withdrawal",
+        amount,
+        date: now,
+        customerName: customer.name,
+        customerId,
+        description: note.trim() || `Payout to ${customer.name}`,
+        balanceAfter: newBankBalance,
+        createdAt: now,
+      });
+    }
+
+    transaction.set(paymentRef, {
+      ownerId,
+      customerId,
+      customerName: customer.name,
+      amount,
+      method,
+      type: "out",
+      ...(bankRef && bankName ? { bankId: bankRef.id, bankName } : {}),
+      note: note.trim() || "Credit Ledger Payout",
+      date: now,
+      createdAt: now,
+    });
+  });
+
+  if (bankRef) {
+    invalidateCache(cacheKeys.banks(ownerId));
+    invalidateCache(cacheKeys.bankTransactions(ownerId, bankRef.id));
+    invalidateCache(cacheKeys.bankTransactions(ownerId));
+  }
+
+  // Update customer balance in cache
+  const cacheKey = cacheKeys.customers(ownerId);
+  const current = getCachedEvenStale<Customer[]>(cacheKey);
+  if (current) {
+    setCached(
+      cacheKey,
+      current.map((c) =>
+        c.id === customerId ? { ...c, balance: Math.round(((c.balance || 0) + amount) * 100) / 100 } : c
       )
     );
   }

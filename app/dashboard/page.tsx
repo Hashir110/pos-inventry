@@ -515,7 +515,7 @@ export default function DashboardHome() {
                                 <span className="font-semibold text-stone-800 block">{customerLabel(inv.customerName)}</span>
                                 {isWithdrawalSale(inv) && (
                                     <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block mt-0.5">
-                                        Withdrawal / رقم نکالی
+                                        Withdrawal
                                     </span>
                                 )}
                             </div>

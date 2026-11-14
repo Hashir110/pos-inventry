@@ -1,7 +1,19 @@
-import { collection, doc, runTransaction } from "firebase/firestore";
+import { collection, doc, getDocs, limit, query, runTransaction, where } from "firebase/firestore";
 import { db } from "../firebase";
 import type { Customer, Product, Sale } from "../../types";
 import { tr } from "../i18n/translate";
+
+export interface ReturnRecord {
+  id: string;
+  originalSaleId: string;
+  itemName: string;
+  productId: string;
+  qty: number;
+  unitPrice: number;
+  refundAmount: number;
+  date: string;
+  ownerId: string;
+}
 
 export const processReturn = async (
   saleId: string,
@@ -69,3 +81,27 @@ export const processReturn = async (
 
   return refundAmount;
 };
+
+export const listReturns = async (
+  ownerId: string,
+  limitCount = 200
+): Promise<ReturnRecord[]> => {
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+  if (!isOnline) return [];
+
+  try {
+    const q = query(
+      collection(db, "returns"),
+      where("ownerId", "==", ownerId),
+      limit(limitCount)
+    );
+    const snap = await getDocs(q);
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }) as ReturnRecord)
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  } catch (error) {
+    console.warn("Failed to fetch returns:", error);
+    return [];
+  }
+};
+

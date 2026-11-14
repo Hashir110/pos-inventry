@@ -6,13 +6,14 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
   query,
   updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "../firebase";
-import type { Product, UnitType } from "../../types";
+import type { Product, StockTransfer, UnitType } from "../../types";
 import { tr } from "../i18n/translate";
 import {
   cacheKeys,
@@ -334,4 +335,28 @@ export const subscribeProducts = (
     }
   );
 };
+
+export const listStockTransfers = async (
+  ownerId: string,
+  limitCount = 200
+): Promise<StockTransfer[]> => {
+  const isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+  if (!isOnline) return [];
+
+  try {
+    const q = query(
+      collection(db, "stock_transfers"),
+      where("ownerId", "==", ownerId),
+      limit(limitCount)
+    );
+    const snap = await getDocs(q);
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }) as StockTransfer)
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  } catch (error) {
+    console.warn("Failed to fetch stock transfers:", error);
+    return [];
+  }
+};
+
 

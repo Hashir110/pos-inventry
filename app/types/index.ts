@@ -159,6 +159,36 @@ export interface CustomerPayment {
   bankName?: string;
   note?: string;
   date: string;
+  type?: "in" | "out";
+}
+
+export interface StockTransfer {
+  id: string;
+  ownerId: string;
+  productId: string;
+  productName: string;
+  qty: number;
+  fromLocation: "gudam" | "shop";
+  toLocation: "gudam" | "shop";
+  date: string;
+}
+
+export interface StockMovementRow {
+  id: string;
+  date: string;
+  productId?: string;
+  productName: string;
+  type: "in" | "out" | "transfer";
+  subType: "purchase" | "sale" | "return" | "transfer";
+  qty: number;
+  unit?: string;
+  weight?: number;
+  rate?: number;
+  total?: number;
+  partyName?: string;
+  reference?: string;
+  location?: string;
+  note?: string;
 }
 
 export interface GatePass {

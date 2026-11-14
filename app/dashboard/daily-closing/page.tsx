@@ -19,7 +19,7 @@ import { customerLabel, formatDate, formatMoney } from "../../lib/format";
 import { dayKey, dayRange, isWithdrawalSale, saleNetAmount, todayKey, toLocalIsoString } from "../../lib/calc";
 import { listSalesInRange, updateSalePayment } from "../../lib/services/sales";
 import { listExpensesInRange } from "../../lib/services/expenses";
-import { listCustomers, listAllPayments, receivePayment } from "../../lib/services/customers";
+import { listCustomers, listAllPayments, receivePayment, payCustomer } from "../../lib/services/customers";
 import { addSupplierPayment, listSuppliers, listSupplierPayments } from "../../lib/services/suppliers";
 import { deleteDayOpening, listDayClosings, listDayOpenings, saveDayClosing, saveDayOpening } from "../../lib/services/dailyClosing";
 import { listBankAccounts, listBankTransactions } from "../../lib/services/banks";
@@ -99,6 +99,7 @@ export default function DailyClosingPage() {
   const [editOpeningOpen, setEditOpeningOpen] = useState(false);
   const [openingInput, setOpeningInput] = useState("");
   const [savingOpening, setSavingOpening] = useState(false);
+  const [paidOutTarget, setPaidOutTarget] = useState<"supplier" | "customer">("supplier");
 
   const [refreshing, setRefreshing] = useState(false);
 
@@ -176,6 +177,8 @@ export default function DailyClosingPage() {
   );
 
   const dayPayments = useMemo(() => payments.filter((p) => dayKey(p.date) === date), [payments, date]);
+  const dayInPayments = useMemo(() => dayPayments.filter((p) => p.type !== "out"), [dayPayments]);
+  const dayOutPayments = useMemo(() => dayPayments.filter((p) => p.type === "out"), [dayPayments]);
   const daySupplierPayments = useMemo(() => supplierPayments.filter((p) => dayKey(p.date) === date), [supplierPayments, date]);
 
   const previousClosing = useMemo(() => {
@@ -243,13 +246,21 @@ export default function DailyClosingPage() {
       }
     });
 
-    const amad = dayPayments.reduce((sum, p) => sum + p.amount, 0);
-    const amadCash = dayPayments.filter((p) => p.method === "Cash").reduce((sum, p) => sum + p.amount, 0);
-    const amadBank = dayPayments.filter((p) => p.method !== "Cash").reduce((sum, p) => sum + p.amount, 0);
+    const amad = dayInPayments.reduce((sum, p) => sum + p.amount, 0);
+    const amadCash = dayInPayments.filter((p) => p.method === "Cash").reduce((sum, p) => sum + p.amount, 0);
+    const amadBank = dayInPayments.filter((p) => p.method !== "Cash").reduce((sum, p) => sum + p.amount, 0);
 
-    const jamad = daySupplierPayments.reduce((sum, p) => sum + p.amount, 0);
-    const jamadCash = daySupplierPayments.filter((p) => p.method === "Cash").reduce((sum, p) => sum + p.amount, 0);
-    const jamadBank = daySupplierPayments.filter((p) => p.method !== "Cash").reduce((sum, p) => sum + p.amount, 0);
+    const supplierJamad = daySupplierPayments.reduce((sum, p) => sum + p.amount, 0);
+    const supplierJamadCash = daySupplierPayments.filter((p) => p.method === "Cash").reduce((sum, p) => sum + p.amount, 0);
+    const supplierJamadBank = daySupplierPayments.filter((p) => p.method !== "Cash").reduce((sum, p) => sum + p.amount, 0);
+
+    const customerJamad = dayOutPayments.reduce((sum, p) => sum + p.amount, 0);
+    const customerJamadCash = dayOutPayments.filter((p) => p.method === "Cash").reduce((sum, p) => sum + p.amount, 0);
+    const customerJamadBank = dayOutPayments.filter((p) => p.method !== "Cash").reduce((sum, p) => sum + p.amount, 0);
+
+    const jamad = supplierJamad + customerJamad;
+    const jamadCash = supplierJamadCash + customerJamadCash;
+    const jamadBank = supplierJamadBank + customerJamadBank;
 
     // Manual bank transactions for this date
     // Client rule: Bank deposit -> Cash on hand MINUS (-), Bank PLUS (+)
@@ -316,7 +327,7 @@ export default function DailyClosingPage() {
       cashInHand,
       grandTotal,
     };
-  }, [sales, dayPayments, daySupplierPayments, expenses, openingBalance, dayManualBankTx, dayCustomerWithdrawals]);
+  }, [sales, dayInPayments, dayOutPayments, daySupplierPayments, expenses, openingBalance, dayManualBankTx, dayCustomerWithdrawals]);
 
   const changedAfterClose =
     !!saved &&
@@ -535,16 +546,54 @@ export default function DailyClosingPage() {
     return failed;
   };
 
+  const handleCustomerPayout = async (lines: SettleLine[], method: SettleMethod, note: string, bankId?: string) => {
+    const failed: SettleLine[] = [];
+    const paymentDate = toLocalIsoString(date);
+
+    for (const line of lines) {
+      const { party, amount, method: lineMethod } = line;
+      const effectiveMethod = lineMethod ?? method;
+      try {
+        await payCustomer(
+          ownerId,
+          party.id,
+          amount,
+          effectiveMethod,
+          note,
+          effectiveMethod === "Bank Account" ? bankId : undefined,
+          paymentDate
+        );
+      } catch (error) {
+        failed.push(line);
+        toast.error(`${party.name}: ${error instanceof Error ? error.message : t("closing_saveItemFailed")}`);
+      }
+    }
+    const saved = lines.filter((l) => !failed.includes(l));
+    const parties = new Set(saved.map((l) => l.party.id)).size;
+    if (saved.length > 0) toast.success(`Credit payout saved for ${parties} ${parties === 1 ? "customer" : "customers"}`);
+    await load(true);
+    return failed;
+  };
+
   const moneyRows = useMemo<MoneyRow[]>(
     () =>
       [
-        ...dayPayments.map((p) => ({
+        ...dayInPayments.map((p) => ({
           id: `p-${p.id}`,
           date: p.date,
           kind: "amad" as Kind,
           party: p.customerName,
           method: p.bankName ? `${p.method} (${p.bankName})` : p.method,
           note: p.note ? `${p.note} (Collection)` : "Credit Ledger Collection",
+          amount: p.amount,
+        })),
+        ...dayOutPayments.map((p) => ({
+          id: `po-${p.id}`,
+          date: p.date,
+          kind: "jamad" as Kind,
+          party: p.customerName,
+          method: p.bankName ? `${p.method} (${p.bankName})` : p.method,
+          note: p.note ? `${p.note} (Credit Payout)` : "Credit Ledger Payout",
           amount: p.amount,
         })),
         ...daySupplierPayments.map((p) => ({
@@ -588,7 +637,7 @@ export default function DailyClosingPage() {
             amount: tx.amount,
           })),
       ].sort((a, b) => b.date.localeCompare(a.date)),
-    [dayPayments, daySupplierPayments, dayCustomerWithdrawals, dayManualBankTx]
+    [dayInPayments, dayOutPayments, daySupplierPayments, dayCustomerWithdrawals, dayManualBankTx]
   );
 
   return (
@@ -749,20 +798,61 @@ export default function DailyClosingPage() {
             emptyText={t("closing_noCreditParties")}
             onSubmit={handleAmad}
           />
-          <SettlementPanel
-            title={t("closing_paidTitle")}
-            subtitle={t("closing_paidSubtitle")}
-            icon={<ArrowUpRight size={20} />}
-            tone="amber"
-            parties={supplierParties}
-            allowSplit
-            banks={banks}
-            noteLabel={t("closing_reasonLabel")}
-            notePlaceholder={t("closing_reasonPlaceholder")}
-            submitLabel={t("closing_savePayment")}
-            emptyText={t("closing_noSupplierDue")}
-            onSubmit={handleJamad}
-          />
+          <div className="flex flex-col space-y-2">
+            <div className="flex items-center justify-between rounded-xl border border-stone-200 bg-stone-100 p-1.5 shadow-sm">
+              <span className="text-xs font-bold text-stone-700 px-2">
+                Paid Out To:
+              </span>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPaidOutTarget("supplier")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition-all ${
+                    paidOutTarget === "supplier"
+                      ? "bg-amber-600 text-white shadow"
+                      : "text-stone-600 hover:bg-stone-200 hover:text-stone-900"
+                  }`}
+                >
+                  Suppliers
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaidOutTarget("customer")}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-extrabold transition-all ${
+                    paidOutTarget === "customer"
+                      ? "bg-amber-600 text-white shadow"
+                      : "text-stone-600 hover:bg-stone-200 hover:text-stone-900"
+                  }`}
+                >
+                  Credit Ledger
+                </button>
+              </div>
+            </div>
+
+            <SettlementPanel
+              key={paidOutTarget}
+              title={paidOutTarget === "supplier" ? t("closing_paidTitle") : "Credit Ledger Payout"}
+              subtitle={
+                paidOutTarget === "supplier"
+                  ? t("closing_paidSubtitle")
+                  : "Record cash / bank payout to customer credit ledger"
+              }
+              icon={<ArrowUpRight size={20} />}
+              tone="amber"
+              parties={paidOutTarget === "supplier" ? supplierParties : customerParties}
+              allowSplit
+              banks={banks}
+              noteLabel={paidOutTarget === "supplier" ? t("closing_reasonLabel") : "Reason / Note"}
+              notePlaceholder={
+                paidOutTarget === "supplier"
+                  ? t("closing_reasonPlaceholder")
+                  : "e.g. Return refund, cash withdrawal, etc."
+              }
+              submitLabel={paidOutTarget === "supplier" ? t("closing_savePayment") : "Save Credit Payout"}
+              emptyText={paidOutTarget === "supplier" ? t("closing_noSupplierDue") : "No credit parties found"}
+              onSubmit={paidOutTarget === "supplier" ? handleJamad : handleCustomerPayout}
+            />
+          </div>
         </div>
       </div>
 
@@ -826,7 +916,7 @@ export default function DailyClosingPage() {
                 <span className="font-semibold text-stone-900 block">{customerLabel(s.customerName)}</span>
                 {isWithdrawalSale(s) && (
                   <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block mt-0.5">
-                    Withdrawal / رقم نکالی
+                    Withdrawal
                   </span>
                 )}
               </div>
