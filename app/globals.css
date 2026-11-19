@@ -10,11 +10,19 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d6d3d1;
+  background: #cbd5e1;
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a29e;
+  background: #94a3b8;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 html {
@@ -28,16 +36,32 @@ html.modal-open main {
 }
 
 body {
-  background-color: #f7f7f7;
-  color: #212b36;
+  background-color: #f8fafc;
+  color: #0f172a;
   font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
 }
 
+/* Tabular figures for strict numerical readouts */
 input[type="number"],
 table,
-.tabular {
+.tabular,
+.tabular-nums {
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" on, "cv05" on, "zero" on;
+}
+
+/* Urdu Typography & RTL Enhancements */
+[dir="rtl"] {
+  font-family: "Noto Sans Arabic", "Inter", system-ui, sans-serif;
+  line-height: 1.35;
+}
+
+[dir="rtl"] input,
+[dir="rtl"] button,
+[dir="rtl"] select,
+[dir="rtl"] textarea {
+  font-family: "Noto Sans Arabic", "Inter", system-ui, sans-serif;
 }
 
 input:focus-visible,

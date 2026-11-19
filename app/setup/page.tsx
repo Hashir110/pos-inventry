@@ -182,7 +182,7 @@ export default function SetupPage() {
                   onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
                 >
                   <option value="Grocery">{t("auth_typeGrocery")}</option>
-                  <option value="Wholesale">Wholesale / Distribution (تھوک ڈسٹری بیوشن)</option>
+                  <option value="Wholesale">Wholesale / Distribution</option>
                   <option value="Medical">{t("auth_typeMedical")}</option>
                   <option value="Hardware">{t("auth_typeHardware")}</option>
                   <option value="General">{t("auth_typeGeneral")}</option>
@@ -193,7 +193,7 @@ export default function SetupPage() {
             {/* Contact / Phone (Optional) */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-stone-700">Phone Number / رابطہ نمبر</label>
+                <label className="block text-xs font-bold text-stone-700">Phone Number</label>
                 <span className="text-[11px] text-stone-400 font-medium">Optional</span>
               </div>
               <div className="relative">
@@ -213,7 +213,7 @@ export default function SetupPage() {
             {/* Address (Optional) */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-stone-700">Shop Address / دکان کا پتہ</label>
+                <label className="block text-xs font-bold text-stone-700">Shop Address</label>
                 <span className="text-[11px] text-stone-400 font-medium">Optional</span>
               </div>
               <div className="relative">
