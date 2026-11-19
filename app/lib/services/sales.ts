@@ -1009,6 +1009,8 @@ export const updateSaleFull = async (
       ...Object.keys(newDeductedMap),
     ]));
 
+    // --- 1. ALL READS MUST OCCUR BEFORE ALL WRITES ---
+    const productReads: { ref: any; snap: any; diff: number; prodId: string }[] = [];
     for (const prodId of allProductIds) {
       const oldUnits = oldDeductedMap[prodId] || 0;
       const newUnits = newDeductedMap[prodId] || 0;
@@ -1017,6 +1019,28 @@ export const updateSaleFull = async (
 
       const ref = doc(db, "products", prodId);
       const snap = await transaction.get(ref);
+      productReads.push({ ref, snap, diff, prodId });
+    }
+
+    // Customer balance reads
+    const oldMethod = sale.paymentMethod || "Cash";
+    const newMethod = updates.paymentMethod || oldMethod;
+    const oldCustId = sale.customerId;
+    const newCustId = updates.customerId ?? oldCustId;
+
+    const custIdsToRead = new Set<string>();
+    if (oldMethod === "Udhar" && oldCustId) custIdsToRead.add(oldCustId);
+    if (newMethod === "Udhar" && newCustId) custIdsToRead.add(newCustId);
+
+    const custSnaps = new Map<string, { ref: any; snap: any }>();
+    for (const cid of custIdsToRead) {
+      const ref = doc(db, "customers", cid);
+      const snap = await transaction.get(ref);
+      custSnaps.set(cid, { ref, snap });
+    }
+
+    // --- 2. ALL WRITES OCCUR AFTER ALL READS ---
+    for (const { ref, snap, diff, prodId } of productReads) {
       if (snap.exists()) {
         const prod = snap.data() as Product;
         const shop = prod.shopStock ?? 0;
@@ -1036,49 +1060,38 @@ export const updateSaleFull = async (
       }
     }
 
-    // Customer balance adjustment
-    const oldMethod = sale.paymentMethod || "Cash";
-    const newMethod = updates.paymentMethod || oldMethod;
-    const oldCustId = sale.customerId;
-    const newCustId = updates.customerId ?? oldCustId;
-
     if (oldMethod === "Udhar" && newMethod !== "Udhar" && oldCustId) {
-      const oldCustRef = doc(db, "customers", oldCustId);
-      const oldCustSnap = await transaction.get(oldCustRef);
-      if (oldCustSnap.exists()) {
-        const bal = (oldCustSnap.data() as Customer).balance || 0;
-        transaction.update(oldCustRef, { balance: roundMoney(bal - oldTotal) });
+      const oldEntry = custSnaps.get(oldCustId);
+      if (oldEntry?.snap?.exists()) {
+        const bal = (oldEntry.snap.data() as Customer).balance || 0;
+        transaction.update(oldEntry.ref, { balance: roundMoney(bal - oldTotal) });
       }
     } else if (oldMethod !== "Udhar" && newMethod === "Udhar" && newCustId) {
-      const newCustRef = doc(db, "customers", newCustId);
-      const newCustSnap = await transaction.get(newCustRef);
-      if (newCustSnap.exists()) {
-        const bal = (newCustSnap.data() as Customer).balance || 0;
-        transaction.update(newCustRef, { balance: roundMoney(bal + newTotal) });
+      const newEntry = custSnaps.get(newCustId);
+      if (newEntry?.snap?.exists()) {
+        const bal = (newEntry.snap.data() as Customer).balance || 0;
+        transaction.update(newEntry.ref, { balance: roundMoney(bal + newTotal) });
       }
     } else if (oldMethod === "Udhar" && newMethod === "Udhar") {
       if (oldCustId === newCustId && oldCustId && newTotal !== oldTotal) {
-        const custRef = doc(db, "customers", oldCustId);
-        const custSnap = await transaction.get(custRef);
-        if (custSnap.exists()) {
-          const bal = (custSnap.data() as Customer).balance || 0;
-          transaction.update(custRef, { balance: roundMoney(bal + newTotal - oldTotal) });
+        const custEntry = custSnaps.get(oldCustId);
+        if (custEntry?.snap?.exists()) {
+          const bal = (custEntry.snap.data() as Customer).balance || 0;
+          transaction.update(custEntry.ref, { balance: roundMoney(bal + newTotal - oldTotal) });
         }
       } else if (oldCustId !== newCustId) {
         if (oldCustId) {
-          const oldRef = doc(db, "customers", oldCustId);
-          const oldSnap = await transaction.get(oldRef);
-          if (oldSnap.exists()) {
-            const bal = (oldSnap.data() as Customer).balance || 0;
-            transaction.update(oldRef, { balance: roundMoney(bal - oldTotal) });
+          const oldEntry = custSnaps.get(oldCustId);
+          if (oldEntry?.snap?.exists()) {
+            const bal = (oldEntry.snap.data() as Customer).balance || 0;
+            transaction.update(oldEntry.ref, { balance: roundMoney(bal - oldTotal) });
           }
         }
         if (newCustId) {
-          const newRef = doc(db, "customers", newCustId);
-          const newSnap = await transaction.get(newRef);
-          if (newSnap.exists()) {
-            const bal = (newSnap.data() as Customer).balance || 0;
-            transaction.update(newRef, { balance: roundMoney(bal + newTotal) });
+          const newEntry = custSnaps.get(newCustId);
+          if (newEntry?.snap?.exists()) {
+            const bal = (newEntry.snap.data() as Customer).balance || 0;
+            transaction.update(newEntry.ref, { balance: roundMoney(bal + newTotal) });
           }
         }
       }
@@ -1144,20 +1157,47 @@ export const deleteSale = async (saleId: string, ownerId: string): Promise<void>
   let deletedInvoiceNo: string | undefined;
 
   await runTransaction(db, async (transaction) => {
+    // --- 1. ALL READS MUST OCCUR BEFORE ALL WRITES ---
     const saleSnap = await transaction.get(saleRef);
     if (!saleSnap.exists()) return;
     const sale = saleSnap.data() as Omit<Sale, "id">;
     deletedInvoiceNo = sale.invoiceNo;
 
-    // 1. Restore product stock
+    // Aggregate restore quantities per product
+    const productQtyMap = new Map<string, number>();
     for (const item of sale.items || []) {
       const prodId = item.productId || item.id;
       if (!prodId) continue;
+      const addQty = item.qty || 0;
+      productQtyMap.set(prodId, (productQtyMap.get(prodId) || 0) + addQty);
+    }
+
+    // Read all products
+    const productReads: { ref: any; snap: any; prodId: string; addQty: number }[] = [];
+    for (const [prodId, addQty] of productQtyMap.entries()) {
       const ref = doc(db, "products", prodId);
       const snap = await transaction.get(ref);
+      productReads.push({ ref, snap, prodId, addQty });
+    }
+
+    // Read customer if Udhar or Split
+    const custRef =
+      (sale.paymentMethod === "Udhar" || sale.paymentMethod === "Split") && sale.customerId
+        ? doc(db, "customers", sale.customerId)
+        : null;
+    const custSnap = custRef ? await transaction.get(custRef) : null;
+
+    // Read bank if sale had bank payment
+    const bankPaidOnSale =
+      sale.bankAmount ?? (sale.paymentMethod === "Bank Account" ? (sale.totalAmount || 0) : 0);
+    const bankRef = sale.bankId && bankPaidOnSale > 0 ? doc(db, "banks", sale.bankId) : null;
+    const bankSnap = bankRef ? await transaction.get(bankRef) : null;
+
+    // --- 2. ALL WRITES OCCUR AFTER ALL READS ---
+    // 2a. Restore product stock
+    for (const { ref, snap, prodId, addQty } of productReads) {
       if (snap.exists()) {
         const prod = snap.data() as Product;
-        const addQty = item.qty || 0;
         const shop = prod.shopStock ?? 0;
         const gudam = prod.gudamStock ?? 0;
         const newShop = shop + addQty;
@@ -1171,37 +1211,27 @@ export const deleteSale = async (saleId: string, ownerId: string): Promise<void>
       }
     }
 
-    // 2. Reverse customer balance if Udhar or Split
-    if ((sale.paymentMethod === "Udhar" || sale.paymentMethod === "Split") && sale.customerId) {
-      const custRef = doc(db, "customers", sale.customerId);
-      const custSnap = await transaction.get(custRef);
-      if (custSnap.exists()) {
-        const bal = (custSnap.data() as Customer).balance || 0;
-        const udharOnSale =
-          sale.paymentMethod === "Udhar"
-            ? (sale.totalAmount || 0)
-            : Math.max(0, (sale.totalAmount || 0) - (sale.cashAmount || 0) - (sale.bankAmount || 0));
-        const net = roundMoney(Math.max(0, udharOnSale - (sale.refundedAmount || 0)));
-        transaction.update(custRef, { balance: roundMoney(bal - net) });
-      }
+    // 2b. Reverse customer balance if Udhar or Split
+    if (custRef && custSnap?.exists()) {
+      const bal = (custSnap.data() as Customer).balance || 0;
+      const udharOnSale =
+        sale.paymentMethod === "Udhar"
+          ? (sale.totalAmount || 0)
+          : Math.max(0, (sale.totalAmount || 0) - (sale.cashAmount || 0) - (sale.bankAmount || 0));
+      const net = roundMoney(Math.max(0, udharOnSale - (sale.refundedAmount || 0)));
+      transaction.update(custRef, { balance: roundMoney(bal - net) });
     }
 
-    // 2b. Reverse bank balance if sale had bank payment
-    const bankPaidOnSale =
-      sale.bankAmount ?? (sale.paymentMethod === "Bank Account" ? (sale.totalAmount || 0) : 0);
-    if (sale.bankId && bankPaidOnSale > 0) {
-      const bankRef = doc(db, "banks", sale.bankId);
-      const bankSnap = await transaction.get(bankRef);
-      if (bankSnap.exists()) {
-        const curBal = (bankSnap.data() as BankAccount).currentBalance || 0;
-        transaction.update(bankRef, {
-          currentBalance: Math.max(0, roundMoney(curBal - bankPaidOnSale)),
-          updatedAt: new Date().toISOString(),
-        });
-      }
+    // 2c. Reverse bank balance if sale had bank payment
+    if (bankRef && bankSnap?.exists() && bankPaidOnSale > 0) {
+      const curBal = (bankSnap.data() as BankAccount).currentBalance || 0;
+      transaction.update(bankRef, {
+        currentBalance: Math.max(0, roundMoney(curBal - bankPaidOnSale)),
+        updatedAt: new Date().toISOString(),
+      });
     }
 
-    // 3. Delete sale doc
+    // 2d. Delete sale doc
     transaction.delete(saleRef);
   });
 
