@@ -1,17 +1,41 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import DataTable from "../../components/DataTable";
 import Link from "next/link";
-import { Eye, Loader2, Pencil, Plus, Printer, RefreshCw, Search, ShoppingBag, TrendingUp, X } from "lucide-react";
+import {
+  Search,
+  RefreshCw,
+  Plus,
+  Download,
+  Calendar,
+  CreditCard,
+  Banknote,
+  BookOpen,
+  ArrowRight,
+  ChevronRight,
+  Eye,
+  CheckCircle2,
+  Clock,
+  Printer,
+  Pencil,
+  X,
+  Loader2,
+  FileSpreadsheet,
+  AlertCircle,
+  TrendingUp,
+  Receipt,
+  RotateCcw,
+  ShoppingBag,
+  Store,
+  User,
+  Phone,
+  MapPin,
+} from "lucide-react";
 import { toast } from "react-toastify";
 import { listRecentSales, updateSaleItems } from "../../lib/services/sales";
-
 import SaleReceipt from "../../components/SaleReceipt";
 import { saleNetAmount } from "../../lib/calc";
 import { customerLabel, isCounterSale } from "../../lib/format";
-import StatCard from "../../components/StatCard";
-import PageHeader from "../../components/PageHeader";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
 import type { TranslationKey } from "../../lib/i18n/translations";
@@ -25,25 +49,36 @@ interface ItemDraft {
   price: string;
 }
 type PayFilter = "all" | "Cash" | "Bank Account" | "Udhar";
-type SortKey = "new" | "old" | "high";
+type StatusFilter = "all" | "paid" | "partial" | "udhar" | "refunded";
+type DateFilter = "today" | "yesterday" | "week" | "month" | "all";
 
 const money = (n: number) => `Rs. ${Math.round(n || 0).toLocaleString()}`;
 
 const formatDate = (iso: string) =>
-  new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
-const methodLabelKey = (m?: string): TranslationKey => {
-  if (m === "Bank Account") return "sales_methodBank";
-  if (m === "Udhar") return "sales_payCredit";
-  return "cash";
-};
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 
-const saleStatus = (sale: Sale): { labelKey: TranslationKey; tone: string } => {
+const saleStatus = (sale: Sale): { key: "paid" | "partial" | "udhar" | "refunded"; label: string; tone: string; bgTone: string } => {
   const refunded = sale.refundedAmount || 0;
   const allReturned = sale.items?.length > 0 && sale.items.every((i) => (i.returnedQty || 0) >= i.qty);
-  if (allReturned) return { labelKey: "sales_statusReturned", tone: "bg-red-100 text-red-700" };
-  if (refunded > 0) return { labelKey: "sales_statusPartial", tone: "bg-amber-100 text-amber-800" };
-  return { labelKey: "sales_statusCompleted", tone: "bg-emerald-100 text-emerald-700" };
+  if (allReturned) {
+    return { key: "refunded", label: "Refunded", tone: "text-rose-700", bgTone: "bg-rose-50 border border-rose-200 text-rose-700" };
+  }
+  if (refunded > 0) {
+    return { key: "partial", label: "Partial Return", tone: "text-amber-700", bgTone: "bg-amber-50 border border-amber-200 text-amber-700" };
+  }
+  if (sale.paymentMethod === "Udhar") {
+    return { key: "udhar", label: "Udhaar Due", tone: "text-orange-700", bgTone: "bg-orange-50 border border-orange-200 text-orange-700" };
+  }
+  return { key: "paid", label: "Paid", tone: "text-emerald-700", bgTone: "bg-emerald-50 border border-emerald-200 text-emerald-700" };
 };
 
 const paymentInfo = (sale: Sale) => {
@@ -53,32 +88,60 @@ const paymentInfo = (sale: Sale) => {
     isUdhar,
     paid: isUdhar ? 0 : net,
     due: isUdhar ? net : 0,
-    badge: isUdhar ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-700",
-    labelKey: (isUdhar ? "due" : "paid") as TranslationKey,
+    badge: isUdhar ? "bg-orange-50 text-orange-700 border border-orange-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200",
+    label: isUdhar ? "Due" : "Paid",
   };
 };
 
 export default function SalesHistoryPage() {
   const { currentUser, currentShop } = useStore();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const isRTL = language === "ur";
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
+  // Filters
   const [search, setSearch] = useState("");
   const [payFilter, setPayFilter] = useState<PayFilter>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("new");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
 
+  // Selection & Details / Edit
   const [selectedSale, setSelectedSale] = useState<SaleRow | null>(null);
   const [draft, setDraft] = useState<ItemDraft[] | null>(null);
   const [draftExtra, setDraftExtra] = useState("");
   const [saving, setSaving] = useState(false);
   const [receiptSale, setReceiptSale] = useState<SaleRow | null>(null);
 
-  const closeDetail = () => {
-    setSelectedSale(null);
-    setDraft(null);
-  };
+  // Pagination
+  const [page, setPage] = useState(1);
+  const pageSize = 15;
 
+  const fetchSales = useCallback(
+    async (force = false) => {
+      if (!currentUser) return;
+      if (force) setRefreshing(true);
+      try {
+        const recent = await listRecentSales(currentUser.uid, 100, force);
+        setSales(recent);
+        if (force) toast.success(t("sales_billUpdated") || "Sales refreshed");
+      } catch (error) {
+        console.error("Error fetching sales:", error);
+        toast.error(t("sales_loadFailed"));
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [currentUser, t]
+  );
+
+  useEffect(() => {
+    fetchSales();
+  }, [fetchSales]);
+
+  // Edit Handlers
   const startEdit = (sale: SaleRow) => {
     setDraftExtra(sale.extraCharges ? String(sale.extraCharges) : "");
     setDraft(
@@ -108,7 +171,7 @@ export default function SalesHistoryPage() {
 
   const draftLineTotal = (sale: SaleRow, index: number) => {
     const d = draft?.[index];
-    if (!d) return sale.items[index].total;
+    if (!d) return sale.items[index].total || sale.items[index].price * sale.items[index].qty;
     const price = parseFloat(d.price) || 0;
     const units = sale.items[index].type === "weight" ? parseFloat(d.weight) || 0 : parseFloat(d.qty) || 0;
     return units * price;
@@ -130,7 +193,7 @@ export default function SalesHistoryPage() {
       );
       const updated: SaleRow = { ...sale, items, totalAmount, extraCharges };
       setSales((prev) => prev.map((s) => (s.id === sale.id ? updated : s)));
-      setSelectedSale(null);
+      setSelectedSale(updated);
       setDraft(null);
       setReceiptSale(updated);
       toast.success(t("sales_billUpdated"));
@@ -141,366 +204,695 @@ export default function SalesHistoryPage() {
     }
   };
 
-  const [refreshing, setRefreshing] = useState(false);
+  // Date filters helper
+  const isSameDay = (d1: Date, d2: Date) =>
+    d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
 
-  const fetchSales = useCallback(async (force = false) => {
-    if (!currentUser) return;
-    if (force) setRefreshing(true);
-    try {
-      const recent = await listRecentSales(currentUser.uid, 50, force);
-      setSales(recent);
-      if (force) toast.success("Sales updated");
-
-    } catch (error) {
-      console.error("Error fetching sales:", error);
-      toast.error(t("sales_loadFailed"));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [currentUser, t]);
-
-  useEffect(() => {
-    fetchSales();
-  }, [fetchSales]);
-
-  const stats = useMemo(
-    () => ({
-      totalRevenue: sales.reduce((s, x) => s + saleNetAmount(x), 0),
-      totalOrders: sales.length,
-    }),
-    [sales]
-  );
-
-  const visibleSales = useMemo(() => {
+  // Filtered Sales
+  const filteredSales = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const list = sales.filter((s) => {
+    const now = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(now.getDate() - 1);
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(now.getDate() - 7);
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+
+    return sales.filter((s) => {
+      // Payment filter
       if (payFilter !== "all" && (s.paymentMethod || "Cash") !== payFilter) return false;
+
+      // Status filter
+      if (statusFilter !== "all") {
+        const st = saleStatus(s).key;
+        if (statusFilter !== st) return false;
+      }
+
+      // Date filter
+      if (dateFilter !== "all") {
+        const saleDate = new Date(s.date);
+        if (dateFilter === "today" && !isSameDay(saleDate, now)) return false;
+        if (dateFilter === "yesterday" && !isSameDay(saleDate, yesterday)) return false;
+        if (dateFilter === "week" && saleDate < sevenDaysAgo) return false;
+        if (dateFilter === "month" && saleDate < thirtyDaysAgo) return false;
+      }
+
+      // Search term
       if (!term) return true;
-      return (
-        (s.invoiceNo || "").toLowerCase().includes(term) ||
-        customerLabel(s.customerName).toLowerCase().includes(term)
-      );
+      const invMatch = (s.invoiceNo || "").toLowerCase().includes(term);
+      const custMatch = customerLabel(s.customerName).toLowerCase().includes(term);
+      return invMatch || custMatch;
     });
-    return [...list].sort((a, b) => {
-      if (sortKey === "old") return a.date.localeCompare(b.date);
-      if (sortKey === "high") return saleNetAmount(b) - saleNetAmount(a);
-      return b.date.localeCompare(a.date);
-    });
-  }, [sales, search, payFilter, sortKey]);
+  }, [sales, search, payFilter, statusFilter, dateFilter]);
+
+  // Pagination slice
+  const totalPages = Math.max(1, Math.ceil(filteredSales.length / pageSize));
+  const displayedSales = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredSales.slice(start, start + pageSize);
+  }, [filteredSales, page, pageSize]);
+
+  // Summary KPI Calculations
+  const stats = useMemo(() => {
+    const totalSales = filteredSales.reduce((s, x) => s + saleNetAmount(x), 0);
+    const invoiceCount = filteredSales.length;
+    const paidAmount = filteredSales
+      .filter((s) => s.paymentMethod !== "Udhar")
+      .reduce((s, x) => s + saleNetAmount(x), 0);
+    const dueKhata = filteredSales
+      .filter((s) => s.paymentMethod === "Udhar")
+      .reduce((s, x) => s + saleNetAmount(x), 0);
+    const khataCount = filteredSales.filter((s) => s.paymentMethod === "Udhar").length;
+    const avgTicket = invoiceCount > 0 ? Math.round(totalSales / invoiceCount) : 0;
+    const paidPct = totalSales > 0 ? Math.round((paidAmount / totalSales) * 100) : 0;
+    const duePct = totalSales > 0 ? Math.round((dueKhata / totalSales) * 100) : 0;
+
+    return {
+      totalSales,
+      invoiceCount,
+      paidAmount,
+      dueKhata,
+      khataCount,
+      avgTicket,
+      paidPct,
+      duePct,
+    };
+  }, [filteredSales]);
+
+  // Export to CSV
+  const handleExportCSV = () => {
+    if (filteredSales.length === 0) {
+      toast.info("No data to export");
+      return;
+    }
+    const headers = ["Invoice #", "Date", "Customer", "Payment Method", "Items Count", "Net Amount", "Status"];
+    const rows = filteredSales.map((s) => [
+      `"${s.invoiceNo || s.id}"`,
+      `"${formatDate(s.date)}"`,
+      `"${customerLabel(s.customerName)}"`,
+      `"${s.paymentMethod || "Cash"}"`,
+      s.items?.length || 0,
+      saleNetAmount(s),
+      `"${saleStatus(s).label}"`,
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `AsaanPOS_Sales_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success("CSV Export downloaded");
+  };
 
   return (
-    <div>
-      <PageHeader
-        title={t("salesHistory")}
-        subtitle={t("viewPastSales")}
-        actions={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => fetchSales(true)}
-              disabled={refreshing}
-              className="btn-secondary flex items-center gap-1.5"
-              title="Refresh from server"
-            >
-              <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
-              <span className="hidden sm:inline">Refresh</span>
-            </button>
-            <Link href="/dashboard/pos" className="btn-primary">
-              <Plus size={18} /> {t("newSale")}
-            </Link>
+    <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
+      {/* 1. TOP HEADER & ACTIONS */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+              {t("sales_title") || "Sales History & Invoices"}
+            </h1>
           </div>
-        }
-      />
+          <p className="mt-1 text-sm text-slate-500">
+            {t("sales_subtitle") || "Real-time transaction register across POS terminals and branches"}
+          </p>
+        </div>
 
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => fetchSales(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"
+            title="Refresh from server"
+          >
+            <RefreshCw size={16} className={refreshing ? "animate-spin text-orange-600" : "text-slate-500"} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-        <StatCard
-          title={t("totalSales")}
-          value={money(stats.totalRevenue)}
-          subtitle={t("afterRefunds")}
-          icon={TrendingUp}
-          theme="blue"
-          loading={loading}
-        />
-        <StatCard
-          title={t("totalOrders")}
-          value={stats.totalOrders}
-          subtitle={t("invoices")}
-          icon={ShoppingBag}
-          theme="amber"
-          loading={loading}
-        />
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            <Download size={16} className="text-slate-500" />
+            <span>{t("sales_export") || "Export CSV"}</span>
+          </button>
+
+          <Link
+            href="/dashboard/pos"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-bold hover:bg-orange-700 transition-colors shadow-sm"
+          >
+            <Plus size={16} />
+            <span>{t("sales_newInvoice") || "New Direct Invoice"}</span>
+          </Link>
+        </div>
       </div>
 
-      <DataTable
-        data={visibleSales}
-        rowKey={(sale) => sale.id}
-        loading={loading}
-        emptyText={t("sales_noBills")}
-        toolbarLeft={
-          <div className="relative w-full lg:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={16} />
+      {/* 2. 4 KPI SUMMARY CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* Card 1: Total Sales */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              {t("sales_totalSalesToday") || "Total Sales"}
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600">
+              <Receipt size={18} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
+              {money(stats.totalSales)}
+            </div>
+            <div className="flex items-center gap-1.5 mt-1 text-xs text-emerald-600 font-semibold">
+              <TrendingUp size={14} />
+              <span>Active Revenue</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Total Invoices */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              {t("sales_totalInvoicesCount") || "Total Invoices"}
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600">
+              <ShoppingBag size={18} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold tracking-tight text-slate-900 tabular-nums">
+              {stats.invoiceCount}
+            </div>
+            <div className="flex items-center gap-1 mt-1 text-xs text-slate-500">
+              <span>{t("sales_avgTicket") || "Avg Ticket"}:</span>
+              <span className="font-bold text-slate-800">{money(stats.avgTicket)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Paid (Cash & Digital) */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              {t("sales_paidCashDigital") || "Paid (Realized)"}
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+              <CheckCircle2 size={18} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold tracking-tight text-emerald-700 tabular-nums">
+              {money(stats.paidAmount)}
+            </div>
+            <div className="flex items-center gap-1 mt-1 text-xs text-emerald-700 font-semibold">
+              <span>{stats.paidPct}%</span>
+              <span className="text-slate-400 font-normal">{t("sales_realized") || "realized in till/bank"}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Due Khata */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              {t("sales_dueKhataTitle") || "Due Khata"}
+            </span>
+            <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600">
+              <BookOpen size={18} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold tracking-tight text-orange-600 tabular-nums">
+              {money(stats.dueKhata)}
+            </div>
+            <div className="flex items-center gap-1 mt-1 text-xs text-slate-500">
+              <span className="font-bold text-orange-600">{stats.duePct}%</span>
+              <span>across {stats.khataCount} invoices</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. FILTERS & SEARCH ROW */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
+          {/* Search bar (lg: 6 cols) */}
+          <div className="lg:col-span-6 relative flex items-center">
+            <Search className="absolute left-3.5 text-slate-400 pointer-events-none" size={17} />
             <input
               type="text"
-              placeholder={t("filterCustomerInvoice")}
-              className="field pl-9"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder={t("filterCustomerInvoice") || "Search by Invoice # (e.g. 10892), Customer Name, or Phone..."}
+              className="w-full pl-10 pr-12 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all"
             />
+            <span className="absolute right-3 px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 text-[11px] font-bold">
+              F2
+            </span>
           </div>
-        }
-        toolbarRight={
-          <>
+
+          {/* Payment Method Filter (lg: 3 cols) */}
+          <div className="lg:col-span-3">
             <select
               value={payFilter}
-              onChange={(e) => setPayFilter(e.target.value as PayFilter)}
-              className="field w-auto cursor-pointer"
+              onChange={(e) => {
+                setPayFilter(e.target.value as PayFilter);
+                setPage(1);
+              }}
+              className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
             >
-              <option value="all">{t("allPayments")}</option>
-              <option value="Cash">{t("cash")}</option>
-              <option value="Bank Account">{t("bankOnline")}</option>
-              <option value="Udhar">{t("sales_payCredit")}</option>
+              <option value="all">{t("sales_allMethods") || "All Methods"}</option>
+              <option value="Cash">{t("cash") || "Cash"}</option>
+              <option value="Bank Account">{t("bankOnline") || "Bank / Digital"}</option>
+              <option value="Udhar">{t("sales_payCredit") || "Udhaar / Khata"}</option>
             </select>
+          </div>
+
+          {/* Status Filter (lg: 3 cols) */}
+          <div className="lg:col-span-3">
             <select
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as SortKey)}
-              className="field w-auto cursor-pointer"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value as StatusFilter);
+                setPage(1);
+              }}
+              className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-500 cursor-pointer"
             >
-              <option value="new">{t("sortNewest")}</option>
-              <option value="old">{t("sales_sortOldest")}</option>
-              <option value="high">{t("sales_sortHighest")}</option>
+              <option value="all">{t("sales_allStatuses") || "All Statuses"}</option>
+              <option value="paid">{t("sales_statusPaid") || "Paid"}</option>
+              <option value="partial">{t("sales_statusPartialTitle") || "Partial"}</option>
+              <option value="udhar">{t("sales_statusUdhaar") || "Udhaar Due"}</option>
+              <option value="refunded">{t("sales_statusRefunded") || "Refunded"}</option>
             </select>
-          </>
-        }
-        columns={[
-          {
-            key: "customer",
-            header: t("customer"),
-            cell: (sale) => {
-              const name = customerLabel(sale.customerName);
-              return (
-                <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 font-display text-sm font-bold text-brand-700">
-                    {name.trim().charAt(0).toUpperCase()}
-                  </span>
-                  <span className="font-semibold text-stone-900">{name}</span>
-                </div>
-              );
-            },
-          },
-          {
-            key: "inv",
-            header: t("invoices"),
-            cell: (sale) => (
-              <div className="flex items-center gap-1.5">
-                <span className="font-mono text-xs font-bold uppercase text-brand-700">#{sale.invoiceNo || "-"}</span>
-                {(sale.isOffline || sale.id.startsWith("local_")) && (
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-800">
-                    Offline
-                  </span>
-                )}
-              </div>
-            ),
-          },
+          </div>
+        </div>
 
-          { key: "date", header: t("date"), className: "whitespace-nowrap", cell: (sale) => <span className="text-stone-600">{formatDate(sale.date)}</span> },
-          {
-            key: "status",
-            header: t("status"),
-            cell: (sale) => {
-              const status = saleStatus(sale);
-              return <span className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${status.tone}`}>{t(status.labelKey)}</span>;
-            },
-          },
-          { key: "total", header: t("grandTotal"), align: "right", cell: (sale) => <span className="font-extrabold text-stone-900">{money(saleNetAmount(sale))}</span> },
-          { key: "paid", header: t("paid"), align: "right", cell: (sale) => <span className="text-stone-700">{money(paymentInfo(sale).paid)}</span> },
-          {
-            key: "due",
-            header: t("due"),
-            align: "right",
-            cell: (sale) => {
-              const pay = paymentInfo(sale);
-              return <span className={`font-semibold ${pay.due > 0 ? "text-red-600" : "text-stone-500"}`}>{money(pay.due)}</span>;
-            },
-          },
-          {
-            key: "breakdown",
-            header: t("paymentBreakdown"),
-            cell: (sale) => {
-              const pay = paymentInfo(sale);
-              return (
-                <div className="flex flex-col items-start gap-1">
-                  <span className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${pay.badge}`}>● {t(pay.labelKey)}</span>
-                  <span className="text-[11px] font-semibold text-stone-400">{t(methodLabelKey(sale.paymentMethod))}</span>
-                </div>
-              );
-            },
-          },
-          {
-            key: "actions",
-            header: t("sales_viewSlip"),
-            align: "right",
-            cell: (sale) => (
+        {/* Date Presets Row */}
+        <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
+              <Calendar size={13} /> {t("date") || "Date"}:
+            </span>
+            {(
+              [
+                { id: "all", label: t("sales_dateAll") || "All Time" },
+                { id: "today", label: t("sales_dateToday") || "Today" },
+                { id: "yesterday", label: t("sales_dateYesterday") || "Yesterday" },
+                { id: "week", label: t("sales_dateThisWeek") || "This Week" },
+                { id: "month", label: t("sales_dateThisMonth") || "This Month" },
+              ] as const
+            ).map((d) => (
               <button
-                onClick={() => setSelectedSale(sale)}
-                className="rounded-lg p-2 text-stone-500 transition hover:bg-brand-50 hover:text-brand-700"
-                title={t("sales_viewBill")}
+                key={d.id}
+                type="button"
+                onClick={() => {
+                  setDateFilter(d.id);
+                  setPage(1);
+                }}
+                className={`px-3 py-1 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                  dateFilter === d.id
+                    ? "bg-orange-600 text-white shadow-xs"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
               >
-                <Eye size={18} />
+                {d.label}
               </button>
-            ),
-          },
-        ]}
-      />
+            ))}
+          </div>
 
-      {selectedSale && (() => {
-        const sale = selectedSale;
-        const status = saleStatus(sale);
-        const pay = paymentInfo(sale);
-        const subTotal = draft
-          ? sale.items.reduce((s, _i, idx) => s + draftLineTotal(sale, idx), 0)
-          : sale.items.reduce((s, i) => s + (i.total || (i.price * i.qty)), 0);
-        const refunded = sale.refundedAmount || 0;
-        const hasReturns = refunded > 0 || sale.items.some((i) => (i.returnedQty || 0) > 0);
+          <div className="text-xs text-slate-500 font-medium">
+            Showing <strong className="text-slate-800">{displayedSales.length}</strong> of{" "}
+            <strong className="text-slate-800">{filteredSales.length}</strong> transactions
+          </div>
+        </div>
+      </div>
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-            <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-pop">
-              <div className="flex items-center justify-between border-b border-stone-200 px-6 py-4">
-                <h3 className="text-lg font-bold text-stone-900">{t("sales_detailTitle")}</h3>
-                <button
-                  onClick={closeDetail}
-                  className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
-                >
-                  <X size={20} />
-                </button>
+      {/* 4. SPLIT LAYOUT: Invoices Register Table (Left) + Detail Panel / Drawer (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Table Column: spans 7 cols when selectedSale is active, 12 cols otherwise */}
+        <div
+          className={`${
+            selectedSale ? "lg:col-span-7" : "lg:col-span-12"
+          } bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden flex flex-col transition-all`}
+        >
+          {/* Table Header */}
+          <div className="p-4 bg-slate-50/70 border-b border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Receipt className="text-orange-600" size={18} />
+              <h2 className="font-bold text-slate-900 text-sm sm:text-base">
+                {t("sales_invoicesRegister") || "Invoices Register"}
+              </h2>
+            </div>
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+              {t("sales_liveUpdating") || "Live Updating"}
+            </span>
+          </div>
+
+          {/* Table Element */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-[11px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200">
+                  <th className="py-3 px-4">{t("sales_colInvoice") || "Invoice #"}</th>
+                  <th className="py-3 px-3">{t("sales_colCustomer") || "Customer"}</th>
+                  <th className="py-3 px-3 text-center">{t("sales_colItems") || "Items"}</th>
+                  <th className="py-3 px-3 text-right">{t("sales_colAmount") || "Amount"}</th>
+                  <th className="py-3 px-3">{t("sales_colMethod") || "Method"}</th>
+                  <th className="py-3 px-3">{t("sales_colStatus") || "Status"}</th>
+                  <th className="py-3 px-4 text-right">{t("sales_colAction") || "Action"}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="animate-spin text-orange-600" size={24} />
+                        <span className="text-xs font-semibold">Loading sales register...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : displayedSales.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                      <div className="flex flex-col items-center justify-center gap-1.5">
+                        <ShoppingBag size={28} className="text-slate-300" />
+                        <p className="text-sm font-semibold text-slate-600">{t("sales_noBills") || "No invoices found"}</p>
+                        <p className="text-xs text-slate-400">Try adjusting your filters or date range.</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  displayedSales.map((sale) => {
+                    const status = saleStatus(sale);
+                    const isSelected = selectedSale?.id === sale.id;
+                    const itemsCount = sale.items?.reduce((s, i) => s + (i.qty || 1), 0) || 0;
+
+                    return (
+                      <tr
+                        key={sale.id}
+                        onClick={() => setSelectedSale(sale)}
+                        className={`cursor-pointer transition-colors ${
+                          isSelected
+                            ? "bg-orange-50/70 border-l-4 border-l-orange-600"
+                            : "hover:bg-slate-50/80"
+                        }`}
+                      >
+                        {/* Invoice # & Time */}
+                        <td className="py-3.5 px-4">
+                          <div className="flex flex-col">
+                            <span className="font-mono text-xs font-bold text-slate-900 flex items-center gap-1">
+                              #{sale.invoiceNo || sale.id.slice(0, 8)}
+                              {(sale.isOffline || sale.id.startsWith("local_")) && (
+                                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-100 text-amber-800 font-bold">
+                                  OFFLINE
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-[11px] text-slate-400 font-medium">
+                              {formatTime(sale.date)}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Customer */}
+                        <td className="py-3.5 px-3">
+                          <div className="flex flex-col min-w-0 max-w-[160px]">
+                            <span className="font-bold text-slate-800 truncate">
+                              {customerLabel(sale.customerName)}
+                            </span>
+                            <span className="text-[11px] text-slate-400 truncate">
+                              {isCounterSale(sale.customerName) ? "Walk-in Customer" : "Registered Party"}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Items */}
+                        <td className="py-3.5 px-3 text-center font-bold text-slate-700 tabular-nums">
+                          {itemsCount}
+                        </td>
+
+                        {/* Amount */}
+                        <td className="py-3.5 px-3 text-right">
+                          <span className="font-bold text-slate-900 tabular-nums">
+                            {money(saleNetAmount(sale))}
+                          </span>
+                        </td>
+
+                        {/* Method */}
+                        <td className="py-3.5 px-3">
+                          <div className="flex items-center gap-1 text-xs text-slate-600 font-medium">
+                            {sale.paymentMethod === "Udhar" ? (
+                              <>
+                                <BookOpen size={13} className="text-orange-600" />
+                                <span className="text-orange-700 font-bold">Udhaar</span>
+                              </>
+                            ) : sale.paymentMethod === "Bank Account" ? (
+                              <>
+                                <CreditCard size={13} className="text-sky-600" />
+                                <span>Bank / QR</span>
+                              </>
+                            ) : (
+                              <>
+                                <Banknote size={13} className="text-emerald-600" />
+                                <span>Cash</span>
+                              </>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Status */}
+                        <td className="py-3.5 px-3">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${status.bgTone}`}
+                          >
+                            {status.label}
+                          </span>
+                        </td>
+
+                        {/* Action */}
+                        <td className="py-3.5 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedSale(sale);
+                            }}
+                            className={`p-1.5 rounded-md transition-colors ${
+                              isSelected
+                                ? "bg-orange-600 text-white"
+                                : "text-slate-400 hover:text-orange-600 hover:bg-slate-100"
+                            }`}
+                          >
+                            <ChevronRight size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination Footer */}
+          <div className="p-3.5 bg-slate-50/70 border-t border-slate-200 flex items-center justify-between flex-wrap gap-2">
+            <span className="text-xs text-slate-500 font-medium">
+              Page {page} of {totalPages}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="px-2.5 py-1 rounded bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+              >
+                Previous
+              </button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const num = i + 1;
+                return (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setPage(num)}
+                    className={`w-7 h-7 rounded text-xs font-bold transition-all ${
+                      page === num
+                        ? "bg-orange-600 text-white"
+                        : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {num}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="px-2.5 py-1 rounded bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Detail Drawer / Slideover (5 cols) */}
+        {selectedSale && (
+          <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-md flex flex-col overflow-hidden sticky top-20">
+            {/* Drawer Header */}
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-base font-bold text-slate-900">
+                    #{selectedSale.invoiceNo || selectedSale.id.slice(0, 8)}
+                  </span>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                      saleStatus(selectedSale).bgTone
+                    }`}
+                  >
+                    {saleStatus(selectedSale).label}
+                  </span>
+                </div>
+                <span className="text-xs text-slate-500 mt-0.5">
+                  {formatDate(selectedSale.date)} • Counter #01
+                </span>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedSale(null);
+                  setDraft(null);
+                }}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
-              <div className="flex-1 overflow-y-auto px-6 py-5">
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-                  <div>
-                    <h4 className="mb-2 text-sm font-bold text-stone-900">{t("sales_customerInfo")}</h4>
-                    <p className="text-lg font-bold text-stone-900">{customerLabel(sale.customerName)}</p>
-                    {sale.description && (
-                      <p className="mt-1 text-sm text-stone-500">{t("sales_noteLine", { note: sale.description })}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <h4 className="mb-2 text-sm font-bold text-stone-900">{t("sales_shopInfo")}</h4>
-                    <p className="text-lg font-bold text-stone-900">{currentShop?.shopName || "—"}</p>
-                    <div className="mt-1 space-y-0.5 text-sm text-stone-500">
-                      {currentShop?.address && <p>{currentShop.address}</p>}
-                      {currentShop?.contact && <p>{t("sales_phoneLine", { phone: currentShop.contact })}</p>}
-                      {currentShop?.email && <p>{currentShop.email}</p>}
+            {/* Drawer Body */}
+            <div className="p-4 sm:p-5 flex flex-col gap-4 max-h-[75vh] overflow-y-auto">
+              {/* Customer Box */}
+              <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-700 font-bold text-xs flex items-center justify-center">
+                      {customerLabel(selectedSale.customerName).slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-slate-800">
+                        {customerLabel(selectedSale.customerName)}
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        {selectedSale.customerId ? "Khata Account Party" : "Walk-in Retail Customer"}
+                      </span>
                     </div>
                   </div>
-
-                  <div>
-                    <h4 className="mb-2 text-sm font-bold text-stone-900">{t("sales_invoiceInfo")}</h4>
-                    <dl className="space-y-1.5 text-sm">
-                      <div className="flex gap-3">
-                        <dt className="w-28 shrink-0 text-stone-500">{t("sales_invoice")}</dt>
-                        <dd className="font-mono font-bold text-brand-700">#{sale.invoiceNo}</dd>
-                      </div>
-                      <div className="flex gap-3">
-                        <dt className="w-28 shrink-0 text-stone-500">{t("date")}</dt>
-                        <dd className="font-semibold text-stone-800">{formatDate(sale.date)}</dd>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <dt className="w-28 shrink-0 text-stone-500">{t("status")}</dt>
-                        <dd>
-                          <span className={`rounded-md px-2.5 py-0.5 text-[11px] font-bold ${status.tone}`}>{t(status.labelKey)}</span>
-                        </dd>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <dt className="w-28 shrink-0 text-stone-500">{t("sales_paymentStatus")}</dt>
-                        <dd>
-                          <span className={`rounded-md px-2.5 py-0.5 text-[11px] font-bold ${pay.badge}`}>● {t(pay.labelKey)}</span>
-                          <span className="ml-2 text-xs font-semibold text-stone-400">{t(methodLabelKey(sale.paymentMethod))}</span>
-                        </dd>
-                      </div>
-                    </dl>
+                  <div className="text-right">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Method</span>
+                    <span className="text-xs font-bold text-slate-800">
+                      {selectedSale.paymentMethod || "Cash"}
+                    </span>
                   </div>
                 </div>
 
-                <h4 className="mb-3 mt-7 text-sm font-bold text-stone-900">{t("sales_orderSummary")}</h4>
-                <div className="overflow-x-auto rounded-lg border border-stone-200">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-stone-100">
+                {selectedSale.description && (
+                  <p className="mt-1 text-xs text-slate-600 italic bg-white p-2 rounded border border-slate-200">
+                    Note: {selectedSale.description}
+                  </p>
+                )}
+              </div>
+
+              {/* Order Items Table */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    {t("sales_orderSummary") || "Order Summary"}
+                  </h3>
+                  {draft && (
+                    <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                      Editing Mode Active
+                    </span>
+                  )}
+                </div>
+
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 font-bold text-slate-500 uppercase tracking-wider">
                       <tr>
-                        <th className="px-4 py-3">{t("sales_product")}</th>
-                        <th className="px-4 py-3 text-center">{t("sales_qtyBags")}</th>
-                        <th className="px-4 py-3 text-center">{t("sales_totalWeight")}</th>
-                        <th className="px-4 py-3 text-right">{t("sales_rate")}</th>
-                        <th className="px-4 py-3 text-center">{t("sales_statusReturned")}</th>
-                        <th className="px-4 py-3 text-right">{t("total")}</th>
+                        <th className="py-2.5 px-3">Item</th>
+                        <th className="py-2.5 px-2 text-center">Qty</th>
+                        <th className="py-2.5 px-2 text-right">Rate</th>
+                        <th className="py-2.5 px-3 text-right">Total</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-stone-100">
-                      {sale.items.map((item, idx) => {
+                    <tbody className="divide-y divide-slate-100">
+                      {selectedSale.items.map((item, idx) => {
                         const isWeight = item.type === "weight";
-                        const weightVal = item.totalWeight ?? (isWeight ? item.qty * (item.weightPerBag || 25) : undefined);
-                        const weightStr = weightVal !== undefined ? `${weightVal} kg` : "—";
-                        const qtyStr = isWeight ? t("sales_bagsCount", { count: String(item.qty).padStart(2, "0") }) : t("sales_pcsCount", { count: item.qty });
+                        const weightVal =
+                          item.totalWeight ?? (isWeight ? item.qty * (item.weightPerBag || 25) : undefined);
 
                         return (
-                          <tr key={idx}>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-3">
-                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-100 font-display text-sm font-bold text-brand-700">
-                                  {item.name.trim().charAt(0).toUpperCase()}
-                                </span>
-                                <span className="font-semibold text-stone-900">{item.name}</span>
-                              </div>
+                          <tr key={idx} className="hover:bg-slate-50/50">
+                            <td className="py-2.5 px-3">
+                              <div className="font-semibold text-slate-900">{item.name}</div>
+                              {weightVal !== undefined && (
+                                <div className="text-[10px] text-slate-400">{weightVal} kg</div>
+                              )}
+                              {(item.returnedQty || 0) > 0 && (
+                                <div className="text-[10px] text-rose-600 font-bold">
+                                  Returned: {item.returnedQty}
+                                </div>
+                              )}
                             </td>
-                            <td className="px-4 py-3 text-center font-semibold text-stone-800 tabular">
+
+                            <td className="py-2.5 px-2 text-center tabular-nums">
                               {draft ? (
                                 <input
                                   type="number"
                                   min="1"
                                   step="any"
                                   value={draft[idx]?.qty ?? ""}
-                                  onChange={(e) => changeDraft(sale, idx, "qty", e.target.value)}
-                                  className="field !w-20 !py-1.5 text-center font-bold"
+                                  onChange={(e) => changeDraft(selectedSale, idx, "qty", e.target.value)}
+                                  className="w-14 py-1 text-center font-bold border border-slate-300 rounded bg-white text-slate-900 focus:ring-1 focus:ring-orange-500"
                                 />
                               ) : (
-                                qtyStr
+                                <span className="font-bold text-slate-700">
+                                  {isWeight ? `${item.qty} bags` : `${item.qty} pcs`}
+                                </span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-center font-bold text-stone-900 tabular">
-                              {draft && isWeight ? (
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="any"
-                                  value={draft[idx]?.weight ?? ""}
-                                  onChange={(e) => changeDraft(sale, idx, "weight", e.target.value)}
-                                  className={`field !w-24 !py-1.5 text-center font-bold ${draft[idx]?.manual ? "!border-amber-300 !bg-amber-50" : ""}`}
-                                />
-                              ) : (
-                                weightStr
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-right text-stone-600 tabular">
+
+                            <td className="py-2.5 px-2 text-right tabular-nums">
                               {draft ? (
                                 <input
                                   type="number"
                                   min="0"
                                   step="any"
                                   value={draft[idx]?.price ?? ""}
-                                  onChange={(e) => changeDraft(sale, idx, "price", e.target.value)}
-                                  className="field !w-24 !py-1.5 text-right font-bold"
+                                  onChange={(e) => changeDraft(selectedSale, idx, "price", e.target.value)}
+                                  className="w-16 py-1 text-right font-bold border border-slate-300 rounded bg-white text-slate-900 focus:ring-1 focus:ring-orange-500"
                                 />
                               ) : (
-                                <>Rs. {item.price}</>
+                                <span className="text-slate-600">Rs. {item.price}</span>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-center font-semibold text-red-600 tabular">
-                              {(item.returnedQty || 0) > 0 ? (isWeight ? `${item.returnedQty} kg` : item.returnedQty) : "—"}
-                            </td>
-                            <td className="px-4 py-3 text-right font-bold text-stone-900 tabular">
-                              Rs. {Math.round(draftLineTotal(sale, idx)).toLocaleString()}
+
+                            <td className="py-2.5 px-3 text-right font-bold text-slate-900 tabular-nums">
+                              Rs. {Math.round(draftLineTotal(selectedSale, idx)).toLocaleString()}
                             </td>
                           </tr>
                         );
@@ -508,87 +900,146 @@ export default function SalesHistoryPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
 
-                {draft && (
-                  <div className="mt-5 flex items-center justify-end gap-3">
-                    <label htmlFor="edit-extra" className="text-sm font-bold text-stone-700">
-                      {t("sales_extraCharges")} <span className="font-normal text-stone-400">{t("sales_extraChargesHint")}</span>
-                    </label>
-                    <input
-                      id="edit-extra"
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={draftExtra}
-                      onChange={(e) => setDraftExtra(e.target.value)}
-                      placeholder="0"
-                      className="field !w-32 !py-1.5 text-right font-bold"
-                    />
-                  </div>
-                )}
-
-                <div className="mt-3 flex justify-end">
-                  <dl className="w-full max-w-sm overflow-hidden rounded-lg border border-stone-200 text-sm">
-                    {[
-                      { label: t("subtotal"), value: money(subTotal), tone: "" },
-                      ...(draft || (sale.extraCharges ?? 0) > 0 ? [{ label: t("sales_extraCharges"), value: money(draft ? Math.max(0, parseFloat(draftExtra) || 0) : sale.extraCharges ?? 0), tone: "" }] : []),
-                      ...(refunded > 0 ? [{ label: t("sales_refundReturn"), value: `− ${money(refunded)}`, tone: "text-red-600" }] : []),
-                      { label: t("grandTotal"), value: money(draft ? subTotal + Math.max(0, parseFloat(draftExtra) || 0) : saleNetAmount(sale)), tone: "font-extrabold text-stone-900" },
-                      { label: t("paid"), value: money(pay.paid), tone: "" },
-                      { label: t("due"), value: money(pay.due), tone: pay.due > 0 ? "font-bold text-red-600" : "" },
-                    ].map((row, i) => (
-                      <div key={row.label} className={`flex justify-between px-4 py-2.5 ${i % 2 === 0 ? "bg-stone-50" : "bg-white"}`}>
-                        <dt className="text-stone-500">{row.label}</dt>
-                        <dd className={`tabular text-stone-800 ${row.tone}`}>{row.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
+              {/* Extra charges in edit mode */}
+              {draft && (
+                <div className="flex items-center justify-between p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-xs">
+                  <span className="font-bold text-amber-900">
+                    {t("sales_extraCharges") || "Extra / Delivery Charges"}
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={draftExtra}
+                    onChange={(e) => setDraftExtra(e.target.value)}
+                    placeholder="0"
+                    className="w-24 py-1 px-2 text-right font-bold border border-amber-300 rounded bg-white text-slate-900"
+                  />
                 </div>
+              )}
 
-                {pay.isUdhar && (
-                  <p className="mt-3 text-right text-xs text-stone-400">
-                    {t("sales_creditNote")}
-                  </p>
-                )}
-              </div>
+              {/* Financial Breakdown Table */}
+              {(() => {
+                const subTotal = draft
+                  ? selectedSale.items.reduce((s, _i, idx) => s + draftLineTotal(selectedSale, idx), 0)
+                  : selectedSale.items.reduce((s, i) => s + (i.total || i.price * i.qty), 0);
+                const refunded = selectedSale.refundedAmount || 0;
+                const extraVal = draft
+                  ? Math.max(0, parseFloat(draftExtra) || 0)
+                  : selectedSale.extraCharges || 0;
+                const grandTotal = draft ? subTotal + extraVal : saleNetAmount(selectedSale);
+                const pay = paymentInfo(selectedSale);
 
-              <div className="flex flex-wrap items-center justify-end gap-2 border-t border-stone-200 px-6 py-4">
-                {draft ? (
-                  <>
-                    <p className="mr-auto text-xs text-stone-400">
-                      {pay.isUdhar ? t("sales_editNoteStockCredit") : t("sales_editNoteStock")}
-                    </p>
-                    <button onClick={() => setDraft(null)} disabled={saving} className="btn-ghost">
-                      {t("cancel")}
-                    </button>
-                    <button onClick={() => saveEdit(sale)} disabled={saving} className="btn-primary min-w-[170px]">
-                      {saving ? <Loader2 className="animate-spin" size={18} /> : <><Printer size={16} /> {t("sales_saveSlip")}</>}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => setReceiptSale(sale)} className="btn-ghost">
-                      <Printer size={16} /> {t("sales_slip")}
-                    </button>
-                    <button
-                      onClick={() => startEdit(sale)}
-                      disabled={hasReturns}
-                      title={hasReturns ? t("sales_editBlocked") : t("sales_editBill")}
-                      className="btn-primary"
-                    >
-                      <Pencil size={16} /> {t("sales_editBill")}
-                    </button>
-                    <button onClick={closeDetail} className="btn-dark">
-                      {t("sales_close")}
-                    </button>
-                  </>
-                )}
-              </div>
+                return (
+                  <div className="rounded-lg border border-slate-200 overflow-hidden text-xs">
+                    <div className="flex justify-between py-2 px-3 bg-slate-50 text-slate-600 border-b border-slate-200">
+                      <span>{t("subtotal") || "Subtotal"}</span>
+                      <span className="font-semibold text-slate-800">{money(subTotal)}</span>
+                    </div>
+
+                    {extraVal > 0 && (
+                      <div className="flex justify-between py-2 px-3 bg-white text-slate-600 border-b border-slate-200">
+                        <span>{t("sales_extraCharges") || "Extra Charges"}</span>
+                        <span className="font-semibold text-slate-800">{money(extraVal)}</span>
+                      </div>
+                    )}
+
+                    {refunded > 0 && (
+                      <div className="flex justify-between py-2 px-3 bg-rose-50 text-rose-700 border-b border-slate-200 font-semibold">
+                        <span>{t("sales_refundReturn") || "Refunds / Returns"}</span>
+                        <span>- {money(refunded)}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between py-2.5 px-3 bg-slate-100 text-slate-900 font-bold border-b border-slate-200 text-sm">
+                      <span>{t("grandTotal") || "Net Payable Total"}</span>
+                      <span className="text-orange-700">{money(grandTotal)}</span>
+                    </div>
+
+                    <div className="flex justify-between py-2 px-3 bg-white text-slate-600 border-b border-slate-100">
+                      <span>{t("paid") || "Paid Amount"}</span>
+                      <span className="font-semibold text-emerald-700">{money(pay.paid)}</span>
+                    </div>
+
+                    <div className="flex justify-between py-2 px-3 bg-white text-slate-600">
+                      <span>{t("due") || "Due / Udhaar Balance"}</span>
+                      <span className={`font-bold ${pay.due > 0 ? "text-orange-600" : "text-slate-500"}`}>
+                        {money(pay.due)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Drawer Action Buttons */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+              {draft ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setDraft(null)}
+                    disabled={saving}
+                    className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                  >
+                    {t("cancel") || "Cancel"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => saveEdit(selectedSale)}
+                    disabled={saving}
+                    className="px-4 py-2 rounded-lg bg-orange-600 text-white text-xs font-bold hover:bg-orange-700 flex items-center gap-1.5 shadow-sm"
+                  >
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />}
+                    <span>{t("sales_saveSlip") || "Save & Print"}</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setReceiptSale(selectedSale)}
+                    className="px-3.5 py-2 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Printer size={14} className="text-slate-500" />
+                    <span>{t("sales_slip") || "Thermal Slip"}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => startEdit(selectedSale)}
+                    disabled={(selectedSale.refundedAmount || 0) > 0}
+                    className="px-3.5 py-2 rounded-lg bg-orange-600 text-white text-xs font-bold hover:bg-orange-700 flex items-center gap-1.5 shadow-xs disabled:opacity-40"
+                    title={
+                      (selectedSale.refundedAmount || 0) > 0
+                        ? "Bills with returns cannot be edited"
+                        : "Edit quantities and rates"
+                    }
+                  >
+                    <Pencil size={14} />
+                    <span>{t("sales_editBill") || "Edit Bill"}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSale(null);
+                      setDraft(null);
+                    }}
+                    className="px-3 py-2 rounded-lg bg-slate-800 text-white text-xs font-bold hover:bg-slate-900"
+                  >
+                    {t("sales_close") || "Close"}
+                  </button>
+                </>
+              )}
             </div>
           </div>
-        );
-      })()}
+        )}
+      </div>
 
+      {/* MODAL: Thermal Receipt Print Preview */}
       {receiptSale && (
         <SaleReceipt
           shop={currentShop}
@@ -600,12 +1051,11 @@ export default function SalesHistoryPage() {
           items={receiptSale.items}
           total={saleNetAmount(receiptSale)}
           paymentMethod={receiptSale.paymentMethod}
-          printLabel={t("printSlip")}
-          closeLabel={t("sales_close")}
+          printLabel={t("printSlip") || "Print Receipt"}
+          closeLabel={t("sales_close") || "Close"}
           onClose={() => setReceiptSale(null)}
         />
       )}
-
     </div>
   );
 }

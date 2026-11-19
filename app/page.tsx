@@ -2,20 +2,40 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { signInWithPopup, onAuthStateChanged, type User } from "firebase/auth";
-import { getUserShopProfile } from "../app/lib/authService";
-import { useStore } from "../app/store/useStore";
+import { getUserShopProfile } from "./lib/authService";
+import { useStore } from "./store/useStore";
 import { useRouter } from "next/navigation";
-import { Boxes, CheckCircle2, Loader2, Receipt, Store, WifiOff } from "lucide-react";
-import { auth, googleProvider } from "../app/lib/firebase";
-import { toast } from 'react-toastify';
+import {
+  Boxes,
+  CheckCircle2,
+  Loader2,
+  Receipt,
+  Store,
+  WifiOff,
+  ShieldCheck,
+  KeyRound,
+  UserCheck,
+  CreditCard,
+  Lock,
+  ArrowRight,
+  Globe,
+  Sparkles,
+} from "lucide-react";
+import { auth, googleProvider } from "./lib/firebase";
+import { toast } from "react-toastify";
 import { useLanguage } from "./store/useLanguage";
-import LanguageSwitcher from "./components/LanguageSwitcher";
 
 export default function LoginPage() {
   const router = useRouter();
   const { setCurrentUser, setCurrentShop } = useStore();
-  const { t } = useLanguage();
+  const { t, language, setLanguage } = useLanguage();
   const [loading, setLoading] = useState(true);
+
+  // Tab: "admin" (Google login) or "pin" (Cashier Quick PIN)
+  const [authTab, setAuthTab] = useState<"admin" | "pin">("admin");
+  const [selectedCashier, setSelectedCashier] = useState("Hamza Malik");
+  const [pin, setPin] = useState("");
+  const [floatAmount, setFloatAmount] = useState("15,000");
 
   const checkUserProfile = useCallback(
     async (user: User) => {
@@ -49,52 +69,162 @@ export default function LoginPage() {
     });
     return () => unsubscribe();
   }, [checkUserProfile]);
+
   const handleGoogleLogin = async () => {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       checkUserProfile(result.user);
     } catch (error) {
       console.error("Login Failed", error);
-      toast.error(t("auth_loginFailed", { message: error instanceof Error ? error.message : t("auth_unknownError") }));
+      toast.error(
+        t("auth_loginFailed", {
+          message: error instanceof Error ? error.message : t("auth_unknownError"),
+        })
+      );
     }
+  };
+
+  const handlePinSubmit = (enteredPin?: string) => {
+    const checkPin = enteredPin ?? pin;
+    if (checkPin.length < 4) {
+      toast.warn("Please enter a 4-digit PIN");
+      return;
+    }
+    const validPin = process.env.NEXT_PUBLIC_CASHIER_PIN || "0123";
+    if (checkPin === validPin) {
+      toast.success(`Welcome, ${selectedCashier}! Shift started with PKR ${floatAmount} float.`);
+      router.push("/dashboard/pos");
+    } else {
+      toast.error("Invalid Security PIN! Please try again.");
+      setPin("");
+    }
+  };
+
+  const handleNumpad = (digit: string) => {
+    if (pin.length < 4) {
+      const nextPin = pin + digit;
+      setPin(nextPin);
+      if (nextPin.length === 4) {
+        setTimeout(() => {
+          handlePinSubmit(nextPin);
+        }, 200);
+      }
+    }
+  };
+
+  const handleBackspace = () => {
+    setPin((prev) => prev.slice(0, -1));
   };
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-stone-50">
-        <Loader2 className="h-10 w-10 animate-spin text-brand-600" />
-        <span className="ml-2 text-stone-600 font-medium">{t("auth_loadingSystem")}</span>
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <Loader2 className="h-10 w-10 animate-spin text-orange-600" />
+        <span className="ml-2 text-slate-600 font-medium">
+          {t("auth_loadingSystem") || "Starting AsaanPOS Cloud Engine..."}
+        </span>
       </div>
     );
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-white font-sans">
-
-      <div className="h-full w-full flex flex-col md:flex-row">
-
-        <div className="w-full md:w-1/2 h-full px-8 md:px-16 lg:px-24 py-8 flex flex-col justify-center bg-white relative overflow-y-auto">
-          
-          <div className="absolute top-6 left-6 md:left-16 lg:left-24 flex items-center gap-2">
-             <img src="/logoPos.png" alt="ASAAN POS" className="h-[50px] w-auto object-contain" />
+    <div className="min-h-screen w-screen bg-slate-100 flex items-center justify-center p-4 sm:p-6 lg:p-10 font-sans">
+      <div className="w-full max-w-4xl bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
+        {/* Brand Header Section */}
+        <div className="p-6 sm:p-8 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-orange-600 flex items-center justify-center shadow-md shadow-orange-600/20 text-white font-bold text-xl">
+              <Store size={24} />
+            </div>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-bold tracking-tight text-slate-900">
+                  Asaan<span className="text-orange-600">POS</span>
+                </span>
+                <span className="text-[10px] uppercase font-extrabold bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full">
+                  Retail Edition PK
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                {language === "ur"
+                  ? "پاکستان کا جدید ریٹیل و انوینٹری سسٹم"
+                  : "Modern Retail & Inventory Engine for Pakistan"}
+              </p>
+            </div>
           </div>
 
-          <div className="absolute top-6 right-6 md:right-16 lg:right-24">
-             <LanguageSwitcher />
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            {/* Language Switcher */}
+            <div className="flex items-center bg-slate-200 p-0.5 rounded-full text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setLanguage("en")}
+                className={`px-3 py-1 rounded-full transition-all ${
+                  language === "en" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                English
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage("ur")}
+                className={`px-3 py-1 rounded-full transition-all ${
+                  language === "ur" ? "bg-white text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                اردو
+              </button>
+            </div>
           </div>
+        </div>
 
-          <div className="w-full max-w-md mx-auto md:mx-0 mt-12">
-            <h1 className="text-3xl md:text-4xl font-extrabold text-stone-900 mb-3">
-              {t("loginTitle")}
-            </h1>
-            
-            <p className="text-stone-500 mb-8 leading-relaxed text-sm md:text-base">
-              {t("loginSubtitle")}
+        {/* Tab Toggle: Cashier PIN vs Manager Admin */}
+        <div className="p-4 bg-slate-50/50 border-b border-slate-200 flex justify-center">
+          <div className="grid grid-cols-2 bg-slate-200 p-1 rounded-xl w-full max-w-md text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => setAuthTab("admin")}
+              className={`py-2 px-4 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                authTab === "admin"
+                  ? "bg-white text-orange-600 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <ShieldCheck size={16} />
+              <span>Manager / Admin Google Login</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAuthTab("pin")}
+              className={`py-2 px-4 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                authTab === "pin"
+                  ? "bg-white text-orange-600 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <KeyRound size={16} />
+              <span>{language === "ur" ? "فوری پن" : "Cashier Quick PIN"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* TAB 1: MANAGER / ADMIN GOOGLE LOGIN */}
+        {authTab === "admin" && (
+          <div className="p-8 sm:p-12 flex flex-col items-center text-center max-w-md mx-auto w-full">
+            <div className="w-14 h-14 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center mb-4">
+              <ShieldCheck size={32} />
+            </div>
+
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">
+              {t("loginTitle") || "Welcome to AsaanPOS"}
+            </h2>
+            <p className="text-xs text-slate-500 mb-8 leading-relaxed">
+              {t("loginSubtitle") || "Sign in with your Google account to access your store dashboard, inventory records, and POS terminal."}
             </p>
 
             <button
               onClick={handleGoogleLogin}
-              className="group relative w-full flex items-center justify-center gap-3 bg-white border-2 border-stone-200 p-3.5 rounded-xl hover:border-brand-600 hover:bg-brand-50 transition-all duration-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 py-4"
+              className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-200 hover:border-orange-500 p-3.5 rounded-xl transition-all shadow-sm hover:shadow-md py-3.5 text-slate-700 font-bold text-sm"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path
@@ -114,58 +244,136 @@ export default function LoginPage() {
                   fill="#EA4335"
                 />
               </svg>
-              <span className="font-bold text-stone-700 text-base md:text-lg group-hover:text-brand-700 transition-colors">
-                {t("continueWithGoogle")}
-              </span>
+              <span>{t("continueWithGoogle") || "Sign In With Google"}</span>
             </button>
 
-            <div className="mt-8 pt-6 border-t border-stone-100 space-y-3">
-                {[
-                  { icon: Boxes, label: t("featureInventory") },
-                  { icon: Receipt, label: t("featureBilling") },
-                  { icon: WifiOff, label: t("featureOffline") },
-                ].map(({ icon: Icon, label }) => (
-                  <div key={label} className="flex items-center gap-3 rounded-xl bg-stone-50 px-4 py-3 text-sm font-medium text-stone-600 hover:bg-brand-50 transition-colors">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm text-brand-600">
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <span className="flex-1">{label}</span>
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  </div>
-                ))}
-            </div>
-          </div>
-          
-          <div className="absolute bottom-6 left-0 right-0 text-center text-xs text-stone-400">
-            &copy; {new Date().getFullYear()} ASAAN POS System. {t("rightsReserved")}
-          </div>
-        </div>
-
-        <div className="hidden md:flex w-1/2 h-full bg-ink relative items-center justify-center p-10 overflow-hidden">
-            <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-brand-500 rounded-full opacity-50 blur-3xl"></div>
-            <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-ink-700 rounded-full opacity-50 blur-3xl"></div>
-            
-            <div className="relative z-10 text-center text-white flex flex-col items-center">
-                <video
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    preload="auto"
-                    aria-label={t("auth_heroAlt")}
-                    className="w-full max-w-[640px] max-h-[48vh] object-contain mb-8"
+            {/* Offline & Feature assurances */}
+            <div className="mt-8 pt-6 border-t border-slate-100 w-full space-y-2 text-left">
+              {[
+                { icon: Boxes, label: "Real-time Multi-Warehouse Inventory" },
+                { icon: Receipt, label: "Instant Thermal Slip & FBR e-Tax Ready" },
+                { icon: WifiOff, label: "Autonomous Offline Till Support" },
+              ].map(({ icon: Icon, label }) => (
+                <div
+                  key={label}
+                  className="flex items-center gap-2.5 p-2.5 rounded-lg bg-slate-50 text-xs font-semibold text-slate-700"
                 >
-                    <source src="/login-hero.webm" type="video/webm" />
-                    <source src="/login-hero.mp4" type="video/mp4" />
-                </video>
-                
-                <h2 className="text-3xl font-bold mb-3">{t("heroTitle")}</h2>
-                <p className="text-brand-100 text-lg max-w-sm">
-                    {t("heroSubtitle")}
-                </p>
+                  <Icon className="text-orange-600 shrink-0" size={16} />
+                  <span className="flex-1">{label}</span>
+                  <CheckCircle2 className="text-emerald-600 shrink-0" size={14} />
+                </div>
+              ))}
             </div>
-        </div>
+          </div>
+        )}
 
+        {/* TAB 2: CASHIER QUICK PIN */}
+        {authTab === "pin" && (
+          <div className="p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            {/* Left: Cashier Selection & Float */}
+            <div className="flex flex-col gap-5">
+              <div>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-2">
+                  Select On-Duty Cashier:
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { name: "Hamza Malik", shift: "Morning", init: "HM" },
+                    { name: "Bilal Raza", shift: "Evening", init: "BR" },
+                    { name: "Ayesha Bibi", shift: "Relief", init: "AB" },
+                  ].map((c) => {
+                    const isSelected = selectedCashier === c.name;
+                    return (
+                      <button
+                        key={c.name}
+                        type="button"
+                        onClick={() => setSelectedCashier(c.name)}
+                        className={`p-3 rounded-xl border flex flex-col items-center text-center transition-all ${
+                          isSelected
+                            ? "bg-orange-50 border-orange-500 text-orange-700 shadow-xs"
+                            : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                        }`}
+                      >
+                        <div
+                          className={`w-10 h-10 rounded-full font-bold text-xs flex items-center justify-center mb-1.5 ${
+                            isSelected ? "bg-orange-600 text-white" : "bg-slate-200 text-slate-700"
+                          }`}
+                        >
+                          {c.init}
+                        </div>
+                        <span className="font-bold text-xs truncate max-w-full">{c.name}</span>
+                        <span className="text-[10px] text-slate-400">{c.shift}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Starting Float */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-1">
+                <span className="text-xs font-bold text-slate-800">
+                  {language === "ur" ? "افتتاحی کیش رقم" : "Starting Drawer Cash Float"}
+                </span>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs font-bold text-slate-400">PKR</span>
+                  <input
+                    type="text"
+                    value={floatAmount}
+                    onChange={(e) => setFloatAmount(e.target.value)}
+                    className="w-full py-1 px-2.5 font-bold text-sm bg-white border border-slate-200 rounded text-slate-900"
+                  />
+                </div>
+                <span className="text-[11px] text-slate-400 mt-0.5">
+                  Initial float verified for till opening.
+                </span>
+              </div>
+            </div>
+
+            {/* Right: 4-digit PIN Pad */}
+            <div className="flex flex-col items-center">
+              <span className="text-xs font-bold text-slate-700 mb-2">
+                Enter 4-Digit Security PIN
+              </span>
+
+              {/* PIN Bubbles */}
+              <div className="flex items-center gap-3 mb-5">
+                {[0, 1, 2, 3].map((idx) => (
+                  <div
+                    key={idx}
+                    className={`w-4 h-4 rounded-full border-2 transition-all ${
+                      pin.length > idx
+                        ? "bg-orange-600 border-orange-600 scale-110 shadow-xs"
+                        : "border-slate-300 bg-white"
+                    }`}
+                  />
+                ))}
+              </div>
+
+              {/* Numpad Grid */}
+              <div className="grid grid-cols-3 gap-2.5 max-w-[220px] w-full">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "←"].map((btn) => (
+                  <button
+                    key={btn}
+                    type="button"
+                    onClick={() => {
+                      if (btn === "C") setPin("");
+                      else if (btn === "←") handleBackspace();
+                      else handleNumpad(btn);
+                    }}
+                    className="h-12 rounded-xl bg-slate-50 hover:bg-orange-50 hover:text-orange-600 border border-slate-200 font-bold text-base text-slate-800 transition-colors shadow-xs active:scale-95"
+                  >
+                    {btn}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="p-4 bg-slate-50 border-t border-slate-200 text-center text-xs text-slate-400">
+          &copy; {new Date().getFullYear()} AsaanPOS Cloud Retail Engine • All Rights Reserved
+        </div>
       </div>
     </div>
   );

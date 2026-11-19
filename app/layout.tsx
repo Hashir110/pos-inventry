@@ -3,32 +3,18 @@ import ToastProvider from "./components/ToastProvider";
 import DialogProvider from "./components/DialogProvider";
 import ModalScrollLock from "./components/ModalScrollLock";
 import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
-import { Nunito, Poppins } from "next/font/google";
 import "./globals.css";
 
-const nunito = Nunito({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const poppins = Poppins({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  display: "swap",
-});
-
 export const metadata: Metadata = {
-  title: "ASAAN POS Inventory Management",
-  description: "Manage your inventory with ease using our ASAAN POS system.",
+  title: "ASAAN POS - Modern Retail Engine",
+  description: "High-performance POS & Inventory Engine for Retailers.",
   icons: {
     icon: "/favicon.ico",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#fe9f43",
+  themeColor: "#ea580c",
 };
 
 export default function RootLayout({
@@ -38,7 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${nunito.variable} ${poppins.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased text-on-surface bg-surface">
         <ToastProvider />
         <ModalScrollLock />
         <ServiceWorkerRegister />

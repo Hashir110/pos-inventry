@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useStore } from "../../store/useStore";
 import { useLanguage } from "../../store/useLanguage";
 import {
@@ -27,13 +27,21 @@ import {
   Building2,
   CheckCircle2,
   Loader2,
+  Phone,
+  MapPin,
+  Calendar,
+  CreditCard,
+  FileText,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "react-toastify";
-import DataTable from "../../components/DataTable";
+
+const money = (n: number) => `Rs. ${Math.round(n || 0).toLocaleString()}`;
 
 export default function SuppliersPage() {
   const { currentShop } = useStore();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const isRTL = language === "ur";
   const ownerId = currentShop?.uid || "";
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -41,16 +49,20 @@ export default function SuppliersPage() {
   const [purchases, setPurchases] = useState<SupplierPurchase[]>([]);
   const [payments, setPayments] = useState<SupplierPayment[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [filter, setFilter] = useState<"all" | "due" | "clear">("all");
 
+  // Modals
   const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState<Supplier | null>(null);
 
+  // Add Supplier Form
   const [newSupName, setNewSupName] = useState("");
   const [newSupPhone, setNewSupPhone] = useState("");
   const [newSupAddress, setNewSupAddress] = useState("");
 
+  // Purchase Form
   const [purchaseSupId, setPurchaseSupId] = useState("");
   const [purchaseProdId, setPurchaseProdId] = useState("");
   const [purchaseQty, setPurchaseQty] = useState(1);
@@ -58,6 +70,7 @@ export default function SuppliersPage() {
   const [purchaseDestination, setPurchaseDestination] = useState<"gudam" | "shop">("gudam");
   const [purchasePaidAmount, setPurchasePaidAmount] = useState(0);
 
+  // Payment Form
   const [paymentSupId, setPaymentSupId] = useState("");
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<"Cash" | "Bank Account">("Cash");
@@ -92,12 +105,37 @@ export default function SuppliersPage() {
     };
   }, [ownerId]);
 
-  const totalSupplierPayable = suppliers.reduce((sum, s) => sum + (s.balance || 0), 0);
+  // Financial Metrics
+  const totalSupplierPayable = useMemo(
+    () => suppliers.reduce((sum, s) => sum + (s.balance || 0), 0),
+    [suppliers]
+  );
+  const dueSuppliersCount = useMemo(() => suppliers.filter((s) => (s.balance || 0) > 0).length, [suppliers]);
+  const clearSuppliersCount = useMemo(() => suppliers.filter((s) => (s.balance || 0) <= 0).length, [suppliers]);
+  const totalPurchasedMonth = useMemo(
+    () => purchases.reduce((sum, p) => sum + (p.totalAmount || 0), 0),
+    [purchases]
+  );
 
+  // Filtered Suppliers
+  const filteredSuppliers = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
+    return suppliers.filter((s) => {
+      const matchName = s.name.toLowerCase().includes(term);
+      const matchPhone = (s.phone || "").toLowerCase().includes(term);
+      if (!matchName && !matchPhone) return false;
+
+      if (filter === "due") return (s.balance || 0) > 0;
+      if (filter === "clear") return (s.balance || 0) <= 0;
+      return true;
+    });
+  }, [suppliers, searchTerm, filter]);
+
+  // Handlers
   const handleAddSupplierSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSupName.trim()) {
-      toast.warn(t("suppliers_warn_name"));
+      toast.warn(t("suppliers_warn_name") || "Please enter supplier name");
       return;
     }
     try {
@@ -107,13 +145,13 @@ export default function SuppliersPage() {
         phone: newSupPhone,
         address: newSupAddress,
       });
-      toast.success(t("suppliers_added", { name: newSupName }));
+      toast.success(t("suppliers_added", { name: newSupName }) || `Supplier ${newSupName} added!`);
       setShowAddSupplierModal(false);
       setNewSupName("");
       setNewSupPhone("");
       setNewSupAddress("");
     } catch (err: any) {
-      toast.error(err.message || t("suppliers_err_add"));
+      toast.error(err.message || t("suppliers_err_add") || "Failed to add supplier");
     } finally {
       setAddingSupplier(false);
     }
@@ -122,11 +160,11 @@ export default function SuppliersPage() {
   const handlePurchaseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!purchaseSupId) {
-      toast.warn(t("suppliers_warn_select_supplier"));
+      toast.warn(t("suppliers_warn_select_supplier") || "Select a supplier");
       return;
     }
     if (!purchaseProdId) {
-      toast.warn(t("suppliers_warn_select_product"));
+      toast.warn(t("suppliers_warn_select_product") || "Select a product");
       return;
     }
     const prod = products.find((p) => p.id === purchaseProdId);
@@ -151,30 +189,25 @@ export default function SuppliersPage() {
             qty: Number(purchaseQty),
             buyingPrice: Number(purchaseBuyingPrice),
             total: totalBill,
-            destinationLocation: purchaseDestination,
+            destination: purchaseDestination,
           },
         ],
         totalAmount: totalBill,
         paidAmount: Number(purchasePaidAmount),
       });
 
-      toast.success(
-        t("suppliers_purchase_recorded", {
-          location: t(purchaseDestination === "gudam" ? "suppliers_dest_warehouse" : "suppliers_dest_shop"),
-        })
-      );
+      toast.success("Purchase saved successfully");
       setShowPurchaseModal(false);
-
-      const pur = await listSupplierPurchases(ownerId);
-      setPurchases(pur);
-
       setPurchaseSupId("");
       setPurchaseProdId("");
       setPurchaseQty(1);
       setPurchaseBuyingPrice(0);
       setPurchasePaidAmount(0);
+
+      const pur = await listSupplierPurchases(ownerId);
+      setPurchases(pur);
     } catch (err: any) {
-      toast.error(err.message || t("suppliers_err_purchase"));
+      toast.error(err.message || "Purchase failed");
     } finally {
       setSavingPurchase(false);
     }
@@ -183,11 +216,11 @@ export default function SuppliersPage() {
   const handlePaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!paymentSupId) {
-      toast.warn(t("suppliers_warn_select_supplier"));
+      toast.warn("Please select a supplier");
       return;
     }
     if (paymentAmount <= 0) {
-      toast.warn(t("suppliers_warn_amount"));
+      toast.warn("Please enter a valid payment amount");
       return;
     }
     const sup = suppliers.find((s) => s.id === paymentSupId);
@@ -203,233 +236,345 @@ export default function SuppliersPage() {
         note: paymentNote,
       });
 
-      toast.success(t("suppliers_payment_recorded", { amount: paymentAmount, name: sup.name }));
+      toast.success("Payment recorded successfully");
       setShowPaymentModal(false);
-
-      const pay = await listSupplierPayments(ownerId);
-      setPayments(pay);
-
       setPaymentSupId("");
       setPaymentAmount(0);
       setPaymentNote("");
+
+      const pay = await listSupplierPayments(ownerId);
+      setPayments(pay);
     } catch (err: any) {
-      toast.error(err.message || t("suppliers_err_payment"));
+      toast.error(err.message || "Payment failed");
     } finally {
       setSavingPayment(false);
     }
   };
 
-  const filteredSuppliers = suppliers.filter(
-    (s) =>
-      s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.phone && s.phone.includes(searchTerm))
-  );
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-sm">
-        <div>
-          <h1 className="text-xl font-extrabold text-stone-900 flex items-center gap-2">
-            <Truck className="text-brand-600" size={24} /> {t("suppliers_title")}
-          </h1>
-          <p className="text-xs text-stone-500 mt-1">
-            {t("suppliers_subtitle")}
+    <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
+      {/* 1. TOP HEADER & ACTIONS */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+              Suppliers & Vendor Accounts
+            </h1>
+          </div>
+          <p className="mt-1 text-sm text-slate-500">
+            Manage wholesale suppliers, purchase inventory bills, and register payment settlements.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setShowAddSupplierModal(true)}
-            className="btn-ghost text-xs font-bold flex items-center gap-1.5"
-          >
-            <UserPlus size={16} /> {t("suppliers_new_supplier")}
-          </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
             onClick={() => setShowPurchaseModal(true)}
-            className="btn-primary text-xs font-bold flex items-center gap-1.5 !bg-amber-600 hover:!bg-amber-700"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors shadow-xs"
           >
-            <ArrowUpRight size={16} /> {t("suppliers_purchase_btn")}
+            <Package size={16} className="text-orange-600" />
+            <span>Record Stock Purchase</span>
           </button>
+
           <button
             onClick={() => setShowPaymentModal(true)}
-            className="btn-primary text-xs font-bold flex items-center gap-1.5"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm font-bold hover:bg-slate-50 transition-colors shadow-xs"
           >
-            <ArrowDownLeft size={16} /> {t("suppliers_pay_btn")}
+            <DollarSign size={16} className="text-emerald-600" />
+            <span>Pay Supplier</span>
+          </button>
+
+          <button
+            onClick={() => setShowAddSupplierModal(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-bold hover:bg-orange-700 transition-colors shadow-sm"
+          >
+            <UserPlus size={16} />
+            <span>Add Supplier</span>
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-amber-100 text-amber-700">
-            <DollarSign size={24} />
+      {/* 2. 4 SUMMARY STAT CARDS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Payables</span>
+            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-700 flex items-center justify-center">
+              <ArrowUpRight size={18} />
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-stone-500 font-bold uppercase">{t("suppliers_total_payable")}</p>
-            <p className="text-xl font-black text-amber-900">
-              Rs. {totalSupplierPayable.toLocaleString()}
-            </p>
-            <p className="text-[11px] text-stone-400">{t("suppliers_total_payable_hint")}</p>
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-brand-100 text-brand-700">
-            <Building2 size={24} />
-          </div>
-          <div>
-            <p className="text-xs text-stone-500 font-bold uppercase">{t("suppliers_total_registered")}</p>
-            <p className="text-xl font-black text-stone-900">{suppliers.length}</p>
-            <p className="text-[11px] text-stone-400">{t("suppliers_active_accounts")}</p>
+          <div className="mt-3">
+            <div className="text-2xl font-bold text-rose-700 tabular-nums">{money(totalSupplierPayable)}</div>
+            <div className="text-xs text-slate-500 mt-0.5">Across {dueSuppliersCount} pending accounts</div>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-emerald-100 text-emerald-700">
-            <Package size={24} />
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Active Suppliers</span>
+            <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center">
+              <Truck size={18} />
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-stone-500 font-bold uppercase">{t("suppliers_total_bills")}</p>
-            <p className="text-xl font-black text-stone-900">{purchases.length}</p>
-            <p className="text-[11px] text-stone-400">{t("suppliers_recorded_receipts")}</p>
+          <div className="mt-3">
+            <div className="text-2xl font-bold text-slate-900 tabular-nums">{suppliers.length}</div>
+            <div className="text-xs text-slate-500 mt-0.5">Registered vendors</div>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">All-Clear Vendors</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+              <CheckCircle2 size={18} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold text-emerald-700 tabular-nums">{clearSuppliersCount}</div>
+            <div className="text-xs text-emerald-700 font-semibold mt-0.5">Zero balance remaining</div>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Stock Purchases</span>
+            <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center">
+              <Package size={18} />
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-2xl font-bold text-slate-900 tabular-nums">{money(totalPurchasedMonth)}</div>
+            <div className="text-xs text-slate-500 mt-0.5">{purchases.length} invoices received</div>
           </div>
         </div>
       </div>
 
-      <DataTable
-        data={filteredSuppliers}
-        rowKey={(s) => s.id}
-        emptyText={<>{t("suppliers_empty")}</>}
-        toolbarLeft={
-          <h2 className="text-sm font-bold text-stone-800 uppercase tracking-wider">{t("suppliers_list_title")}</h2>
-        }
-        toolbarRight={
-          <div className="relative w-full sm:w-64">
-            <input
-              type="text"
-              placeholder={t("suppliers_search_placeholder")}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input-field pl-9 text-xs"
-            />
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={14} />
-          </div>
-        }
-        columns={[
-          { key: "name", header: t("suppliers_col_name"), cell: (s) => <span className="font-extrabold text-stone-900">{s.name}</span> },
-          { key: "phone", header: t("phone"), cell: (s) => <span className="text-stone-600">{s.phone || "-"}</span> },
-          { key: "address", header: t("address"), cell: (s) => <span className="text-stone-500">{s.address || "-"}</span> },
-          {
-            key: "balance",
-            header: t("suppliers_col_balance"),
-            align: "right",
-            cell: (s) => <span className="font-black text-amber-700">Rs. {(s.balance || 0).toLocaleString()}</span>,
-          },
-          {
-            key: "actions",
-            header: t("actions"),
-            align: "center",
-            cell: (s) => (
-              <div className="flex justify-center gap-2 text-xs">
-                <button
-                  onClick={() => {
-                    setPurchaseSupId(s.id);
-                    setShowPurchaseModal(true);
-                  }}
-                  className="px-2.5 py-1 rounded bg-amber-50 text-amber-700 font-bold border border-amber-200 hover:bg-amber-100"
-                >
-                  {t("suppliers_add_purchase_bill")}
-                </button>
-                <button
-                  onClick={() => {
-                    setPaymentSupId(s.id);
-                    setShowPaymentModal(true);
-                  }}
-                  className="px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 hover:bg-emerald-100"
-                >
-                  {t("suppliers_add_payment")}
-                </button>
-                <button
-                  onClick={() => setShowHistoryModal(s)}
-                  className="p-1 text-stone-500 hover:bg-stone-100 rounded"
-                  title={t("suppliers_view_ledger")}
-                >
-                  <History size={16} />
-                </button>
-              </div>
-            ),
-          },
-        ]}
-      />
+      {/* 3. SEARCH & FILTER ROW */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search supplier name or phone..."
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all font-medium"
+          />
+        </div>
 
+        <div className="flex items-center gap-1.5 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setFilter("all")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              filter === "all" ? "bg-orange-600 text-white shadow-xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            All Vendors ({suppliers.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter("due")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              filter === "due" ? "bg-orange-600 text-white shadow-xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            Outstanding Due ({dueSuppliersCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilter("clear")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              filter === "clear" ? "bg-orange-600 text-white shadow-xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            All Clear ({clearSuppliersCount})
+          </button>
+        </div>
+      </div>
+
+      {/* 4. SUPPLIER DIRECTORY TABLE */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="bg-slate-50 text-[11px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200">
+                <th className="py-3 px-4">Supplier Profile</th>
+                <th className="py-3 px-3">Contact</th>
+                <th className="py-3 px-3">Address</th>
+                <th className="py-3 px-3 text-right">Payable Balance</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredSuppliers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-slate-400">
+                    <Truck size={32} className="mx-auto mb-2 text-slate-300" />
+                    <p className="text-sm font-semibold text-slate-600">No suppliers found</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredSuppliers.map((s) => {
+                  const hasDue = (s.balance || 0) > 0;
+                  return (
+                    <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-9 h-9 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 ${
+                              hasDue ? "bg-rose-100 text-rose-800" : "bg-emerald-100 text-emerald-800"
+                            }`}
+                          >
+                            {s.name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="font-bold text-slate-900 text-sm">{s.name}</span>
+                            <span className="text-[11px] text-slate-400">Vendor ID: #{s.id.slice(0, 6)}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-3 font-medium text-slate-700">
+                        {s.phone ? (
+                          <span className="flex items-center gap-1 text-slate-600">
+                            <Phone size={12} className="text-orange-600" /> {s.phone}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+
+                      <td className="py-3 px-3 text-slate-500">
+                        {s.address ? (
+                          <span className="flex items-center gap-1">
+                            <MapPin size={12} /> {s.address}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+
+                      <td className="py-3 px-3 text-right">
+                        <span
+                          className={`font-bold tabular-nums text-sm ${
+                            hasDue ? "text-rose-600" : "text-emerald-700"
+                          }`}
+                        >
+                          {hasDue ? money(s.balance) : "Rs. 0 (Clear ✓)"}
+                        </span>
+                      </td>
+
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPurchaseSupId(s.id);
+                              setShowPurchaseModal(true);
+                            }}
+                            className="px-2.5 py-1 rounded bg-slate-100 hover:bg-orange-50 hover:text-orange-700 text-slate-700 font-semibold"
+                            title="Record Purchase"
+                          >
+                            + Purchase
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPaymentSupId(s.id);
+                              setShowPaymentModal(true);
+                            }}
+                            className="px-2.5 py-1 rounded bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 font-semibold"
+                            title="Pay Supplier"
+                          >
+                            Pay
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowHistoryModal(s)}
+                            className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                            title="View Statement History"
+                          >
+                            <History size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* MODAL 1: ADD SUPPLIER */}
       {showAddSupplierModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-pop w-full max-w-md overflow-hidden">
-            <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-stone-50">
-              <h3 className="font-extrabold text-stone-900 text-sm flex items-center gap-2">
-                <UserPlus size={18} className="text-brand-600" /> {t("suppliers_modal_add_title")}
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Truck className="text-orange-600" size={18} />
+                <h3 className="font-bold text-slate-900 text-sm">Add New Supplier / Vendor</h3>
+              </div>
               <button
+                type="button"
                 onClick={() => setShowAddSupplierModal(false)}
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-200"
+                className="text-slate-400 hover:text-slate-700"
               >
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleAddSupplierSubmit} className="p-5 space-y-4">
+
+            <form onSubmit={handleAddSupplierSubmit} className="p-5 flex flex-col gap-3.5 text-xs">
               <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">
-                  {t("suppliers_label_name")}
-                </label>
+                <label className="font-bold text-slate-700 block mb-1">Company / Supplier Name *</label>
                 <input
                   type="text"
-                  placeholder={t("suppliers_placeholder_name")}
+                  required
                   value={newSupName}
                   onChange={(e) => setNewSupName(e.target.value)}
-                  className="input-field"
-                  required
+                  placeholder="e.g. Tapal Tea Distributors"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-orange-500 outline-none"
                 />
               </div>
+
               <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">
-                  {t("suppliers_label_phone")}
-                </label>
+                <label className="font-bold text-slate-700 block mb-1">Phone Number</label>
                 <input
-                  type="text"
-                  placeholder="03xx-xxxxxxx"
+                  type="tel"
                   value={newSupPhone}
                   onChange={(e) => setNewSupPhone(e.target.value)}
-                  className="input-field"
+                  placeholder="0300-1234567"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-orange-500 outline-none"
                 />
               </div>
+
               <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">{t("address")}</label>
+                <label className="font-bold text-slate-700 block mb-1">Address / Warehouse Location</label>
                 <input
                   type="text"
-                  placeholder={t("address")}
                   value={newSupAddress}
                   onChange={(e) => setNewSupAddress(e.target.value)}
-                  className="input-field"
+                  placeholder="e.g. Circular Road, Lahore"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-orange-500 outline-none"
                 />
               </div>
-              <div className="pt-2 flex gap-3">
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowAddSupplierModal(false)}
-                  className="btn-ghost flex-1 text-xs"
+                  className="px-4 py-2 rounded-lg bg-white border border-slate-200 font-bold text-slate-700 hover:bg-slate-50"
                 >
-                  {t("cancel")}
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={addingSupplier}
-                  className="btn-primary flex-1 text-xs font-bold min-h-[38px] flex items-center justify-center"
+                  className="px-5 py-2 rounded-lg bg-orange-600 text-white font-bold hover:bg-orange-700 flex items-center gap-1.5 shadow-sm disabled:opacity-50"
                 >
-                  {addingSupplier ? (
-                    <Loader2 className="animate-spin text-white" size={16} />
-                  ) : (
-                    t("suppliers_save_supplier")
-                  )}
+                  {addingSupplier ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                  <span>Save Supplier</span>
                 </button>
               </div>
             </form>
@@ -437,169 +582,134 @@ export default function SuppliersPage() {
         </div>
       )}
 
+      {/* MODAL 2: RECORD STOCK PURCHASE */}
       {showPurchaseModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-pop w-full max-w-lg overflow-hidden">
-            <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-amber-50">
-              <h3 className="font-extrabold text-amber-900 text-sm flex items-center gap-2">
-                <ArrowUpRight size={18} className="text-amber-600" /> {t("suppliers_modal_purchase_title")}
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">
+            <div className="p-4 bg-orange-50 border-b border-orange-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Package className="text-orange-600" size={18} />
+                <h3 className="font-bold text-orange-900 text-sm">Record Stock Purchase from Vendor</h3>
+              </div>
               <button
+                type="button"
                 onClick={() => setShowPurchaseModal(false)}
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-200"
+                className="text-slate-400 hover:text-slate-700"
               >
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handlePurchaseSubmit} className="p-5 space-y-4">
-              <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">
-                  {t("suppliers_label_supplier")}
-                </label>
-                <select
-                  value={purchaseSupId}
-                  onChange={(e) => setPurchaseSupId(e.target.value)}
-                  className="input-field"
-                  required
-                >
-                  <option value="">{t("suppliers_select_supplier")}</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {t("suppliers_option_balance", { name: s.name, amount: s.balance || 0 })}
-                    </option>
-                  ))}
-                </select>
-              </div>
 
-              <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">
-                  {t("suppliers_label_item")}
-                </label>
-                <select
-                  value={purchaseProdId}
-                  onChange={(e) => {
-                    setPurchaseProdId(e.target.value);
-                    const pr = products.find((p) => p.id === e.target.value);
-                    if (pr) setPurchaseBuyingPrice(pr.buyingPrice || 0);
-                  }}
-                  className="input-field"
-                  required
-                >
-                  <option value="">{t("suppliers_select_item")}</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {t("suppliers_option_rate", { name: p.name, amount: p.buyingPrice })}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
+            <form onSubmit={handlePurchaseSubmit} className="p-5 flex flex-col gap-3.5 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">
-                    {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" ? t("suppliers_label_qty_bags") : t("suppliers_label_qty_pcs")}
-                  </label>
+                  <label className="font-bold text-slate-700 block mb-1">Select Supplier *</label>
+                  <select
+                    value={purchaseSupId}
+                    onChange={(e) => setPurchaseSupId(e.target.value)}
+                    required
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-medium"
+                  >
+                    <option value="">-- Choose Vendor --</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Select Product *</label>
+                  <select
+                    value={purchaseProdId}
+                    onChange={(e) => {
+                      setPurchaseProdId(e.target.value);
+                      const prod = products.find((p) => p.id === e.target.value);
+                      if (prod && prod.buyingPrice) setPurchaseBuyingPrice(prod.buyingPrice);
+                    }}
+                    required
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-medium"
+                  >
+                    <option value="">-- Choose Item --</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Quantity</label>
                   <input
                     type="number"
                     min="1"
+                    step="any"
                     value={purchaseQty}
-                    onChange={(e) => setPurchaseQty(Math.max(1, Number(e.target.value)))}
-                    className="input-field"
-                    required
+                    onChange={(e) => setPurchaseQty(Math.max(1, parseFloat(e.target.value) || 0))}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold"
                   />
-                  {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
-                    <p className="text-[10px] text-stone-500 mt-1 font-medium">
-                      {t("suppliers_weight_line", { weight: purchaseQty * 25 })}
-                    </p>
-                  )}
                 </div>
+
                 <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">
-                    {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" ? t("suppliers_label_rate_kg") : t("suppliers_label_rate_pc")}
-                  </label>
+                  <label className="font-bold text-slate-700 block mb-1">Unit Buying Rate</label>
                   <input
                     type="number"
                     min="0"
                     step="any"
                     value={purchaseBuyingPrice}
-                    onChange={(e) => setPurchaseBuyingPrice(Number(e.target.value))}
-                    className="input-field"
-                    required
+                    onChange={(e) => setPurchaseBuyingPrice(Math.max(0, parseFloat(e.target.value) || 0))}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-slate-900"
                   />
-                  {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
-                    <p className="text-[10px] text-stone-500 mt-1 font-medium">
-                      {t("suppliers_per_bag", { amount: (purchaseBuyingPrice * 25).toLocaleString() })}
-                    </p>
-                  )}
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">
-                    {t("suppliers_label_destination")}
-                  </label>
+                  <label className="font-bold text-slate-700 block mb-1">Destination</label>
                   <select
                     value={purchaseDestination}
-                    onChange={(e) =>
-                      setPurchaseDestination(e.target.value as "gudam" | "shop")
-                    }
-                    className="input-field"
+                    onChange={(e) => setPurchaseDestination(e.target.value as any)}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-semibold"
                   >
-                    <option value="gudam">{t("suppliers_dest_warehouse")}</option>
-                    <option value="shop">{t("suppliers_dest_shop")}</option>
+                    <option value="gudam">Warehouse (Gudam)</option>
+                    <option value="shop">Front Shop</option>
                   </select>
                 </div>
-                <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">
-                    {t("suppliers_label_advance")}
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={purchasePaidAmount}
-                    onChange={(e) => setPurchasePaidAmount(Number(e.target.value))}
-                    className="input-field"
-                  />
-                </div>
               </div>
 
-              <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs flex justify-between font-bold items-center">
-                <span>
-                  {t("suppliers_total_bill")}
-                  {products.find((p) => p.id === purchaseProdId)?.unitType === "weight" && (
-                    <span className="text-[11px] text-stone-500 font-normal ml-1">
-                      ({purchaseQty * 25} kg × Rs. {purchaseBuyingPrice})
-                    </span>
-                  )}
-                </span>
-                <span className="text-amber-900 font-extrabold text-sm">
-                  Rs. {(
-                    products.find((p) => p.id === purchaseProdId)?.unitType === "weight"
-                      ? purchaseQty * 25 * purchaseBuyingPrice
-                      : purchaseQty * purchaseBuyingPrice
-                  ).toLocaleString()}
-                </span>
+              {/* Amount Paid Now vs Khata Balance */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Cash Paid at Delivery (Balance goes to Khata):
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={purchasePaidAmount}
+                  onChange={(e) => setPurchasePaidAmount(Math.max(0, parseFloat(e.target.value) || 0))}
+                  placeholder="0 if fully on credit"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-bold text-emerald-700"
+                />
               </div>
 
-              <div className="pt-2 flex gap-3">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowPurchaseModal(false)}
-                  className="btn-ghost flex-1 text-xs"
+                  className="px-4 py-2 rounded-lg bg-white border border-slate-200 font-bold text-slate-700 hover:bg-slate-50"
                 >
-                  {t("cancel")}
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={savingPurchase}
-                  className="btn-primary flex-1 text-xs font-bold !bg-amber-600 hover:!bg-amber-700 min-h-[38px] flex items-center justify-center"
+                  className="px-5 py-2 rounded-lg bg-orange-600 text-white font-bold hover:bg-orange-700 flex items-center gap-1.5 shadow-sm disabled:opacity-50"
                 >
-                  {savingPurchase ? (
-                    <Loader2 className="animate-spin text-white" size={16} />
-                  ) : (
-                    t("suppliers_save_purchase")
-                  )}
+                  {savingPurchase ? <Loader2 size={16} className="animate-spin" /> : <Package size={16} />}
+                  <span>Save Purchase Bill</span>
                 </button>
               </div>
             </form>
@@ -607,101 +717,96 @@ export default function SuppliersPage() {
         </div>
       )}
 
+      {/* MODAL 3: PAY SUPPLIER */}
       {showPaymentModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-pop w-full max-w-md overflow-hidden">
-            <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-emerald-50">
-              <h3 className="font-extrabold text-emerald-900 text-sm flex items-center gap-2">
-                <ArrowDownLeft size={18} className="text-emerald-600" /> {t("suppliers_modal_payment_title")}
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+            <div className="p-4 bg-emerald-50 border-b border-emerald-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <DollarSign className="text-emerald-700" size={18} />
+                <h3 className="font-bold text-emerald-900 text-sm">Pay Supplier / Settle Due</h3>
+              </div>
               <button
+                type="button"
                 onClick={() => setShowPaymentModal(false)}
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-200"
+                className="text-slate-400 hover:text-slate-700"
               >
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handlePaymentSubmit} className="p-5 space-y-4">
+
+            <form onSubmit={handlePaymentSubmit} className="p-5 flex flex-col gap-3.5 text-xs">
               <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">
-                  {t("suppliers_label_supplier")}
-                </label>
+                <label className="font-bold text-slate-700 block mb-1">Select Supplier *</label>
                 <select
                   value={paymentSupId}
                   onChange={(e) => setPaymentSupId(e.target.value)}
-                  className="input-field"
                   required
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-sm"
                 >
-                  <option value="">{t("suppliers_select_supplier")}</option>
+                  <option value="">-- Choose Supplier to Pay --</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {t("suppliers_option_payable", { name: s.name, amount: s.balance || 0 })}
+                      {s.name} (Balance: {money(s.balance)})
                     </option>
                   ))}
                 </select>
               </div>
 
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Payment Amount (PKR) *</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="any"
+                    value={paymentAmount || ""}
+                    onChange={(e) => setPaymentAmount(Math.max(0, parseFloat(e.target.value) || 0))}
+                    placeholder="e.g. 5000"
+                    required
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-emerald-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Payment Method</label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value as any)}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg font-semibold"
+                  >
+                    <option value="Cash">Till Cash</option>
+                    <option value="Bank Account">Bank Transfer / Cheque</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
-                <label className="text-xs font-bold text-stone-700 block mb-1">
-                  {t("suppliers_label_payment_amount")}
-                </label>
+                <label className="font-bold text-slate-700 block mb-1">Payment Note / Cheque #</label>
                 <input
-                  type="number"
-                  min="1"
-                  placeholder="0"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                  className="input-field text-lg font-bold text-emerald-800"
-                  required
+                  type="text"
+                  value={paymentNote}
+                  onChange={(e) => setPaymentNote(e.target.value)}
+                  placeholder="e.g. Paid cash to driver Tariq"
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">
-                    {t("suppliers_label_payment_method")}
-                  </label>
-                  <select
-                    value={paymentMethod}
-                    onChange={(e) =>
-                      setPaymentMethod(e.target.value as "Cash" | "Bank Account")
-                    }
-                    className="input-field"
-                  >
-                    <option value="Cash">{t("cash")}</option>
-                    <option value="Bank Account">{t("suppliers_method_bank")}</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-stone-700 block mb-1">{t("suppliers_label_note")}</label>
-                  <input
-                    type="text"
-                    placeholder={t("suppliers_placeholder_note")}
-                    value={paymentNote}
-                    onChange={(e) => setPaymentNote(e.target.value)}
-                    className="input-field"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 flex gap-3">
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setShowPaymentModal(false)}
-                  className="btn-ghost flex-1 text-xs"
+                  className="px-4 py-2 rounded-lg bg-white border border-slate-200 font-bold text-slate-700 hover:bg-slate-50"
                 >
-                  {t("cancel")}
+                  Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={savingPayment}
-                  className="btn-primary flex-1 text-xs font-bold min-h-[38px] flex items-center justify-center"
+                  className="px-5 py-2 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700 flex items-center gap-1.5 shadow-sm disabled:opacity-50"
                 >
-                  {savingPayment ? (
-                    <Loader2 className="animate-spin text-white" size={16} />
-                  ) : (
-                    t("suppliers_save_payment")
-                  )}
+                  {savingPayment ? <Loader2 size={16} className="animate-spin" /> : <DollarSign size={16} />}
+                  <span>Save Payment</span>
                 </button>
               </div>
             </form>
@@ -709,89 +814,101 @@ export default function SuppliersPage() {
         </div>
       )}
 
+      {/* MODAL 4: SUPPLIER STATEMENT HISTORY */}
       {showHistoryModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-pop w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="p-4 border-b border-stone-200 flex justify-between items-center bg-stone-50">
-              <div>
-                <h3 className="font-extrabold text-stone-900 text-sm">
-                  {t("suppliers_history_title", { name: showHistoryModal.name })}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <History className="text-orange-600" size={18} />
+                <h3 className="font-bold text-slate-900 text-sm">
+                  Ledger History: {showHistoryModal.name}
                 </h3>
-                <p className="text-xs text-amber-700 font-bold">
-                  {t("suppliers_history_balance", { amount: (showHistoryModal.balance || 0).toLocaleString() })}
-                </p>
               </div>
               <button
+                type="button"
                 onClick={() => setShowHistoryModal(null)}
-                className="rounded-lg p-1 text-stone-400 hover:bg-stone-200"
+                className="text-slate-400 hover:text-slate-700"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-5 overflow-y-auto space-y-6">
-              <div>
-                <h4 className="text-xs font-bold text-stone-700 uppercase border-b pb-2 mb-3">
-                  {t("suppliers_history_purchases")}
-                </h4>
-                <div className="space-y-2">
-                  {purchases
-                    .filter((p) => p.supplierId === showHistoryModal.id)
-                    .map((pur) => (
-                      <div
-                        key={pur.id}
-                        className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs flex justify-between items-center"
-                      >
-                        <div>
-                          <p className="font-bold text-stone-900">
-                            {pur.items
-                              .map((i) =>
-                                t("suppliers_history_item", { name: i.productName, qty: i.qty, price: i.buyingPrice })
-                              )
-                              .join(", ")}
-                          </p>
-                          <p className="text-[11px] text-stone-500">
-                            {new Date(pur.date).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <span className="font-black text-amber-800">
-                          Rs. {pur.totalAmount.toLocaleString()}
-                        </span>
-                      </div>
-                    ))}
-                </div>
+            <div className="p-4 overflow-y-auto flex flex-col gap-3">
+              <div className="p-3 bg-orange-50 rounded-lg flex items-center justify-between text-xs">
+                <span className="font-bold text-orange-900">Current Outstanding Balance:</span>
+                <span className="font-extrabold text-orange-700 text-base tabular-nums">
+                  {money(showHistoryModal.balance || 0)}
+                </span>
               </div>
 
-              <div>
-                <h4 className="text-xs font-bold text-stone-700 uppercase border-b pb-2 mb-3">
-                  {t("suppliers_history_payments")}
-                </h4>
-                <div className="space-y-2">
-                  {payments
-                    .filter((p) => p.supplierId === showHistoryModal.id)
-                    .map((pay) => (
-                      <div
-                        key={pay.id}
-                        className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs flex justify-between items-center"
-                      >
-                        <div>
-                          <p className="font-bold text-emerald-900">
-                            {t("suppliers_history_payment_line", {
-                              method: pay.method === "Cash" ? t("cash") : pay.method === "Bank Account" ? t("suppliers_method_bank") : pay.method,
-                            })}{" "}
-                            {pay.note ? `- ${pay.note}` : ""}
-                          </p>
-                          <p className="text-[11px] text-emerald-600">
-                            {new Date(pay.date).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <span className="font-black text-emerald-800">
-                          - Rs. {pay.amount.toLocaleString()}
-                        </span>
-                      </div>
-                    ))}
-                </div>
+              <div className="border border-slate-200 rounded-lg overflow-hidden text-xs">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 font-bold text-slate-500 uppercase tracking-wider text-[11px]">
+                    <tr>
+                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3">Type</th>
+                      <th className="py-2.5 px-3">Details</th>
+                      <th className="py-2.5 px-3 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {[
+                      ...purchases
+                        .filter((p) => p.supplierId === showHistoryModal.id)
+                        .map((p) => ({
+                          id: p.id,
+                          date: p.date,
+                          kind: "Purchase",
+                          details: p.items.map((i) => `${i.productName} × ${i.qty}`).join(", "),
+                          amount: p.totalAmount,
+                        })),
+                      ...payments
+                        .filter((p) => p.supplierId === showHistoryModal.id)
+                        .map((p) => ({
+                          id: p.id,
+                          date: p.date,
+                          kind: "Payment",
+                          details: `${p.method}${p.note ? ` • ${p.note}` : ""}`,
+                          amount: p.amount,
+                        })),
+                    ]
+                      .sort((a, b) => b.date.localeCompare(a.date))
+                      .map((rec) => (
+                        <tr key={rec.id} className="hover:bg-slate-50/70">
+                          <td className="py-2 px-3 text-slate-500 whitespace-nowrap">
+                            {new Date(rec.date).toLocaleDateString()}
+                          </td>
+                          <td className="py-2 px-3 font-bold">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] ${
+                                rec.kind === "Purchase"
+                                  ? "bg-rose-50 text-rose-700"
+                                  : "bg-emerald-50 text-emerald-700"
+                              }`}
+                            >
+                              {rec.kind}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 text-slate-600 truncate max-w-xs">{rec.details}</td>
+                          <td className="py-2 px-3 text-right font-bold tabular-nums">
+                            {money(rec.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
               </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowHistoryModal(null)}
+                className="px-4 py-1.5 rounded-lg bg-slate-800 text-white text-xs font-bold hover:bg-slate-900"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
