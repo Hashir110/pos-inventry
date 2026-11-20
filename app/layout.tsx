@@ -8,6 +8,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "ASAAN POS - Modern Retail Engine",
   description: "High-performance POS & Inventory Engine for Retailers.",
+  manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
   },
