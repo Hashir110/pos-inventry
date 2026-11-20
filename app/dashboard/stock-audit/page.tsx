@@ -1,8 +1,6 @@
 "use client";
 
-// TODO: connect logic with backend physical stock audit service in next phase
-
-import { useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Boxes,
   ClipboardCheck,
@@ -15,40 +13,173 @@ import {
   TrendingUp,
   Download,
   Filter,
+  RefreshCw,
+  Loader2,
+  Save,
+  Check,
+  X,
+  FileSpreadsheet,
 } from "lucide-react";
-import { mockStockAuditMetrics, mockAuditItems, type AuditItem } from "../../mocks/stockAudit";
 import { toast } from "react-toastify";
+import { useStore } from "../../store/useStore";
+import {
+  loadAuditProducts,
+  calculateStockAuditMetrics,
+  applyStockAuditReconciliation,
+  type RealAuditItem,
+  type StockAuditAdjustment,
+} from "../../lib/services/stockAudit";
 
 export default function StockAuditPage() {
-  const [items, setItems] = useState<AuditItem[]>(mockAuditItems);
+  const { currentUser, currentShop } = useStore();
+  const [items, setItems] = useState<RealAuditItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [savingReconciliation, setSavingReconciliation] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [adjustmentReason, setAdjustmentReason] = useState("Physical Stock Count Variance");
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState<"all" | "discrepancy" | "matched">("all");
 
-  const filteredItems = items.filter((item) => {
-    const match =
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.barcode.includes(searchTerm);
-    if (!match) return false;
+  const loadData = async (isManual = false) => {
+    if (!currentUser?.uid) return;
+    if (isManual) setRefreshing(true);
+    else setLoading(true);
 
-    if (filter === "discrepancy") return item.status === "discrepancy";
-    if (filter === "matched") return item.status === "matched";
-    return true;
-  });
+    try {
+      const data = await loadAuditProducts(currentUser.uid);
+      setItems(data);
+    } catch (error) {
+      console.error("Failed to load audit products:", error);
+      toast.error("Could not load products catalog for audit.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-  const handleAdjust = (id: string, newCount: number) => {
+  useEffect(() => {
+    loadData();
+  }, [currentUser?.uid]);
+
+  const metrics = useMemo(() => calculateStockAuditMetrics(items), [items]);
+
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      const term = searchTerm.toLowerCase();
+      const match =
+        item.name.toLowerCase().includes(term) ||
+        item.category.toLowerCase().includes(term) ||
+        item.sku.toLowerCase().includes(term);
+      if (!match) return false;
+
+      if (filter === "discrepancy") return item.status === "discrepancy";
+      if (filter === "matched") return item.status === "matched";
+      return true;
+    });
+  }, [items, searchTerm, filter]);
+
+  const discrepancies = useMemo(() => {
+    return items.filter((i) => i.physicalCount !== i.systemStock);
+  }, [items]);
+
+  const handleAdjustCount = (id: string, newCount: number) => {
+    const val = Math.max(0, newCount);
     setItems((prev) =>
       prev.map((i) =>
         i.id === id
           ? {
               ...i,
-              physicalCount: newCount,
-              status: newCount === i.systemStock ? "matched" : "discrepancy",
+              physicalCount: val,
+              status: val === i.systemStock ? "matched" : "discrepancy",
             }
           : i
       )
     );
-    toast.success("Count updated");
+  };
+
+  const handleApplyReconciliation = async () => {
+    if (!currentUser?.uid || discrepancies.length === 0) return;
+    setSavingReconciliation(true);
+
+    try {
+      const adjustments: StockAuditAdjustment[] = discrepancies.map((d) => {
+        const diff = d.physicalCount - d.systemStock;
+        return {
+          productId: d.id,
+          name: d.name,
+          oldStock: d.systemStock,
+          newStock: d.physicalCount,
+          variance: diff,
+          unitBuyingPrice: d.buyingPrice,
+          financialImpact: diff * (d.sellingPrice || d.buyingPrice || 0),
+          reason: adjustmentReason,
+        };
+      });
+
+      await applyStockAuditReconciliation(currentUser.uid, adjustments);
+      toast.success(
+        `Successfully adjusted ${adjustments.length} product(s) to match physical shelf count!`
+      );
+      setShowConfirmModal(false);
+
+      // Refresh to pull updated stock
+      await loadData();
+    } catch (error) {
+      console.error("Failed to save audit adjustments:", error);
+      toast.error("Could not save audit reconciliation. Please check connection.");
+    } finally {
+      setSavingReconciliation(false);
+    }
+  };
+
+  const handleExportAuditCSV = () => {
+    if (items.length === 0) return;
+
+    const rows: string[][] = [
+      [`AsaanPOS - Physical Stock Audit Report (${currentShop?.shopName || "Store"})`],
+      [`Date: ${new Date().toLocaleString()}`],
+      [],
+      [
+        "Product Name",
+        "Category",
+        "System Stock",
+        "Physical Shelf Count",
+        "Variance",
+        "Status",
+        "Selling Rate",
+        "Variance Value (PKR)",
+      ],
+      ...items.map((i) => {
+        const diff = i.physicalCount - i.systemStock;
+        const val = diff * (i.sellingPrice || 0);
+        return [
+          i.name,
+          i.category,
+          String(i.systemStock),
+          String(i.physicalCount),
+          diff === 0 ? "0" : diff > 0 ? `+${diff}` : `${diff}`,
+          i.status,
+          `Rs. ${i.sellingPrice}`,
+          `Rs. ${val}`,
+        ];
+      }),
+    ];
+
+    const csvContent =
+      "data:text/csv;charset=utf-8,\uFEFF" +
+      rows.map((row) => row.map((cell) => `"${String(cell || "").replace(/"/g, '""')}"`).join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Stock_Audit_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast.success("Stock Audit Variance CSV exported");
   };
 
   return (
@@ -66,13 +197,36 @@ export default function StockAuditPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => toast.success("Stock Audit Variance Report exported")}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors shadow-xs"
-        >
-          <Download size={14} className="text-slate-500" />
-          <span>Export Audit Log</span>
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => loadData(true)}
+            disabled={refreshing || loading}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors shadow-xs disabled:opacity-50"
+            title="Reload products from server"
+          >
+            <RefreshCw size={14} className={refreshing ? "animate-spin text-orange-600" : "text-slate-500"} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+
+          <button
+            onClick={handleExportAuditCSV}
+            disabled={items.length === 0}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition-colors shadow-xs disabled:opacity-50"
+          >
+            <Download size={14} className="text-slate-500" />
+            <span>Export Audit Log</span>
+          </button>
+
+          {discrepancies.length > 0 && (
+            <button
+              onClick={() => setShowConfirmModal(true)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-600 text-white text-xs font-bold hover:bg-orange-700 transition-colors shadow-sm"
+            >
+              <Save size={14} />
+              <span>Reconcile {discrepancies.length} Discrepancies</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 2. 5 KPI CARDS */}
@@ -81,7 +235,7 @@ export default function StockAuditPage() {
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Asset Value</span>
           <div className="mt-2">
             <div className="text-xl font-bold text-slate-900 tabular-nums">
-              {mockStockAuditMetrics.totalValue}
+              Rs. {Math.round(metrics.totalAssetValue).toLocaleString()}
             </div>
             <div className="text-[11px] text-emerald-600 font-semibold mt-0.5">Physical Inventory</div>
           </div>
@@ -91,9 +245,9 @@ export default function StockAuditPage() {
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tracked SKUs</span>
           <div className="mt-2">
             <div className="text-xl font-bold text-slate-900 tabular-nums">
-              {mockStockAuditMetrics.trackedSkus} Items
+              {metrics.trackedSkus} Items
             </div>
-            <div className="text-[11px] text-slate-500 mt-0.5">8 Store Categories</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">Live in Database</div>
           </div>
         </div>
 
@@ -101,9 +255,9 @@ export default function StockAuditPage() {
           <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Low Stock</span>
           <div className="mt-2">
             <div className="text-xl font-bold text-amber-700 tabular-nums">
-              {mockStockAuditMetrics.lowStockCount} SKUs
+              {metrics.lowStockCount} SKUs
             </div>
-            <div className="text-[11px] text-amber-700 font-semibold mt-0.5">Reorder Threshold Reached</div>
+            <div className="text-[11px] text-amber-700 font-semibold mt-0.5">Stock &le; 5 units</div>
           </div>
         </div>
 
@@ -111,19 +265,21 @@ export default function StockAuditPage() {
           <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700">Out of Stock</span>
           <div className="mt-2">
             <div className="text-xl font-bold text-rose-700 tabular-nums">
-              {mockStockAuditMetrics.outOfStockCount} SKU
+              {metrics.outOfStockCount} SKUs
             </div>
-            <div className="text-[11px] text-rose-600 font-semibold mt-0.5">Shelf stockout alert</div>
+            <div className="text-[11px] text-rose-600 font-semibold mt-0.5">Zero shelf inventory</div>
           </div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Expiring &lt;30d</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-orange-700">Discrepancies</span>
           <div className="mt-2">
-            <div className="text-xl font-bold text-slate-900 tabular-nums">
-              {mockStockAuditMetrics.expiringBatches} Batches
+            <div className="text-xl font-bold text-orange-700 tabular-nums">
+              {metrics.discrepancyCount} Items
             </div>
-            <div className="text-[11px] text-orange-600 font-semibold mt-0.5">Inspection needed</div>
+            <div className="text-[11px] text-orange-600 font-semibold mt-0.5">
+              {metrics.discrepancyCount > 0 ? "Action required" : "100% Balanced"}
+            </div>
           </div>
         </div>
       </div>
@@ -138,7 +294,7 @@ export default function StockAuditPage() {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search product, SKU or scan barcode..."
+              placeholder="Search product name, category or SKU..."
               className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium focus:ring-2 focus:ring-orange-500 outline-none"
             />
           </div>
@@ -173,96 +329,178 @@ export default function StockAuditPage() {
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="bg-slate-50 text-[11px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200">
-                <th className="py-2.5 px-4">Item &amp; Barcode</th>
-                <th className="py-2.5 px-3">Category</th>
-                <th className="py-2.5 px-3 text-center">System Recorded</th>
-                <th className="py-2.5 px-4 text-center">Physical Count</th>
-                <th className="py-2.5 px-3 text-center">Variance</th>
-                <th className="py-2.5 px-3 text-center">Status</th>
-                <th className="py-2.5 px-4 text-right">Last Verified</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredItems.map((item) => {
-                const diff = item.physicalCount - item.systemStock;
-                const isMatched = diff === 0;
+          {loading ? (
+            <div className="py-16 text-center flex flex-col items-center justify-center">
+              <Loader2 className="w-8 h-8 animate-spin text-orange-600 mb-2" />
+              <span className="text-xs font-semibold text-slate-600">Loading catalog from Firestore...</span>
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="py-16 text-center flex flex-col items-center justify-center">
+              <Boxes className="w-10 h-10 text-slate-300 mb-2" />
+              <span className="text-xs font-semibold text-slate-600">No products found matching filter</span>
+            </div>
+          ) : (
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="bg-slate-50 text-[11px] uppercase tracking-wider font-bold text-slate-500 border-b border-slate-200">
+                  <th className="py-2.5 px-4">Item &amp; Details</th>
+                  <th className="py-2.5 px-3">Category</th>
+                  <th className="py-2.5 px-3 text-center">System Recorded</th>
+                  <th className="py-2.5 px-4 text-center">Physical Count</th>
+                  <th className="py-2.5 px-3 text-center">Variance</th>
+                  <th className="py-2.5 px-3 text-center">Status</th>
+                  <th className="py-2.5 px-4 text-right">Selling Rate</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredItems.map((item) => {
+                  const diff = item.physicalCount - item.systemStock;
+                  const isMatched = diff === 0;
 
-                return (
-                  <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3 px-4">
-                      <span className="font-bold text-slate-900 block text-xs">{item.name}</span>
-                      <span className="text-[11px] text-slate-400 font-mono">
-                        SKU: {item.sku} • {item.barcode}
-                      </span>
-                    </td>
+                  return (
+                    <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-3 px-4">
+                        <span className="font-bold text-slate-900 block text-xs">{item.name}</span>
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          ID: {item.sku}
+                        </span>
+                      </td>
 
-                    <td className="py-3 px-3 text-slate-600">{item.category}</td>
+                      <td className="py-3 px-3 text-slate-600">{item.category}</td>
 
-                    <td className="py-3 px-3 text-center font-bold text-slate-700 tabular-nums">
-                      {item.systemStock} {item.unit}
-                    </td>
+                      <td className="py-3 px-3 text-center font-bold text-slate-700 tabular-nums">
+                        {item.systemStock} {item.unit}
+                      </td>
 
-                    <td className="py-3 px-4 text-center">
-                      <div className="inline-flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleAdjust(item.id, Math.max(0, item.physicalCount - 1))}
-                          className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 font-bold"
+                      <td className="py-3 px-4 text-center">
+                        <div className="inline-flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleAdjustCount(item.id, item.physicalCount - 1)}
+                            className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 font-bold"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.physicalCount}
+                            onChange={(e) => handleAdjustCount(item.id, parseInt(e.target.value) || 0)}
+                            className="w-14 text-center py-0.5 border border-slate-200 rounded font-bold bg-slate-50 text-slate-900"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAdjustCount(item.id, item.physicalCount + 1)}
+                            className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 font-bold"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-3 text-center font-bold tabular-nums">
+                        {isMatched ? (
+                          <span className="text-slate-400">0</span>
+                        ) : diff > 0 ? (
+                          <span className="text-sky-700">+{diff} (Over)</span>
+                        ) : (
+                          <span className="text-rose-600">{diff} (Short)</span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-3 text-center">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            isMatched
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-rose-50 text-rose-700 border border-rose-200"
+                          }`}
                         >
-                          -
-                        </button>
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.physicalCount}
-                          onChange={(e) => handleAdjust(item.id, Math.max(0, parseInt(e.target.value) || 0))}
-                          className="w-12 text-center py-0.5 border border-slate-200 rounded font-bold bg-slate-50"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleAdjust(item.id, item.physicalCount + 1)}
-                          className="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 font-bold"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </td>
+                          {isMatched ? "Matched ✓" : "Discrepancy ⚠"}
+                        </span>
+                      </td>
 
-                    <td className="py-3 px-3 text-center font-bold tabular-nums">
-                      {isMatched ? (
-                        <span className="text-slate-400">0</span>
-                      ) : diff > 0 ? (
-                        <span className="text-sky-700">+{diff} (Over)</span>
-                      ) : (
-                        <span className="text-rose-600">{diff} (Short)</span>
-                      )}
-                    </td>
-
-                    <td className="py-3 px-3 text-center">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          isMatched
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : "bg-rose-50 text-rose-700 border border-rose-200"
-                        }`}
-                      >
-                        {isMatched ? "Matched ✓" : "Discrepancy ⚠"}
-                      </span>
-                    </td>
-
-                    <td className="py-3 px-4 text-right text-slate-400 text-[11px] whitespace-nowrap">
-                      {item.lastCounted}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      <td className="py-3 px-4 text-right text-slate-700 font-bold tabular-nums">
+                        Rs. {item.sellingPrice.toLocaleString()}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
+
+      {/* CONFIRMATION RECONCILIATION MODAL */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col">
+            <div className="p-4 bg-orange-50 border-b border-orange-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="text-orange-600" size={18} />
+                <h3 className="font-bold text-orange-950 text-sm">Confirm Stock Reconciliation</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 flex flex-col gap-4 text-xs">
+              <p className="text-slate-600 leading-relaxed">
+                You are about to adjust <strong>{discrepancies.length} item(s)</strong> in your Firestore database to match the physical shelf counts recorded.
+              </p>
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-1.5">
+                <span className="font-bold text-slate-800">Reason for Stock Adjustment:</span>
+                <select
+                  value={adjustmentReason}
+                  onChange={(e) => setAdjustmentReason(e.target.value)}
+                  className="w-full bg-white border border-slate-200 py-1.5 px-2.5 rounded-lg text-xs font-medium text-slate-800 outline-none"
+                >
+                  <option>Physical Stock Count Variance</option>
+                  <option>Damaged / Broken / Expired Stock Written Off</option>
+                  <option>Theft / Shrinkage Unaccounted Loss</option>
+                  <option>Correction of Incorrect Previous Receiving</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmModal(false)}
+                  disabled={savingReconciliation}
+                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyReconciliation}
+                  disabled={savingReconciliation}
+                  className="px-5 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold flex items-center gap-2 shadow-sm disabled:opacity-50"
+                >
+                  {savingReconciliation ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Saving to Firestore...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={14} />
+                      <span>Apply & Update Stock</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

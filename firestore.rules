@@ -126,6 +126,40 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /stock_audits/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update, delete: if false;
+    }
+
+    match /purchase_orders/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update: if isOwner() && keepsOwner();
+      allow delete: if isOwner();
+    }
+
+    match /staff_members/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update: if isOwner() && keepsOwner();
+      allow delete: if isOwner();
+    }
+
+    match /staff_shifts/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update: if isOwner() && keepsOwner();
+      allow delete: if isOwner();
+    }
+
+    match /deliveries/{id} {
+      allow read: if canRead();
+      allow create: if createsOwn();
+      allow update: if isOwner() && keepsOwner();
+      allow delete: if isOwner();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

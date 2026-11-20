@@ -42,6 +42,7 @@ import {
   mockTopSellingFallback,
   mockLowStockFallback,
 } from "../mocks/dashboard";
+import { aggregateHourlyDistribution } from "../lib/services/analytics";
 
 type RangePreset = "today" | "week" | "month" | "custom";
 
@@ -263,7 +264,14 @@ export default function DashboardHome() {
       : mockTopSellingFallback; // TODO: connect logic to dedicated item analytics endpoint if no sale items
 
   // Real vs Mock: Hourly Distribution for Chart
-  const hourlyChartData = mockHourlyDistribution; // TODO: connect logic to live hourly transaction aggregator
+  const hourlyChartData = useMemo(() => {
+    if (invoices.length === 0 && expenseItems.length === 0) {
+      return mockHourlyDistribution;
+    }
+    const realHourly = aggregateHourlyDistribution(invoices, expenseItems);
+    const hasData = realHourly.some((p) => p.sales > 0 || p.expenses > 0);
+    return hasData ? realHourly : mockHourlyDistribution;
+  }, [invoices, expenseItems]);
 
   const topItemsGrossContribution = topSellingList.reduce((acc, curr) => acc + curr.revenue, 0);
   const grossPercent =
