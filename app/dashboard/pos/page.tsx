@@ -258,7 +258,7 @@ export default function POSPage() {
         let chosenBankName: string | undefined = undefined;
 
         if (paymentMethod === "Cash") {
-            calculatedCashAmount = grandTotal;
+            calculatedCashAmount = grossTotal;
             calculatedBankAmount = 0;
         } else if (paymentMethod === "Bank Account") {
             if (banks.length === 0) {
@@ -269,7 +269,7 @@ export default function POSPage() {
                 toast.error("Barah-e-karam bank muntakhib karein");
                 return;
             }
-            calculatedCashAmount = 0;
+            calculatedCashAmount = advance;
             calculatedBankAmount = grandTotal;
             chosenBankId = selectedBank.id;
             chosenBankName = selectedBank.bankName;
@@ -298,7 +298,7 @@ export default function POSPage() {
             chosenBankId = selectedBank.id;
             chosenBankName = selectedBank.bankName;
         } else if (paymentMethod === "Udhar") {
-            calculatedCashAmount = 0;
+            calculatedCashAmount = advance;
             calculatedBankAmount = 0;
         }
 

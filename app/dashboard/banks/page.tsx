@@ -38,7 +38,7 @@ import {
   recordManualBankTransaction,
 } from "../../lib/services/banks";
 import { listRecentSales } from "../../lib/services/sales";
-import { saleNetAmount, todayKey } from "../../lib/calc";
+import { saleNetAmount, salePaymentBreakdown, todayKey } from "../../lib/calc";
 
 const money = (n: number) => `Rs. ${Math.round(n || 0).toLocaleString()}`;
 
@@ -140,10 +140,7 @@ export default function BankAccountsPage() {
       for (const sale of bankSales) {
         const identifier = sale.id || sale.invoiceNo?.toString();
         if (!existingSaleIds.has(identifier) && !existingSaleIds.has(sale.invoiceNo?.toString())) {
-          const amount =
-            sale.paymentMethod === "Bank Account"
-              ? saleNetAmount(sale)
-              : (sale.bankAmount || 0);
+          const amount = salePaymentBreakdown(sale).bank;
 
           if (amount > 0) {
             missingTx.push({

@@ -14,7 +14,7 @@ import {
 import { auth, db } from "../firebase";
 import { tr } from "../i18n/translate";
 import { deductStock } from "../stock";
-import { toLocalIsoString } from "../calc";
+import { salePaymentBreakdown, toLocalIsoString } from "../calc";
 import type {
   BankAccount,
   BankTransaction,
@@ -344,26 +344,19 @@ export const createOnlineSale = async (
   }
 
   // Auto-merge into existing DayClosing for this date if it was already closed
-  let addedCash = 0;
-  let addedBank = 0;
-  let addedUdhar = 0;
-  if (meta.paymentMethod === "Split") {
-    addedCash = meta.cashAmount || 0;
-    addedBank = meta.bankAmount || 0;
-    addedUdhar = Math.max(0, roundMoney(netPayable - (addedCash + addedBank)));
-  } else if (meta.paymentMethod === "Bank Account") {
-    addedBank = netPayable;
-  } else if (meta.paymentMethod === "Udhar") {
-    addedUdhar = netPayable;
-  } else {
-    addedCash = netPayable;
-  }
+  const breakdown = salePaymentBreakdown({
+    totalAmount,
+    advanceAmount: meta.advanceAmount,
+    paymentMethod: meta.paymentMethod,
+    cashAmount: meta.cashAmount,
+    bankAmount: meta.bankAmount,
+  });
 
   await mergeSaleIntoDayClosing(ownerId, saleDate, {
-    net: netPayable,
-    cash: addedCash,
-    bank: addedBank,
-    udhar: addedUdhar,
+    net: breakdown.total,
+    cash: breakdown.cash,
+    bank: breakdown.bank,
+    udhar: breakdown.udhar,
   });
 
   return invoiceNo;
@@ -434,27 +427,19 @@ export const queueOfflineSale = (
   }
 
   // Optimistically merge into local cached DayClosing if exists
-  const netAmount = Math.max(0, roundMoney(totalAmount - (meta.advanceAmount || 0)));
-  let addedCash = 0;
-  let addedBank = 0;
-  let addedUdhar = 0;
-  if (meta.paymentMethod === "Split") {
-    addedCash = meta.cashAmount || 0;
-    addedBank = meta.bankAmount || 0;
-    addedUdhar = Math.max(0, roundMoney(netAmount - (addedCash + addedBank)));
-  } else if (meta.paymentMethod === "Bank Account") {
-    addedBank = netAmount;
-  } else if (meta.paymentMethod === "Udhar") {
-    addedUdhar = netAmount;
-  } else {
-    addedCash = netAmount;
-  }
+  const breakdown = salePaymentBreakdown({
+    totalAmount,
+    advanceAmount: meta.advanceAmount,
+    paymentMethod: meta.paymentMethod,
+    cashAmount: meta.cashAmount,
+    bankAmount: meta.bankAmount,
+  });
 
   void mergeSaleIntoDayClosing(ownerId, saleDate, {
-    net: netAmount,
-    cash: addedCash,
-    bank: addedBank,
-    udhar: addedUdhar,
+    net: breakdown.total,
+    cash: breakdown.cash,
+    bank: breakdown.bank,
+    udhar: breakdown.udhar,
   });
 
   return invoiceNo;
@@ -584,30 +569,15 @@ export const syncPendingSales = async (onProgress?: (remaining: number) => void)
       transaction.set(saleRef, saleData);
     });
 
-    const advancePaid = order.advanceAmount || 0;
-    const netAmount = Math.max(0, roundMoney(order.totalAmount - advancePaid));
-    let addedCash = 0;
-    let addedBank = 0;
-    let addedUdhar = 0;
-    if (order.paymentMethod === "Split") {
-      addedCash = order.cashAmount || 0;
-      addedBank = order.bankAmount || 0;
-      addedUdhar = Math.max(0, roundMoney(netAmount - (addedCash + addedBank)));
-    } else if (order.paymentMethod === "Bank Account") {
-      addedBank = netAmount;
-    } else if (order.paymentMethod === "Udhar") {
-      addedUdhar = netAmount;
-    } else {
-      addedCash = netAmount;
-    }
+    const breakdown = salePaymentBreakdown(order);
     await mergeSaleIntoDayClosing(order.ownerId, order.date, {
-      net: netAmount,
-      cash: addedCash,
-      bank: addedBank,
-      udhar: addedUdhar,
+      net: breakdown.total,
+      cash: breakdown.cash,
+      bank: breakdown.bank,
+      udhar: breakdown.udhar,
     });
 
-    if (order.bankId && addedBank > 0) {
+    if (order.bankId && breakdown.bank > 0) {
       invalidateCache(cacheKeys.banks(order.ownerId));
       invalidateCache(cacheKeys.bankTransactions(order.ownerId, order.bankId));
       invalidateCache(cacheKeys.bankTransactions(order.ownerId));

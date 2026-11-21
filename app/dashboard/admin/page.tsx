@@ -22,7 +22,7 @@ import StatCard from "../../components/StatCard";
 import DataTable from "../../components/DataTable";
 import AdminLoginModal from "../../components/AdminLoginModal";
 import { customerLabel, formatDate, formatMoney } from "../../lib/format";
-import { dayRange, isWithdrawalSale, saleNetAmount, saleProfit } from "../../lib/calc";
+import { dayRange, isWithdrawalSale, saleNetAmount, salePaymentBreakdown, saleProfit } from "../../lib/calc";
 import { listSalesInRange } from "../../lib/services/sales";
 import { listExpensesInRange } from "../../lib/services/expenses";
 import { listSupplierPayments, listSupplierPurchases } from "../../lib/services/suppliers";
@@ -149,8 +149,7 @@ export default function AdminPage() {
     const expenseSum = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const jamad = supplierPayments.reduce((sum, p) => sum + p.amount, 0);
     const creditSales = regularSales
-      .filter((s) => (s.paymentMethod || "").trim() === "Udhar")
-      .reduce((sum, s) => sum + saleNetAmount(s), 0);
+      .reduce((sum, s) => sum + salePaymentBreakdown(s).udhar, 0);
     return {
       creditSales,
       posSales,

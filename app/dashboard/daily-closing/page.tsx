@@ -16,7 +16,7 @@ import ChooseCustomerModal from "../../components/ChooseCustomerModal";
 import { useDialog } from "../../components/DialogProvider";
 import SettlementPanel, { type SettleLine, type SettleMethod } from "../../components/SettlementPanel";
 import { customerLabel, formatDate, formatMoney } from "../../lib/format";
-import { dayKey, dayRange, isWithdrawalSale, saleNetAmount, todayKey, toLocalIsoString } from "../../lib/calc";
+import { dayKey, dayRange, isWithdrawalSale, saleNetAmount, salePaymentBreakdown, todayKey, toLocalIsoString } from "../../lib/calc";
 import { listSalesInRange, updateSalePayment } from "../../lib/services/sales";
 import { listExpensesInRange } from "../../lib/services/expenses";
 import { listCustomers, listAllPayments, receivePayment, payCustomer } from "../../lib/services/customers";
@@ -228,22 +228,11 @@ export default function DailyClosingPage() {
     let udhar = 0;
 
     sales.forEach((s) => {
-      const net = saleNetAmount(s);
-      const m = (s.paymentMethod || "Cash").trim();
-      if (m === "Split") {
-        const c = s.cashAmount || 0;
-        const b = s.bankAmount || 0;
-        cash += c;
-        bank += b;
-        const rem = Math.max(0, net - (c + b));
-        udhar += rem;
-      } else if (m === "Bank Account") {
-        bank += net;
-      } else if (m === "Udhar") {
-        udhar += net;
-      } else {
-        cash += net;
-      }
+      if (isWithdrawalSale(s)) return;
+      const b = salePaymentBreakdown(s);
+      cash += b.cash;
+      bank += b.bank;
+      udhar += b.udhar;
     });
 
     const amad = dayInPayments.reduce((sum, p) => sum + p.amount, 0);
