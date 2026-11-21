@@ -11,7 +11,7 @@ import { listExpensesInRange } from "../lib/services/expenses";
 import { countLowStock } from "../lib/services/products";
 import { listDayClosings } from "../lib/services/dailyClosing";
 import { listSupplierPayments } from "../lib/services/suppliers";
-import { dayKey, dayRange, isWithdrawalSale, saleNetAmount } from "../lib/calc";
+import { dayKey, dayRange, isWithdrawalSale, saleNetAmount, salePaymentBreakdown } from "../lib/calc";
 import { customerLabel, isCounterSale } from "../lib/format";
 import SaleReceipt from "../components/SaleReceipt";
 import HiddenAmount from "../components/HiddenAmount";
@@ -107,13 +107,12 @@ export default function DashboardHome() {
             let udharSum = 0;
 
             allSales.forEach(sale => {
-                const netSaleAmount = saleNetAmount(sale);
-                totalRevenue += netSaleAmount;
-
-                const method = sale.paymentMethod ? sale.paymentMethod.trim() : "Cash";
-                if (method === "Bank Account") bankSum += netSaleAmount;
-                else if (method === "Udhar") udharSum += netSaleAmount;
-                else cashSum += netSaleAmount;
+                if (isWithdrawalSale(sale)) return;
+                const b = salePaymentBreakdown(sale);
+                totalRevenue += b.total;
+                cashSum += b.cash;
+                bankSum += b.bank;
+                udharSum += b.udhar;
             });
 
             const totalExpenseSum = allExpenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);

@@ -67,9 +67,20 @@ export default function CustomerLedgerPage() {
 
   const entries = useMemo<LedgerEntry[]>(() => {
     const raw = [
-      ...sales.map((s) => {
+      ...sales.flatMap((s) => {
         const isWithdrawal = s.items.some((i) => i.id === "withdrawal");
-        return {
+        const net = saleNetAmount(s);
+        const adv = Math.min(net, Math.max(0, Number(s.advanceAmount) || 0));
+        const list: Array<{
+          id: string;
+          date: string;
+          kind: "sale" | "payment";
+          title: string;
+          details: string;
+          amount: number;
+        }> = [];
+
+        list.push({
           id: s.id,
           date: s.date,
           kind: "sale" as const,
@@ -78,9 +89,24 @@ export default function CustomerLedgerPage() {
             : `${t("maalGiven")} • #${s.invoiceNo}`,
           details: isWithdrawal
             ? (s.description || "Cash Withdrawal from Ledger")
-            : describeItems(s) + (s.refundedAmount ? ` ${t("credit_returnNote", { amount: formatMoney(s.refundedAmount) })}` : ""),
-          amount: saleNetAmount(s),
-        };
+            : describeItems(s) +
+              (s.refundedAmount ? ` ${t("credit_returnNote", { amount: formatMoney(s.refundedAmount) })}` : "") +
+              (adv > 0 ? ` (Advance: ${formatMoney(adv)})` : ""),
+          amount: net,
+        });
+
+        if (adv > 0) {
+          list.push({
+            id: `${s.id}_advance`,
+            date: s.date,
+            kind: "payment" as const,
+            title: `Advance Paid • #${s.invoiceNo}`,
+            details: "Cash Advance",
+            amount: adv,
+          });
+        }
+
+        return list;
       }),
       ...payments.map((p) => {
         const isPayout = p.type === "out";
@@ -104,10 +130,11 @@ export default function CustomerLedgerPage() {
       .reverse();
   }, [sales, payments, t]);
 
-  const totalReceived = useMemo(
-    () => payments.filter((p) => p.type !== "out").reduce((sum, p) => sum + p.amount, 0),
-    [payments]
-  );
+  const totalReceived = useMemo(() => {
+    const paySum = payments.filter((p) => p.type !== "out").reduce((sum, p) => sum + p.amount, 0);
+    const advSum = sales.reduce((sum, s) => sum + Math.min(saleNetAmount(s), Math.max(0, Number(s.advanceAmount) || 0)), 0);
+    return paySum + advSum;
+  }, [payments, sales]);
 
   if (loading) {
     return (

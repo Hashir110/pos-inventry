@@ -62,6 +62,77 @@ export const saleProfit = (
 export const saleNetAmount = (sale: Pick<Sale, "totalAmount" | "refundedAmount">): number =>
   Math.max(0, (Number(sale.totalAmount) || 0) - (Number(sale.refundedAmount) || 0));
 
+export interface SalePaymentBreakdown {
+  cash: number;
+  bank: number;
+  udhar: number;
+  total: number;
+}
+
+export const salePaymentBreakdown = (
+  sale?: (Pick<Sale, "totalAmount" | "refundedAmount"> & {
+    items?: SaleItem[];
+    paymentMethod?: any;
+    advanceAmount?: number;
+    cashAmount?: number;
+    bankAmount?: number;
+    isWithdrawal?: boolean;
+    description?: string;
+  }) | null
+): SalePaymentBreakdown => {
+  if (!sale) {
+    return { cash: 0, bank: 0, udhar: 0, total: 0 };
+  }
+  if (
+    sale.isWithdrawal ||
+    sale.description === "Cash Withdrawal from Ledger" ||
+    (Array.isArray(sale.items) && isWithdrawalSale(sale as any))
+  ) {
+    return { cash: 0, bank: 0, udhar: 0, total: 0 };
+  }
+
+  const total = saleNetAmount(sale);
+  const adv = Math.min(total, Math.max(0, Number(sale.advanceAmount) || 0));
+  const m = ((sale.paymentMethod as string) || "Cash").trim();
+
+  let cash = 0;
+  let bank = 0;
+  let udhar = 0;
+
+  if (m === "Split") {
+    const rawCash = Math.max(0, Number(sale.cashAmount) || 0);
+    const rawBank = Math.max(0, Number(sale.bankAmount) || 0);
+    const effectiveCash =
+      rawCash + rawBank >= total && rawCash >= adv
+        ? rawCash
+        : Math.min(total, rawCash + adv);
+    const effectiveBank = Math.min(Math.max(0, total - effectiveCash), rawBank);
+    cash = effectiveCash;
+    bank = effectiveBank;
+    udhar = Math.max(0, total - (cash + bank));
+  } else if (m === "Bank Account") {
+    cash = adv;
+    bank = Math.max(0, total - adv);
+    udhar = 0;
+  } else if (m === "Udhar") {
+    cash = adv;
+    udhar = Math.max(0, total - adv);
+    bank = 0;
+  } else {
+    // "Cash" or default
+    cash = total;
+    bank = 0;
+    udhar = 0;
+  }
+
+  return {
+    cash: Math.round(cash * 100) / 100,
+    bank: Math.round(bank * 100) / 100,
+    udhar: Math.round(udhar * 100) / 100,
+    total: Math.round(total * 100) / 100,
+  };
+};
+
 export const isWithdrawalSale = (
   sale?: (Pick<Sale, "items"> & { isWithdrawal?: boolean; description?: string }) | null
 ): boolean => {
